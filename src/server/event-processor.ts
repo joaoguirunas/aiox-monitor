@@ -2,6 +2,7 @@ import { insertEvent, createSession, closeSession, getEvents } from '@/lib/queri
 import { detectProject } from './project-detector';
 import { trackTerminal, deactivateTerminal } from './terminal-tracker';
 import { trackAgent, detectAgentFromPayload } from './agent-tracker';
+import { broadcast } from './ws-broadcaster';
 import type { EventPayload, EventType } from '@/lib/types';
 
 const VALID_TYPES = new Set<string>([
@@ -87,7 +88,12 @@ export function processEvent(payload: EventPayload): ProcessedEvent {
     raw_payload: truncate(payload, 2000),
   });
 
-  // 7. On Stop/SubagentStop: deactivate terminal + close session
+  // 7. Broadcast event to WS clients (fire-and-forget)
+  try {
+    broadcast({ type: 'event:new', event, projectId: project.id, agentId: agent.id });
+  } catch { /* never block event processing */ }
+
+  // 8. On Stop/SubagentStop: deactivate terminal + close session
   if (STOP_TYPES.has(eventType) && terminal) {
     deactivateTerminal(project.id, terminal.pid);
     if (sessionId !== undefined) {

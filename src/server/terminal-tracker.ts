@@ -1,8 +1,10 @@
 import {
   upsertTerminal,
-  deactivateTerminal,
+  deactivateTerminal as dbDeactivateTerminal,
   deactivateStaleTerminals,
+  getTerminalsByProject,
 } from '@/lib/queries';
+import { broadcast } from './ws-broadcaster';
 import type { Terminal } from '@/lib/types';
 
 export function trackTerminal(
@@ -13,7 +15,13 @@ export function trackTerminal(
   return upsertTerminal(projectId, pid, sessionId);
 }
 
-export { deactivateTerminal };
+export function deactivateTerminal(projectId: number, pid: number): void {
+  dbDeactivateTerminal(projectId, pid);
+  try {
+    const terminal = getTerminalsByProject(projectId).find(t => t.pid === pid);
+    if (terminal) broadcast({ type: 'terminal:update', terminal, projectId });
+  } catch { /* fire-and-forget */ }
+}
 
 export function cleanupStaleTerminals(): void {
   deactivateStaleTerminals(600); // 10 minutes

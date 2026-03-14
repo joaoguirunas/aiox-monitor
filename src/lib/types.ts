@@ -112,3 +112,37 @@ export interface Stats {
   activeProjects: number;
   lastEvent?: Event;
 }
+
+// WebSocket message types
+export interface WsMessage {
+  type: string;
+}
+
+export interface WsEventNew extends WsMessage {
+  type: 'event:new';
+  event: Event;
+  projectId: number;
+  agentId?: number;
+}
+
+export interface WsAgentUpdate extends WsMessage {
+  type: 'agent:update';
+  agent: Agent;
+  projectId: number;
+}
+
+export interface WsTerminalUpdate extends WsMessage {
+  type: 'terminal:update';
+  terminal: Terminal;
+  projectId: number;
+}
+
+export interface WsPing extends WsMessage {
+  type: 'ping';
+}
+
+export type WsIncomingMessage =
+  | WsEventNew
+  | WsAgentUpdate
+  | WsTerminalUpdate
+  | WsPing;

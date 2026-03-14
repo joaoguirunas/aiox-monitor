@@ -1,5 +1,4 @@
 import { createServer } from 'node:http';
-import { parse } from 'node:url';
 import next from 'next';
 import { WebSocketServer } from 'ws';
 import type { WebSocket as WsType } from 'ws';
@@ -17,8 +16,7 @@ const handle = app.getRequestHandler();
 app.prepare().then(() => {
   const httpServer = createServer(async (req, res) => {
     try {
-      const parsedUrl = parse(req.url!, true);
-      await handle(req, res, parsedUrl);
+      await handle(req, res);
     } catch (err) {
       console.error('[server] request error:', req.url, err);
       if (!res.headersSent) {
@@ -31,7 +29,7 @@ app.prepare().then(() => {
   const wss = new WebSocketServer({ noServer: true });
 
   httpServer.on('upgrade', (req, socket, head) => {
-    const { pathname } = parse(req.url ?? '');
+    const { pathname } = new URL(req.url ?? '', `http://localhost:${port}`);
     if (pathname === '/ws') {
       wss.handleUpgrade(req, socket as Parameters<typeof wss.handleUpgrade>[1], head, (ws: WsType) => {
         wss.emit('connection', ws, req);

@@ -58,6 +58,16 @@ export function PhaserGame() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Resize handler
+  useEffect(() => {
+    const handleResize = () => {
+      if (!gameRef.current) return;
+      gameRef.current.scale.resize(window.innerWidth, window.innerHeight - NAVBAR_HEIGHT);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Push WS messages para Phaser
   useEffect(() => {
     if (!lastMessage) return;

@@ -7,8 +7,8 @@ import { useWebSocket } from './useWebSocket';
 import type { Agent, WsAgentUpdate, WsEventNew } from '@/lib/types';
 
 export function useKanban() {
-  const { projects } = useProjects();
-  const { agents } = useAgents(); // no project filter — all agents
+  const { projects, loading: projectsLoading } = useProjects();
+  const { agents, loading: agentsLoading } = useAgents(); // no project filter — all agents
   const { lastMessage } = useWebSocket();
   const [agentState, setAgentState] = useState<Record<number, Agent>>({});
 
@@ -42,5 +42,7 @@ export function useKanban() {
         }),
     }));
 
-  return { columns, lastMessage };
+  const loading = projectsLoading || agentsLoading;
+
+  return { columns, loading, lastMessage };
 }

@@ -5,11 +5,13 @@ import { WebSocketServer } from 'ws';
 import type { WebSocket as WsType } from 'ws';
 import { setBroadcaster } from './src/server/ws-broadcaster';
 import { startIdleDetector } from './src/server/idle-detector';
+import { cleanupOldEvents } from './src/server/cleanup';
+import { getCompanyConfig } from './src/lib/queries';
 
 const dev = process.env.NODE_ENV !== 'production';
 const port = Number(process.env.PORT ?? 8888);
 
-const app = next({ dev, hostname: 'localhost', port, turbopack: dev });
+const app = next({ dev, hostname: 'localhost', port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
@@ -41,6 +43,21 @@ app.prepare().then(() => {
 
   setBroadcaster(wss);
   startIdleDetector();
+
+  // Cleanup old events — run after 60s delay, then every 24h
+  setTimeout(() => {
+    try {
+      const config = getCompanyConfig();
+      cleanupOldEvents(config.event_retention_days);
+    } catch { /* silent on startup */ }
+
+    setInterval(() => {
+      try {
+        const config = getCompanyConfig();
+        cleanupOldEvents(config.event_retention_days);
+      } catch { /* silent */ }
+    }, 24 * 60 * 60 * 1000);
+  }, 60_000);
 
   httpServer.listen(port, () => {
     console.log(`> Ready on http://localhost:${port}`);

@@ -48,15 +48,26 @@
 | 3.6 | Mesa Central Dinâmica (posições por agente ativo via API) | Ready for Review | 3.5 |
 | 3.7 | Agente Caminha até Mesa ao Receber Evento via WebSocket | Ready for Review | 3.6 |
 
-### Fase 4 — Empresa Completa (PRÓXIMA)
+### Fase 4 — Empresa Completa (COMPLETA)
 
 | Story | Título | Status | Depende |
 |-------|--------|--------|---------|
-| 4.1 | Sprites Pixel Art por Agente — Identidade Visual Única | Draft | 3.7 |
-| 4.2 | Animações Completas de Transição entre Zonas | Draft | 4.1 |
-| 4.3 | Break Room Expandida — Móveis e Interações | Draft | 4.2 |
-| 4.4 | Sistema de Temas Visuais — Espacial, Moderno, Oldschool, Cyberpunk | Draft | 4.3 |
-| 4.5 | Personalização da Empresa — UI de Configuração | Draft | 4.4 |
+| 4.1 | Sprites Pixel Art por Agente — Identidade Visual Única | Ready for Review | 3.7 |
+| 4.2 | Animações Completas de Transição entre Zonas | Ready for Review | 4.1 |
+| 4.3 | Break Room Expandida — Móveis e Interações | Ready for Review | 4.2 |
+| 4.4 | Sistema de Temas Visuais — Espacial, Moderno, Oldschool, Cyberpunk | Ready for Review | 4.3 |
+| 4.5 | Personalização da Empresa — UI de Configuração | Ready for Review | 4.4 |
+
+### Fase 5 — Polish + Publicação (PRÓXIMA)
+
+| Story | Título | Status | Depende |
+|-------|--------|--------|---------|
+| 5.1 | PM2 — Startup Automático no Boot do Mac | Draft | 4.5 |
+| 5.2 | npm run setup — Comando Único de Instalação | Draft | 5.1 |
+| 5.3 | README Completo para Open Source | Draft | 5.2 |
+| 5.4 | Limpeza Automática de Eventos Antigos (>30 dias) | Draft | 4.5 |
+| 5.5 | Responsive Design e Polish Visual | Draft | 4.5 |
+| 5.6 | Preparação para npm publish | Draft | 5.3 |
 
 ## Arquitetura
 
@@ -93,13 +104,16 @@ src/
 │   ├── page.tsx                   # Redirect → /lista
 │   ├── lista/page.tsx             # Modo Lista — tabela de eventos com filtros
 │   ├── kanban/page.tsx            # Modo Kanban — colunas por projeto
-│   ├── empresa/page.tsx           # Página de configuração da empresa
+│   ├── empresa/
+│   │   ├── page.tsx               # Modo Empresa — escritório isométrico Phaser.js
+│   │   └── config/page.tsx        # Config empresa (nome, tema, timeouts)
 │   └── api/
 │       ├── events/route.ts        # POST (receptor hook) + GET (lista filtrada)
 │       ├── projects/route.ts      # GET projects
 │       ├── projects/[id]/route.ts # GET/PUT project by id
 │       ├── agents/route.ts        # GET agents
-│       └── stats/route.ts         # GET stats dashboard
+│       ├── stats/route.ts         # GET stats dashboard
+│       └── company-config/route.ts # GET/PUT company config + WS theme broadcast
 ├── server/
 │   ├── ws-broadcaster.ts          # Singleton WS broadcaster (setBroadcaster + broadcast)
 │   ├── event-processor.ts         # Processa payload do hook → DB + WS broadcast
@@ -138,8 +152,37 @@ src/
     │   ├── ProjectColumn.tsx       # Coluna por projeto com AgentCards
     │   └── AgentCard.tsx           # Card de agente (status, tool, flash)
     └── empresa/
-        └── config/
-            └── agent-colors.ts     # Cores por agente
+        └── PhaserGame.tsx          # Phaser game wrapper (dynamic import, WS sync)
+game/
+├── config.ts                       # Phaser game config
+├── constants.ts                    # NAVBAR_HEIGHT, TILE_SIZE, etc.
+├── bridge/
+│   └── react-phaser-bridge.ts      # React↔Phaser bridge (syncAgents, updateAgent, setTheme)
+├── data/
+│   ├── agent-sprite-config.ts      # 11 agent visual configs (color, accessory, hair)
+│   ├── agent-visuals.ts            # Agent color/icon mapping
+│   ├── office-layout.ts            # Tile positions, zones, furniture, lounge V2
+│   └── themes.ts                   # 4 themes (moderno, espacial, oldschool, cyberpunk)
+├── animations/
+│   └── agent-animations.ts         # Frame-based animation registration
+├── managers/
+│   └── AgentManager.ts             # Agent lifecycle, walk transitions, collision avoidance
+├── objects/
+│   ├── AgentSprite.ts              # Agent sprite with pixel art + status badge
+│   ├── Desk.ts                     # Desk with monitor + theme support
+│   ├── Sofa.ts                     # Sofa + theme support
+│   ├── CoffeeTable.ts             # Coffee table + theme support
+│   ├── CoffeeMachine.ts           # Coffee machine with steam animation
+│   ├── Bookshelf.ts               # Bookshelf with colored books
+│   ├── Plant.ts                    # Plant with pot and leaves
+│   ├── WaterCooler.ts             # Water cooler with translucent bottle
+│   └── Door.ts                     # Office entrance door
+├── scenes/
+│   ├── BootScene.ts               # Asset loading + spritesheet generation
+│   └── OfficeScene.ts             # Main office scene (floor, walls, furniture, themes)
+└── utils/
+    ├── iso-utils.ts               # Isometric 2:1 projection utilities
+    └── sprite-generator.ts        # Procedural pixel art spritesheet (Canvas API)
 ```
 
 ## Schema SQLite

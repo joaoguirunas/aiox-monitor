@@ -5,7 +5,8 @@ import { ProjectProvider } from '@/contexts/ProjectContext';
 
 export const metadata: Metadata = {
   title: 'aiox-monitor',
-  description: 'Observability dashboard for Claude Code + AIOX agents',
+  description: 'Real-time AI agent monitoring dashboard with virtual isometric office',
+  icons: { icon: '/favicon.svg' },
 };
 
 export default function RootLayout({

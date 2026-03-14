@@ -71,6 +71,7 @@ export interface CompanyConfig {
   ambient_music: 0 | 1;
   idle_timeout_lounge: number;
   idle_timeout_break: number;
+  event_retention_days: number;
   updated_at: string;
 }
 

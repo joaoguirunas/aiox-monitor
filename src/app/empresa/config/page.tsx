@@ -56,7 +56,18 @@ export default function CompanyConfigPage() {
   }
 
   if (!config) {
-    return <div className="p-8 text-gray-500 font-mono">Carregando...</div>;
+    return (
+      <div className="max-w-2xl mx-auto p-8 space-y-6">
+        <div className="h-8 bg-gray-800 rounded animate-pulse w-1/2" />
+        <div className="h-10 bg-gray-800 rounded animate-pulse" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-20 bg-gray-800 rounded animate-pulse" />
+          ))}
+        </div>
+        <div className="h-10 bg-gray-800 rounded animate-pulse" />
+      </div>
+    );
   }
 
   return (
@@ -80,7 +91,7 @@ export default function CompanyConfigPage() {
       {/* Tema */}
       <div className="space-y-2">
         <label className="block text-sm font-mono text-gray-400">Tema Visual</label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {THEMES.map((t) => (
             <button
               key={t.value}

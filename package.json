@@ -1,7 +1,36 @@
 {
   "name": "aiox-monitor",
-  "version": "0.1.0",
-  "private": true,
+  "version": "1.0.0",
+  "description": "Real-time dashboard for AI agent monitoring with isometric virtual office",
+  "author": "Joao Ramos",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/joaoguirunas/aiox-monitor.git"
+  },
+  "homepage": "https://github.com/joaoguirunas/aiox-monitor",
+  "keywords": ["ai", "agent", "monitor", "dashboard", "claude", "phaser", "isometric", "nextjs"],
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "aiox-monitor": "./bin/aiox-monitor.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "public/",
+    "server.ts",
+    "next.config.mjs",
+    "tsconfig.json",
+    "tsconfig.server.json",
+    "tailwind.config.ts",
+    "postcss.config.mjs",
+    "ecosystem.config.cjs",
+    "package.json",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=.server/server.mjs && node .server/server.mjs",
     "build": "next build",
@@ -9,12 +38,21 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "install-hook": "tsx scripts/install-hook.ts",
-    "uninstall-hook": "tsx scripts/uninstall-hook.ts"
+    "uninstall-hook": "tsx scripts/uninstall-hook.ts",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop aiox-monitor",
+    "pm2:restart": "pm2 restart aiox-monitor",
+    "pm2:logs": "pm2 logs aiox-monitor --lines 50",
+    "pm2:startup": "pm2 startup launchd && pm2 save",
+    "pm2:status": "pm2 status",
+    "setup": "bash scripts/setup.sh",
+    "cleanup": "tsx scripts/cleanup.ts"
   },
   "dependencies": {
     "lucide-react": "^0.469.0",
     "next": "^15.1.6",
     "phaser": "^3.87.0",
+    "pm2": "^6.0.14",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "ws": "^8.18.0"

@@ -23,6 +23,9 @@ Thumbs.db
 .idea/
 *.swp
 
+# AIOX Framework (dependency, not project code)
+.aiox-core/
+
 # AIOX Local (AIOX)
 .aiox-core/local/
 .claude/settings.local.json

@@ -14,7 +14,6 @@ function createDb(): DatabaseSync {
 
 // Global singleton — survives Next.js hot-reload in development
 declare global {
-  // eslint-disable-next-line no-var
   var __aiox_db: DatabaseSync | undefined;
 }
 

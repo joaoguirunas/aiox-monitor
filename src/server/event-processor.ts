@@ -2,7 +2,7 @@ import { insertEvent, createSession, closeSession, getEvents } from '@/lib/queri
 import { detectProject } from './project-detector';
 import { trackTerminal, deactivateTerminal } from './terminal-tracker';
 import { trackAgent, detectAgentFromPayload } from './agent-tracker';
-import type { EventPayload, EventType, Event } from '@/lib/types';
+import type { EventPayload, EventType } from '@/lib/types';
 
 const VALID_TYPES = new Set<string>([
   'PreToolUse',

@@ -1,5 +1,50 @@
 import { processEvent } from '@/server/event-processor';
-import type { EventPayload } from '@/lib/types';
+import { getEvents } from '@/lib/queries';
+import { parseIntParam, apiErrorResponse } from '@/lib/api-utils';
+import type { EventPayload, EventFilters, EventType } from '@/lib/types';
+
+const VALID_TYPES = new Set<EventType>([
+  'PreToolUse',
+  'PostToolUse',
+  'UserPromptSubmit',
+  'Stop',
+  'SubagentStop',
+]);
+
+export async function GET(request: Request): Promise<Response> {
+  try {
+    const { searchParams } = new URL(request.url);
+
+    const projectId = parseIntParam(searchParams.get('project_id'), 'project_id');
+    const agentId = parseIntParam(searchParams.get('agent_id'), 'agent_id');
+    const terminalId = parseIntParam(searchParams.get('terminal_id'), 'terminal_id');
+    const limit = parseIntParam(searchParams.get('limit'), 'limit');
+    const offset = parseIntParam(searchParams.get('offset'), 'offset');
+
+    const typeParam = searchParams.get('type');
+    if (typeParam && !VALID_TYPES.has(typeParam as EventType)) {
+      return Response.json(
+        { success: false, error: `Invalid type: must be one of ${[...VALID_TYPES].join(', ')}` },
+        { status: 400 },
+      );
+    }
+
+    const filters: EventFilters = {
+      projectId,
+      agentId,
+      terminalId,
+      type: typeParam ? (typeParam as EventType) : undefined,
+      since: searchParams.get('since') ?? undefined,
+      limit,
+      offset,
+    };
+
+    const result = getEvents(filters);
+    return Response.json(result);
+  } catch (error) {
+    return apiErrorResponse(error);
+  }
+}
 
 export async function POST(request: Request): Promise<Response> {
   let payload: Partial<EventPayload>;

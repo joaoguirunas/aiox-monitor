@@ -4,6 +4,7 @@ import next from 'next';
 import { WebSocketServer } from 'ws';
 import type { WebSocket as WsType } from 'ws';
 import { setBroadcaster } from './src/server/ws-broadcaster';
+import { startIdleDetector } from './src/server/idle-detector';
 
 const dev = process.env.NODE_ENV !== 'production';
 const port = Number(process.env.PORT ?? 8888);
@@ -31,6 +32,7 @@ app.prepare().then(() => {
   });
 
   setBroadcaster(wss);
+  startIdleDetector();
 
   httpServer.listen(port, () => {
     console.log(`> Ready on http://localhost:${port}`);

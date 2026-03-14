@@ -34,8 +34,9 @@ export function trackAgent(
     return updated;
   }
 
-  const status = eventType === 'PreToolUse' ? 'working' : agent.status;
-  if (toolName || status !== agent.status) {
+  // Any non-Stop event resets agent to 'working' (also resets idle detector timer)
+  const status = 'working';
+  if (status !== agent.status || toolName !== agent.current_tool) {
     updateAgentStatus(projectId, agentName, status, toolName ?? null);
   }
 

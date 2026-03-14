@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 8888",
+    "dev": "tsx --watch server.ts",
     "build": "next build",
-    "start": "next start --port 8888",
+    "start": "NODE_ENV=production tsx server.ts",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "install-hook": "tsx scripts/install-hook.ts",

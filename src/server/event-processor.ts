@@ -1,9 +1,9 @@
-import { insertEvent, createSession, closeSession, getEvents } from '@/lib/queries';
+import { insertEvent, createSession, closeSession, getEvents } from '../lib/queries';
 import { detectProject } from './project-detector';
 import { trackTerminal, deactivateTerminal } from './terminal-tracker';
 import { trackAgent, detectAgentFromPayload } from './agent-tracker';
 import { broadcast } from './ws-broadcaster';
-import type { EventPayload, EventType } from '@/lib/types';
+import type { EventPayload, EventType } from '../lib/types';
 
 const VALID_TYPES = new Set<string>([
   'PreToolUse',

@@ -1,6 +1,6 @@
-import { db } from '@/lib/db';
+import { db } from '../lib/db';
 import { broadcast } from './ws-broadcaster';
-import type { Agent, AgentStatus } from '@/lib/types';
+import type { Agent, AgentStatus } from '../lib/types';
 
 // Fallback constants (seconds) — used if company_config query fails
 const DEFAULT_TIMEOUT_LOUNGE = 300;   // working → idle  (5 min)

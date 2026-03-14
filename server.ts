@@ -9,13 +9,21 @@ import { startIdleDetector } from './src/server/idle-detector';
 const dev = process.env.NODE_ENV !== 'production';
 const port = Number(process.env.PORT ?? 8888);
 
-const app = next({ dev, hostname: 'localhost', port });
+const app = next({ dev, hostname: 'localhost', port, turbopack: dev });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
-  const httpServer = createServer((req, res) => {
-    const parsedUrl = parse(req.url!, true);
-    handle(req, res, parsedUrl);
+  const httpServer = createServer(async (req, res) => {
+    try {
+      const parsedUrl = parse(req.url!, true);
+      await handle(req, res, parsedUrl);
+    } catch (err) {
+      console.error('[server] request error:', req.url, err);
+      if (!res.headersSent) {
+        res.statusCode = 500;
+        res.end('Internal Server Error');
+      }
+    }
   });
 
   const wss = new WebSocketServer({ noServer: true });

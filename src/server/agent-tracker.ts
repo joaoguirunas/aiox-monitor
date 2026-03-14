@@ -1,6 +1,6 @@
-import { upsertAgent, updateAgentStatus } from '@/lib/queries';
+import { upsertAgent, updateAgentStatus } from '../lib/queries';
 import { broadcast } from './ws-broadcaster';
-import type { Agent, EventType } from '@/lib/types';
+import type { Agent, EventType } from '../lib/types';
 
 const DISPLAY_NAMES: Record<string, string> = {
   '@dev': 'Dex',

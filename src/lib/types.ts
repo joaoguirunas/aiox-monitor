@@ -137,6 +137,11 @@ export interface WsTerminalUpdate extends WsMessage {
   projectId: number;
 }
 
+export interface WsThemeChange extends WsMessage {
+  type: 'theme:change';
+  theme: ThemeName;
+}
+
 export interface WsPing extends WsMessage {
   type: 'ping';
 }
@@ -145,4 +150,5 @@ export type WsIncomingMessage =
   | WsEventNew
   | WsAgentUpdate
   | WsTerminalUpdate
+  | WsThemeChange
   | WsPing;

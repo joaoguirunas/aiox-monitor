@@ -3,9 +3,9 @@ import {
   deactivateTerminal as dbDeactivateTerminal,
   deactivateStaleTerminals,
   getTerminalsByProject,
-} from '@/lib/queries';
+} from '../lib/queries';
 import { broadcast } from './ws-broadcaster';
-import type { Terminal } from '@/lib/types';
+import type { Terminal } from '../lib/types';
 
 export function trackTerminal(
   projectId: number,

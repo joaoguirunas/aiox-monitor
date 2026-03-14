@@ -9,6 +9,7 @@ const LINKS = [
   { href: '/kanban', label: 'Kanban' },
   { href: '/lista', label: 'Lista' },
   { href: '/empresa', label: 'Empresa' },
+  { href: '/empresa/config', label: 'Config' },
 ];
 
 export function Navbar() {

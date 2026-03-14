@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { Navbar } from '@/components/layout/Navbar';
 
 export const metadata: Metadata = {
   title: 'aiox-monitor',
@@ -13,7 +14,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body className="bg-gray-950 text-gray-100 min-h-screen">
+      <body className="bg-gray-950 text-gray-100 min-h-screen flex flex-col">
+        <Navbar />
         {children}
       </body>
     </html>

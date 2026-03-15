@@ -71,6 +71,7 @@ export interface CompanyConfig {
   ambient_music: 0 | 1;
   idle_timeout_lounge: number;
   idle_timeout_break: number;
+  event_retention_days: number;
   updated_at: string;
 }
 
@@ -112,3 +113,43 @@ export interface Stats {
   activeProjects: number;
   lastEvent?: Event;
 }
+
+// WebSocket message types
+export interface WsMessage {
+  type: string;
+}
+
+export interface WsEventNew extends WsMessage {
+  type: 'event:new';
+  event: Event;
+  projectId: number;
+  agentId?: number;
+}
+
+export interface WsAgentUpdate extends WsMessage {
+  type: 'agent:update';
+  agent: Agent;
+  projectId: number;
+}
+
+export interface WsTerminalUpdate extends WsMessage {
+  type: 'terminal:update';
+  terminal: Terminal;
+  projectId: number;
+}
+
+export interface WsThemeChange extends WsMessage {
+  type: 'theme:change';
+  theme: ThemeName;
+}
+
+export interface WsPing extends WsMessage {
+  type: 'ping';
+}
+
+export type WsIncomingMessage =
+  | WsEventNew
+  | WsAgentUpdate
+  | WsTerminalUpdate
+  | WsThemeChange
+  | WsPing;

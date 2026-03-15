@@ -5,6 +5,7 @@ import type { Event, EventFilters } from '@/lib/types';
 import { useEvents } from '@/hooks/useEvents';
 import { useProjects } from '@/hooks/useProjects';
 import { useAgents } from '@/hooks/useAgents';
+import { useProjectContext } from '@/contexts/ProjectContext';
 import { FilterBar } from '@/components/lista/FilterBar';
 import { EventTable } from '@/components/lista/EventTable';
 import { EventDetail } from '@/components/lista/EventDetail';
@@ -12,10 +13,25 @@ import { EventDetail } from '@/components/lista/EventDetail';
 export default function ListaPage() {
   const [filters, setFilters] = useState<EventFilters>({ limit: 100 });
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const { selectedProjectId, setSelectedProjectId } = useProjectContext();
 
-  const { events, loading, total } = useEvents(filters);
+  // Merge global project selector with local filters — context wins for projectId
+  const effectiveFilters: EventFilters = {
+    ...filters,
+    projectId: selectedProjectId ?? filters.projectId,
+  };
+
+  const { events, loading, total } = useEvents(effectiveFilters);
+
+  // Keep context in sync when FilterBar changes the project dropdown
+  const handleFiltersChange = (newFilters: EventFilters) => {
+    setFilters(newFilters);
+    if (newFilters.projectId !== filters.projectId) {
+      setSelectedProjectId(newFilters.projectId ?? null);
+    }
+  };
   const { projects } = useProjects();
-  const { agents } = useAgents(filters.projectId);
+  const { agents } = useAgents(effectiveFilters.projectId);
 
   const agentMap = new Map(agents.map((a) => [a.id, a]));
   const projectMap = new Map(projects.map((p) => [p.id, p]));
@@ -39,8 +55,8 @@ export default function ListaPage() {
 
         <div className="mb-4">
           <FilterBar
-            filters={filters}
-            onFiltersChange={setFilters}
+            filters={effectiveFilters}
+            onFiltersChange={handleFiltersChange}
             projects={projects}
             agents={agents}
           />

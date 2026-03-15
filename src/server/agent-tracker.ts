@@ -1,5 +1,6 @@
-import { upsertAgent, updateAgentStatus } from '@/lib/queries';
-import type { Agent, EventType } from '@/lib/types';
+import { upsertAgent, updateAgentStatus } from '../lib/queries';
+import { broadcast } from './ws-broadcaster';
+import type { Agent, EventType } from '../lib/types';
 
 const DISPLAY_NAMES: Record<string, string> = {
   '@dev': 'Dex',
@@ -28,15 +29,20 @@ export function trackAgent(
 
   if (STOP_TYPES.has(eventType)) {
     updateAgentStatus(projectId, agentName, 'idle', null);
-    return { ...agent, status: 'idle', current_tool: undefined };
+    const updated: Agent = { ...agent, status: 'idle', current_tool: undefined };
+    try { broadcast({ type: 'agent:update', agent: updated, projectId }); } catch { /* fire-and-forget */ }
+    return updated;
   }
 
-  const status = eventType === 'PreToolUse' ? 'working' : agent.status;
-  if (toolName || status !== agent.status) {
+  // Any non-Stop event resets agent to 'working' (also resets idle detector timer)
+  const status = 'working';
+  if (status !== agent.status || toolName !== agent.current_tool) {
     updateAgentStatus(projectId, agentName, status, toolName ?? null);
   }
 
-  return { ...agent, status, current_tool: toolName };
+  const updated: Agent = { ...agent, status, current_tool: toolName };
+  try { broadcast({ type: 'agent:update', agent: updated, projectId }); } catch { /* fire-and-forget */ }
+  return updated;
 }
 
 /** Best-effort: scan payload text for @agent-name patterns */

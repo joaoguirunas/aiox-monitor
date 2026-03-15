@@ -1,0 +1,20 @@
+# Development
+docs/
+.claude/
+.aiox-core/
+.aiox/
+.github/
+.cursor/
+.codex/
+.gemini/
+.antigravity/
+scripts/
+data/
+logs/
+.server/
+.next/
+
+# Config
+.env
+.env.*
+AGENTS.md

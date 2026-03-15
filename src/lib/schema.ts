@@ -75,6 +75,7 @@ export function initSchema(db: DatabaseSync): void {
       ambient_music       INTEGER NOT NULL DEFAULT 0,
       idle_timeout_lounge INTEGER NOT NULL DEFAULT 300,
       idle_timeout_break  INTEGER NOT NULL DEFAULT 300,
+      event_retention_days INTEGER NOT NULL DEFAULT 30,
       updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
@@ -97,4 +98,11 @@ export function initSchema(db: DatabaseSync): void {
 
   // Seed singleton row for company_config
   db.exec(`INSERT OR IGNORE INTO company_config (id) VALUES (1)`);
+
+  // Migrations for existing DBs
+  try {
+    db.exec(`ALTER TABLE company_config ADD COLUMN event_retention_days INTEGER NOT NULL DEFAULT 30`);
+  } catch {
+    // Column already exists — ignore
+  }
 }

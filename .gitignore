@@ -22,6 +22,11 @@ logs/
 Thumbs.db
 .idea/
 *.swp
+.cursor/
+.codex/
+.gemini/
+.antigravity/
+__pycache__/
 
 # AIOX Framework (dependency, not project code)
 .aiox-core/
@@ -32,8 +37,9 @@ Thumbs.db
 .aiox/install-log.txt
 
 # aiox-monitor
-data/
-data/*.db
+.server/
+/data/
+/data/*.db
 .next/
 *.tsbuildinfo
 next-env.d.ts

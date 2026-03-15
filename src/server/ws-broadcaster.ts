@@ -21,7 +21,12 @@ export function broadcast(message: WsMessage): void {
   const json = JSON.stringify(message);
   for (const client of wss.clients) {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(json);
+      try {
+        client.send(json);
+      } catch (err) {
+        console.error('[ws] send error, terminating client:', err);
+        try { client.terminate(); } catch { /* ignore */ }
+      }
     }
   }
 }

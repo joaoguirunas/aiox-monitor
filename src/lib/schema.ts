@@ -1,9 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite';
 
 export function initSchema(db: DatabaseSync): void {
-  // Enable WAL mode and foreign keys for all connections
+  // Enable WAL mode, foreign keys, and busy timeout for all connections
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
+  db.exec('PRAGMA busy_timeout = 5000');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS projects (

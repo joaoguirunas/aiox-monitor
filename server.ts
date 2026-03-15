@@ -7,6 +7,14 @@ import { startIdleDetector } from './src/server/idle-detector';
 import { cleanupOldEvents } from './src/server/cleanup';
 import { getCompanyConfig } from './src/lib/queries';
 
+// Process-level safety net — prevent crashes from unhandled errors
+process.on('uncaughtException', (err) => {
+  console.error('[server] uncaught exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[server] unhandled rejection:', reason);
+});
+
 const dev = process.env.NODE_ENV !== 'production';
 const port = Number(process.env.PORT ?? 8888);
 
@@ -28,15 +36,28 @@ app.prepare().then(() => {
 
   const wss = new WebSocketServer({ noServer: true });
 
+  wss.on('error', (err) => {
+    console.error('[server] WebSocket server error:', err);
+  });
+
   httpServer.on('upgrade', (req, socket, head) => {
-    const { pathname } = new URL(req.url ?? '', `http://localhost:${port}`);
-    if (pathname === '/ws') {
-      wss.handleUpgrade(req, socket as Parameters<typeof wss.handleUpgrade>[1], head, (ws: WsType) => {
-        wss.emit('connection', ws, req);
-      });
-    } else {
+    try {
+      const { pathname } = new URL(req.url ?? '', `http://localhost:${port}`);
+      if (pathname === '/ws') {
+        wss.handleUpgrade(req, socket as Parameters<typeof wss.handleUpgrade>[1], head, (ws: WsType) => {
+          wss.emit('connection', ws, req);
+        });
+      } else {
+        socket.destroy();
+      }
+    } catch (err) {
+      console.error('[server] upgrade error:', err);
       socket.destroy();
     }
+  });
+
+  httpServer.on('error', (err) => {
+    console.error('[server] HTTP server error:', err);
   });
 
   setBroadcaster(wss);
@@ -60,4 +81,7 @@ app.prepare().then(() => {
   httpServer.listen(port, () => {
     console.log(`> Ready on http://localhost:${port}`);
   });
+}).catch((err) => {
+  console.error('[server] Failed to start Next.js:', err);
+  process.exit(1);
 });

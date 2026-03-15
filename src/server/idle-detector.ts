@@ -51,15 +51,19 @@ const queryBreak = db.prepare(`
 const updateStatus = db.prepare(`UPDATE agents SET status = ? WHERE id = ? AND status = ?`);
 
 function checkIdleAgents(): void {
-  const timeouts = getTimeouts();
+  try {
+    const timeouts = getTimeouts();
 
-  const toIdle    = queryWorking.all(timeouts.lounge) as unknown as Agent[];
-  const toBreak   = queryIdle.all(timeouts.break)     as unknown as Agent[];
-  const toOffline = queryBreak.all(TIMEOUT_OFFLINE)   as unknown as Agent[];
+    const toIdle    = queryWorking.all(timeouts.lounge) as unknown as Agent[];
+    const toBreak   = queryIdle.all(timeouts.break)     as unknown as Agent[];
+    const toOffline = queryBreak.all(TIMEOUT_OFFLINE)   as unknown as Agent[];
 
-  applyTransitions(toIdle,    'idle');
-  applyTransitions(toBreak,   'break');
-  applyTransitions(toOffline, 'offline');
+    applyTransitions(toIdle,    'idle');
+    applyTransitions(toBreak,   'break');
+    applyTransitions(toOffline, 'offline');
+  } catch (err) {
+    console.error('[idle-detector] check failed (will retry next interval):', err);
+  }
 }
 
 function applyTransitions(agents: Agent[], newStatus: AgentStatus): void {

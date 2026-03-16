@@ -1,22 +1,34 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useProjects } from './useProjects';
 import { useAgents } from './useAgents';
 import { useWebSocket } from './useWebSocket';
-import type { Agent, WsAgentUpdate, WsEventNew } from '@/lib/types';
+import type { Agent, WsAgentUpdate } from '@/lib/types';
 
 export function useKanban() {
-  const { projects, loading: projectsLoading } = useProjects();
-  const { agents, loading: agentsLoading } = useAgents(); // no project filter — all agents
-  const { lastMessage } = useWebSocket();
+  const { projects, loading: projectsLoading, refresh: refreshProjects } = useProjects();
+  const { agents, loading: agentsLoading, refresh: refreshAgents } = useAgents(); // no project filter — all agents
+  const { lastMessage, reconnectCount } = useWebSocket();
   const [agentState, setAgentState] = useState<Record<number, Agent>>({});
+  const fetchVersionRef = useRef(0);
 
-  // Initialise map from initial fetch
+  // Merge fetched agents into state — preserve WS updates for agents not in the fetch response
   useEffect(() => {
-    const map: Record<number, Agent> = {};
-    agents.forEach(a => { map[a.id] = a; });
-    setAgentState(map);
+    fetchVersionRef.current++;
+    setAgentState(prev => {
+      const merged: Record<number, Agent> = {};
+      // Start with fresh fetch data
+      agents.forEach(a => { merged[a.id] = a; });
+      // For agents NOT in the fetch but present via WS, keep them
+      for (const [idStr, agent] of Object.entries(prev)) {
+        const id = Number(idStr);
+        if (!(id in merged)) {
+          merged[id] = agent;
+        }
+      }
+      return merged;
+    });
   }, [agents]);
 
   // Patch individual agent via WS
@@ -25,6 +37,13 @@ export function useKanban() {
     const { agent } = lastMessage as WsAgentUpdate;
     setAgentState(prev => ({ ...prev, [agent.id]: agent }));
   }, [lastMessage]);
+
+  // Refetch on WebSocket reconnection (may have missed events)
+  useEffect(() => {
+    if (reconnectCount === 0) return;
+    refreshProjects();
+    refreshAgents();
+  }, [reconnectCount, refreshProjects, refreshAgents]);
 
   // Filter to projects active in the last 24h and group agents
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -44,5 +63,7 @@ export function useKanban() {
 
   const loading = projectsLoading || agentsLoading;
 
-  return { columns, loading, lastMessage };
+  const refresh = () => { refreshProjects(); refreshAgents(); };
+
+  return { columns, loading, lastMessage, refresh };
 }

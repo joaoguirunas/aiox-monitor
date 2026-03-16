@@ -10,11 +10,14 @@ export class AgentSprite extends Phaser.GameObjects.Container {
   private sprite: Phaser.GameObjects.Sprite;
   private statusBadge: Phaser.GameObjects.Graphics;
   private nameLabel: Phaser.GameObjects.Text;
+  private glowCircle: Phaser.GameObjects.Arc;
   private agentColor: number;
   private spriteKey: string;
   private currentStatus: AgentStatus = 'idle';
   private animState: AgentAnimState = 'idle';
   private currentTween: Phaser.Tweens.Tween | null = null;
+  private glowTween: Phaser.Tweens.Tween | null = null;
+  private labelTween: Phaser.Tweens.Tween | null = null;
   private lastZone: string | null = null;
 
   constructor(
@@ -30,7 +33,11 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     this.agentColor = getAgentColor(agentName);
     const config = getAgentSpriteConfig(agentName);
 
-    // Usar spritesheet do agente, fallback para default, fallback para programático
+    // Agent glow (aura under feet)
+    this.glowCircle = scene.add.circle(0, 6, 18, this.agentColor, 0.06);
+    this.add(this.glowCircle);
+
+    // Sprite
     this.spriteKey = scene.textures.exists(config.key)
       ? config.key
       : scene.textures.exists('agent-default')
@@ -38,14 +45,14 @@ export class AgentSprite extends Phaser.GameObjects.Container {
         : '';
 
     if (this.spriteKey) {
-      this.sprite = scene.add.sprite(0, -8, this.spriteKey, 0);
+      this.sprite = scene.add.sprite(0, -10, this.spriteKey, 0);
       this.sprite.setOrigin(0.5, 0.5);
 
       if (this.spriteKey === 'agent-default' && config.key !== 'agent-default') {
         this.sprite.setTint(this.agentColor);
       }
     } else {
-      this.sprite = scene.add.sprite(0, -8, '__DEFAULT');
+      this.sprite = scene.add.sprite(0, -10, '__DEFAULT');
       this.sprite.setVisible(false);
       this.createFallbackGraphics();
     }
@@ -56,17 +63,29 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     this.drawStatusBadge();
     this.add(this.statusBadge);
 
-    // Nome flutuante
-    this.nameLabel = scene.add.text(0, -32, displayName, {
-      fontSize: '10px',
-      color: '#ffffff',
+    // Holographic name label
+    const colorHex = '#' + this.agentColor.toString(16).padStart(6, '0');
+    this.nameLabel = scene.add.text(0, -38, displayName, {
+      fontSize: '9px',
+      color: colorHex,
       fontFamily: 'monospace',
-      backgroundColor: '#00000088',
-      padding: { x: 3, y: 1 },
+      stroke: '#000000',
+      strokeThickness: 2,
     }).setOrigin(0.5);
+    this.nameLabel.setAlpha(0.7);
     this.add(this.nameLabel);
 
-    // Inicializar zona actual
+    // Floating label animation
+    this.labelTween = scene.tweens.add({
+      targets: this.nameLabel,
+      y: this.nameLabel.y - 2,
+      duration: 2500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Initialize zone
     const tile = pixelToTile(x, y);
     this.lastZone = getZoneForTile(tile.tileX, tile.tileY);
 
@@ -77,27 +96,57 @@ export class AgentSprite extends Phaser.GameObjects.Container {
   private createFallbackGraphics(): void {
     const g = this.scene.add.graphics();
     g.fillStyle(0xddccbb, 1);
-    g.fillCircle(0, -18, 6);
+    g.fillCircle(0, -20, 7);
     g.fillStyle(this.agentColor, 1);
-    g.fillRoundedRect(-7, -12, 14, 16, 3);
-    g.fillStyle(0x333344, 1);
-    g.fillRect(-5, 4, 4, 6);
-    g.fillRect(1, 4, 4, 6);
+    g.fillRoundedRect(-8, -13, 16, 18, 3);
+    g.fillStyle(0x1a1e30, 1);
+    g.fillRect(-5, 5, 4, 7);
+    g.fillRect(1, 5, 4, 7);
     this.add(g);
   }
 
   private drawStatusBadge(): void {
     this.statusBadge.clear();
     const color = STATUS_COLORS[this.currentStatus] ?? STATUS_COLORS.idle;
+    // Badge glow ring
+    this.statusBadge.fillStyle(color, 0.25);
+    this.statusBadge.fillCircle(12, -22, 6);
+    // Badge fill
     this.statusBadge.fillStyle(color, 1);
-    this.statusBadge.fillCircle(10, -18, 4);
-    this.statusBadge.lineStyle(1, 0xffffff, 0.8);
-    this.statusBadge.strokeCircle(10, -18, 4);
+    this.statusBadge.fillCircle(12, -22, 3.5);
+    // Badge border
+    this.statusBadge.lineStyle(1, 0xffffff, 0.5);
+    this.statusBadge.strokeCircle(12, -22, 3.5);
+  }
+
+  private updateGlow(): void {
+    if (this.glowTween) {
+      this.glowTween.stop();
+      this.glowTween = null;
+    }
+
+    if (this.currentStatus === 'working') {
+      this.glowCircle.setAlpha(0.1);
+      this.glowTween = this.scene.tweens.add({
+        targets: this.glowCircle,
+        alpha: { from: 0.08, to: 0.18 },
+        scaleX: { from: 1, to: 1.15 },
+        scaleY: { from: 1, to: 1.1 },
+        duration: 1500,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    } else {
+      this.glowCircle.setAlpha(0.04);
+      this.glowCircle.setScale(1);
+    }
   }
 
   setStatus(status: AgentStatus): void {
     this.currentStatus = status;
     this.drawStatusBadge();
+    this.updateGlow();
   }
 
   setTilePosition(tileX: number, tileY: number): void {
@@ -117,11 +166,9 @@ export class AgentSprite extends Phaser.GameObjects.Container {
       const distance = Phaser.Math.Distance.Between(this.x, this.y, targetX, targetY);
       const duration = Phaser.Math.Clamp(distance * 4, 500, 3000);
 
-      // Determinar direcção dominante e tocar animação correcta
       const direction = this.getWalkDirection(deltaX, deltaY);
       this.playAnimIfExists(`walk-${direction}`);
 
-      // Flip horizontal para walk-side esquerda
       if (direction === 'side' && deltaX < 0) {
         this.sprite.setFlipX(true);
       } else {
@@ -162,11 +209,13 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     const tile = pixelToTile(this.x, this.y);
     const currentZone = getZoneForTile(tile.tileX, tile.tileY);
     if (currentZone && currentZone !== this.lastZone && this.lastZone !== null) {
-      // Flash sutil ao cruzar fronteira de zona
+      // Zone crossing flash with agent color
       this.scene.tweens.add({
-        targets: this.sprite,
-        alpha: 0.6,
-        duration: 150,
+        targets: this.glowCircle,
+        alpha: 0.25,
+        scaleX: 1.4,
+        scaleY: 1.3,
+        duration: 200,
         yoyo: true,
         ease: 'Sine.easeInOut',
       });
@@ -226,6 +275,8 @@ export class AgentSprite extends Phaser.GameObjects.Container {
 
   destroy(fromScene?: boolean): void {
     this.stopCurrentAnimation();
+    if (this.glowTween) this.glowTween.stop();
+    if (this.labelTween) this.labelTween.stop();
     super.destroy(fromScene);
   }
 }

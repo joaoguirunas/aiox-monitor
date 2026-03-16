@@ -27,6 +27,25 @@ function truncate(value: unknown, maxLen = 500): string | undefined {
   return s.length > maxLen ? s.slice(0, maxLen) : s;
 }
 
+function extractReadableInput(input: unknown): string | undefined {
+  if (input === null || input === undefined) return undefined;
+  if (typeof input === 'string') return input.length > 500 ? input.slice(0, 500) : input;
+  if (typeof input === 'object' && input !== null) {
+    const obj = input as Record<string, unknown>;
+    // Extract the most meaningful field from tool_input objects
+    for (const key of ['command', 'query', 'prompt', 'content', 'message', 'file_path', 'pattern', 'description']) {
+      const val = obj[key];
+      if (typeof val === 'string' && val.length > 0) {
+        return val.length > 500 ? val.slice(0, 500) : val;
+      }
+    }
+  }
+  return truncate(input);
+}
+
+// Cache: remember last known agent per terminal PID
+const terminalAgentCache = new Map<number, string>();
+
 export interface ProcessedEvent {
   id: number;
   project_id: number;
@@ -41,20 +60,62 @@ export function processEvent(payload: EventPayload): ProcessedEvent {
   // 1. Detect / upsert project
   const project = detectProject(payload.project_path, payload.project_name);
 
-  // 2. Detect agent name (from field or payload text scan)
-  const agentName =
-    payload.agent_name?.trim() ||
-    detectAgentFromPayload(payload.input) ||
-    '@unknown';
+  // 1b. Broadcast project update (new or refreshed last_active)
+  try { broadcast({ type: 'project:update', project }); } catch { /* fire-and-forget */ }
 
-  // 3. Track terminal (if pid provided)
+  // 2. Detect agent name — trust hook detection first, then server-side Skill/Agent
+  //    detection, then terminal cache, then fallback.
+  //    We do NOT scan tool output server-side — file contents cause false positives.
+  let detected = payload.agent_name?.trim() || undefined;
+
+  // Server-side fallback: detect from Skill/Agent tool input (reliable sources only)
+  if (!detected || detected === '@unknown') {
+    if (payload.tool_name === 'Skill' || payload.tool_name === 'Agent') {
+      const inputStr = typeof payload.input === 'string' ? payload.input : JSON.stringify(payload.input ?? '');
+      const found = detectAgentFromPayload(inputStr);
+      if (found !== '@unknown') detected = found;
+    }
+  }
+
+  const pid = payload.terminal_pid;
+  let agentName: string;
+
+  if (detected && detected !== '@unknown') {
+    agentName = detected;
+    // Cache this known agent for the terminal (sticky until Stop)
+    if (pid !== undefined) terminalAgentCache.set(pid, detected);
+  } else if (pid !== undefined && terminalAgentCache.has(pid)) {
+    // Reuse last known agent for this terminal
+    agentName = terminalAgentCache.get(pid)!;
+  } else {
+    agentName = '@unknown';
+  }
+
+  // On Stop: clear the terminal cache so next session starts fresh
+  if (STOP_TYPES.has(eventType) && pid !== undefined) {
+    terminalAgentCache.delete(pid);
+  }
+
+  // 3. Track agent (before terminal, so we have display_name)
+  const agent = trackAgent(project.id, agentName, eventType, payload.tool_name);
+
+  // 4. Track terminal (if pid provided)
+  const inputSummary = extractReadableInput(payload.input);
   const terminal =
     payload.terminal_pid !== undefined
-      ? trackTerminal(project.id, payload.terminal_pid, payload.terminal_session_id)
+      ? trackTerminal(project.id, payload.terminal_pid, {
+          sessionId: payload.terminal_session_id,
+          agentName: agentName !== '@unknown' ? agentName : undefined,
+          agentDisplayName: agent.display_name,
+          currentTool: payload.tool_name,
+          currentInput: inputSummary,
+        })
       : undefined;
 
-  // 4. Track agent
-  const agent = trackAgent(project.id, agentName, eventType, payload.tool_name);
+  // 4b. Broadcast terminal update with agent info (if terminal was tracked)
+  if (terminal) {
+    try { broadcast({ type: 'terminal:update', terminal, projectId: project.id }); } catch { /* fire-and-forget */ }
+  }
 
   // 5. Resolve or create an active session for this terminal
   let sessionId: number | undefined;
@@ -83,7 +144,7 @@ export function processEvent(payload: EventPayload): ProcessedEvent {
     terminal_id: terminal?.id,
     type: eventType,
     tool: payload.tool_name,
-    input_summary: truncate(payload.input),
+    input_summary: inputSummary,
     output_summary: truncate(payload.output),
     raw_payload: truncate(payload, 2000),
   });

@@ -2,6 +2,7 @@ import {
   upsertTerminal,
   deactivateTerminal as dbDeactivateTerminal,
   deactivateStaleTerminals,
+  markTerminalsActive,
   getTerminalsByProject,
 } from '../lib/queries';
 import { broadcast } from './ws-broadcaster';
@@ -10,9 +11,15 @@ import type { Terminal } from '../lib/types';
 export function trackTerminal(
   projectId: number,
   pid: number,
-  sessionId?: string,
+  opts?: {
+    sessionId?: string;
+    agentName?: string;
+    agentDisplayName?: string;
+    currentTool?: string;
+    currentInput?: string;
+  },
 ): Terminal {
-  return upsertTerminal(projectId, pid, sessionId);
+  return upsertTerminal(projectId, pid, opts);
 }
 
 export function deactivateTerminal(projectId: number, pid: number): void {
@@ -24,11 +31,12 @@ export function deactivateTerminal(projectId: number, pid: number): void {
 }
 
 export function cleanupStaleTerminals(): void {
-  deactivateStaleTerminals(600); // 10 minutes
+  markTerminalsActive(30);        // processing > 30s without event → active
+  deactivateStaleTerminals(7200); // no activity for 2h → inactive
 }
 
 // Module-level cleanup interval — runs once per process
-// Next.js in dev may restart this on hot-reload, which is acceptable
+// Reduced to 15s for responsive processing→active transition
 if (typeof setInterval !== 'undefined') {
-  setInterval(cleanupStaleTerminals, 60_000);
+  setInterval(cleanupStaleTerminals, 15_000);
 }

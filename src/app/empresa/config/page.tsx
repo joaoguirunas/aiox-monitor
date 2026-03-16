@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { setTheme } from '@/game/bridge/react-phaser-bridge';
-import type { CompanyConfig, ThemeName } from '@/lib/types';
+import { useWebSocket } from '@/hooks/useWebSocket';
+import type { CompanyConfig, ThemeName, Project } from '@/lib/types';
 
 const THEMES: { value: ThemeName; label: string; description: string }[] = [
   { value: 'moderno', label: 'Moderno', description: 'Clean, minimal, cores neutras' },
@@ -11,22 +12,60 @@ const THEMES: { value: ThemeName; label: string; description: string }[] = [
   { value: 'cyberpunk', label: 'Cyberpunk', description: 'Neon, rosa/cyan, scanlines' },
 ];
 
+interface ProjectWithStats extends Project {
+  events: number;
+  agents: number;
+  sessions: number;
+}
+
 export default function CompanyConfigPage() {
   const [config, setConfig] = useState<CompanyConfig | null>(null);
+  const [projects, setProjects] = useState<ProjectWithStats[]>([]);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ projectId: number; action: 'delete' | 'clear'; name: string } | null>(null);
+  const { lastMessage, reconnectCount } = useWebSocket();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadProjects = useCallback(() => {
+    fetch('/api/projects?stats=1')
+      .then((r) => r.json())
+      .then(setProjects)
+      .catch(() => {});
+  }, []);
+
+  const loadProjectsDebounced = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(loadProjects, 500);
+  }, [loadProjects]);
+
+  useEffect(() => {
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, []);
 
   useEffect(() => {
     fetch('/api/company-config')
       .then((r) => r.json())
       .then(setConfig)
       .catch(() => setToast({ type: 'error', message: 'Erro ao carregar configuração' }));
-  }, []);
+    loadProjects();
+  }, [loadProjects]);
+
+  useEffect(() => {
+    if (!lastMessage) return;
+    if (lastMessage.type === 'project:update' || lastMessage.type === 'event:new' || lastMessage.type === 'agent:update') {
+      loadProjectsDebounced();
+    }
+  }, [lastMessage, loadProjectsDebounced]);
+
+  useEffect(() => {
+    if (reconnectCount === 0) return;
+    loadProjects();
+  }, [reconnectCount, loadProjects]);
 
   function handleThemeChange(theme: ThemeName) {
     if (!config) return;
     setConfig({ ...config, theme });
-    // Preview imediato via bridge
     setTheme(theme);
   }
 
@@ -46,133 +85,272 @@ export default function CompanyConfigPage() {
         }),
       });
       if (!res.ok) throw new Error();
-      setToast({ type: 'success', message: 'Configuração guardada!' });
+      showToast('success', 'Configuração guardada!');
     } catch {
-      setToast({ type: 'error', message: 'Erro ao guardar' });
+      showToast('error', 'Erro ao guardar');
     } finally {
       setSaving(false);
-      setTimeout(() => setToast(null), 3000);
     }
+  }
+
+  async function handleProjectAction() {
+    if (!confirmAction) return;
+    const { projectId, action } = confirmAction;
+    try {
+      if (action === 'delete') {
+        const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+        showToast('success', 'Projeto apagado com sucesso');
+      } else {
+        const res = await fetch(`/api/projects/${projectId}/events`, { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        showToast('success', `${data.events} eventos e ${data.sessions} sessões limpos`);
+      }
+      loadProjects();
+    } catch {
+      showToast('error', 'Erro ao executar ação');
+    } finally {
+      setConfirmAction(null);
+    }
+  }
+
+  function showToast(type: 'success' | 'error', message: string) {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3000);
   }
 
   if (!config) {
     return (
-      <div className="max-w-2xl mx-auto p-8 space-y-6">
-        <div className="h-8 bg-gray-800 rounded animate-pulse w-1/2" />
-        <div className="h-10 bg-gray-800 rounded animate-pulse" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-20 bg-gray-800 rounded animate-pulse" />
-          ))}
+      <main className="w-full px-4 py-5">
+        <div className="max-w-3xl space-y-5">
+          <div className="h-4 shimmer rounded w-48" />
+          <div className="h-9 shimmer rounded w-full" />
+          <div className="grid grid-cols-2 gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-16 shimmer rounded-lg" />
+            ))}
+          </div>
         </div>
-        <div className="h-10 bg-gray-800 rounded animate-pulse" />
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-8 space-y-8">
-      <h1 className="text-2xl font-bold font-mono text-gray-100">
-        Configuração da Empresa
-      </h1>
-
-      {/* Nome */}
-      <div className="space-y-2">
-        <label className="block text-sm font-mono text-gray-400">Nome da Empresa</label>
-        <input
-          type="text"
-          value={config.name}
-          onChange={(e) => setConfig({ ...config, name: e.target.value })}
-          className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2
-                     text-gray-100 font-mono focus:border-blue-500 focus:outline-none"
-        />
+    <main className="w-full px-4 py-5">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <h1 className="text-sm font-semibold text-text-primary font-display tracking-tight">
+          Configuração
+        </h1>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={loadProjects}
+            className="px-2.5 py-1 text-[11px] font-medium text-text-muted hover:text-text-secondary rounded-md border border-border/50 hover:border-border transition-colors"
+          >
+            Atualizar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-3 py-1.5 text-[11px] font-medium text-white bg-accent-blue hover:bg-accent-blue/80 rounded-md transition-colors disabled:opacity-40"
+          >
+            {saving ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
       </div>
 
-      {/* Tema */}
-      <div className="space-y-2">
-        <label className="block text-sm font-mono text-gray-400">Tema Visual</label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {THEMES.map((t) => (
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-8">
+        {/* Left: Settings */}
+        <div className="space-y-6">
+          {/* Nome */}
+          <SettingBlock label="Nome da Empresa">
+            <input
+              type="text"
+              value={config.name}
+              onChange={(e) => setConfig({ ...config, name: e.target.value })}
+              className="w-full bg-surface-1/50 border border-border/50 rounded-md px-3 py-2 text-[13px] text-text-primary focus:border-accent-blue/40 focus:outline-none transition-colors"
+            />
+          </SettingBlock>
+
+          {/* Tema */}
+          <SettingBlock label="Tema Visual">
+            <div className="grid grid-cols-2 gap-2">
+              {THEMES.map((t) => (
+                <button
+                  key={t.value}
+                  onClick={() => handleThemeChange(t.value)}
+                  className={`px-3 py-2.5 rounded-lg border text-left transition-colors ${
+                    config.theme === t.value
+                      ? 'border-accent-blue/50 bg-accent-blue/[0.06] text-text-primary'
+                      : 'border-border/40 bg-surface-1/30 text-text-secondary hover:border-border hover:bg-white/[0.02]'
+                  }`}
+                >
+                  <div className="text-[12px] font-medium">{t.label}</div>
+                  <div className="text-[11px] text-text-muted mt-0.5">{t.description}</div>
+                </button>
+              ))}
+            </div>
+          </SettingBlock>
+
+          {/* Timeouts */}
+          <SettingBlock label="Timeouts de Inatividade">
+            <div className="space-y-3">
+              <RangeField
+                label="Working → Idle (lounge)"
+                value={config.idle_timeout_lounge}
+                min={60} max={1800} step={60}
+                display={`${Math.round(config.idle_timeout_lounge / 60)} min`}
+                onChange={(v) => setConfig({ ...config, idle_timeout_lounge: v })}
+              />
+              <RangeField
+                label="Idle → Break (café)"
+                value={config.idle_timeout_break}
+                min={300} max={3600} step={60}
+                display={`${Math.round(config.idle_timeout_break / 60)} min`}
+                onChange={(v) => setConfig({ ...config, idle_timeout_break: v })}
+              />
+            </div>
+          </SettingBlock>
+
+          {/* Music toggle */}
+          <SettingBlock label="Música Ambiente">
             <button
-              key={t.value}
-              onClick={() => handleThemeChange(t.value)}
-              className={`p-3 rounded border font-mono text-left transition
-                ${config.theme === t.value
-                  ? 'border-blue-500 bg-blue-500/10 text-blue-300'
-                  : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
-                }`}
+              onClick={() => setConfig({ ...config, ambient_music: config.ambient_music ? 0 : 1 })}
+              className="flex items-center gap-2.5"
             >
-              <div className="font-bold">{t.label}</div>
-              <div className="text-xs mt-1 opacity-70">{t.description}</div>
+              <div className={`w-9 h-5 rounded-full transition-colors ${config.ambient_music ? 'bg-accent-blue' : 'bg-surface-3'}`}>
+                <div className={`w-4 h-4 mt-0.5 rounded-full bg-white transition-transform ${config.ambient_music ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+              </div>
+              <span className="text-[11px] text-text-muted">{config.ambient_music ? 'Ligada' : 'Desligada'}</span>
             </button>
-          ))}
+          </SettingBlock>
         </div>
-      </div>
 
-      {/* Idle Timeouts */}
-      <div className="space-y-4">
-        <label className="block text-sm font-mono text-gray-400">Timeouts de Inactividade</label>
-
-        <div className="space-y-1">
-          <div className="flex justify-between text-xs font-mono text-gray-500">
-            <span>Working → Idle (lounge)</span>
-            <span>{Math.round(config.idle_timeout_lounge / 60)} min</span>
+        {/* Right: Projects */}
+        <div>
+          <div className="flex items-center gap-3 mb-3">
+            <span className="text-[11px] font-medium text-text-secondary">Projetos Registados</span>
+            <div className="h-px flex-1 bg-border/60" />
+            <span className="text-[11px] tabular-nums text-text-muted">{projects.length}</span>
           </div>
-          <input
-            type="range" min={60} max={1800} step={60}
-            value={config.idle_timeout_lounge}
-            onChange={(e) => setConfig({ ...config, idle_timeout_lounge: Number(e.target.value) })}
-            className="w-full accent-blue-500"
-          />
-        </div>
 
-        <div className="space-y-1">
-          <div className="flex justify-between text-xs font-mono text-gray-500">
-            <span>Idle → Break (café)</span>
-            <span>{Math.round(config.idle_timeout_break / 60)} min</span>
+          {projects.length === 0 ? (
+            <p className="text-[11px] text-text-muted py-4">Nenhum projeto registado</p>
+          ) : (
+            <div className="space-y-2">
+              {projects.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between rounded-lg border border-border/40 bg-surface-1/30 px-4 py-3 hover:bg-white/[0.02] transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-medium text-text-primary truncate">{p.name}</div>
+                    <div className="text-[11px] text-text-muted truncate mt-0.5">{p.path}</div>
+                    <div className="flex gap-3 mt-1 text-[11px] text-text-muted">
+                      <span>{p.events} eventos</span>
+                      <span>{p.agents} agentes</span>
+                      <span>{p.sessions} sessões</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 ml-3 shrink-0">
+                    <button
+                      onClick={() => setConfirmAction({ projectId: p.id, action: 'clear', name: p.name })}
+                      className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-colors"
+                    >
+                      Limpar
+                    </button>
+                    <button
+                      onClick={() => setConfirmAction({ projectId: p.id, action: 'delete', name: p.name })}
+                      className="px-2.5 py-1 text-[11px] font-medium rounded-md border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 transition-colors"
+                    >
+                      Apagar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Confirm dialog */}
+      {confirmAction && (
+        <>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40" onClick={() => setConfirmAction(null)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-surface-1 border border-border rounded-xl p-5 max-w-md w-full space-y-4 shadow-xl">
+              <h3 className="text-[13px] font-semibold text-text-primary font-display">
+                {confirmAction.action === 'delete' ? 'Apagar Projeto' : 'Limpar Eventos'}
+              </h3>
+              <p className="text-[12px] text-text-secondary leading-relaxed">
+                {confirmAction.action === 'delete'
+                  ? `Tem certeza que deseja apagar "${confirmAction.name}" e TODOS os dados associados (eventos, agentes, sessões, terminais)? Esta ação é irreversível.`
+                  : `Tem certeza que deseja limpar todos os eventos e sessões de "${confirmAction.name}"? Os agentes e o projeto serão mantidos.`
+                }
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setConfirmAction(null)}
+                  className="px-3 py-1.5 text-[11px] font-medium rounded-md border border-border/50 text-text-secondary hover:bg-white/[0.03] transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleProjectAction}
+                  className={`px-3 py-1.5 text-[11px] font-medium rounded-md text-white transition-colors ${
+                    confirmAction.action === 'delete'
+                      ? 'bg-rose-600 hover:bg-rose-500'
+                      : 'bg-amber-600 hover:bg-amber-500'
+                  }`}
+                >
+                  {confirmAction.action === 'delete' ? 'Apagar Tudo' : 'Limpar Eventos'}
+                </button>
+              </div>
+            </div>
           </div>
-          <input
-            type="range" min={300} max={3600} step={60}
-            value={config.idle_timeout_break}
-            onChange={(e) => setConfig({ ...config, idle_timeout_break: Number(e.target.value) })}
-            className="w-full accent-blue-500"
-          />
-        </div>
-      </div>
-
-      {/* Ambient Music */}
-      <div className="flex items-center gap-3">
-        <label className="text-sm font-mono text-gray-400">Música Ambiente</label>
-        <button
-          onClick={() => setConfig({ ...config, ambient_music: config.ambient_music ? 0 : 1 })}
-          className={`w-10 h-5 rounded-full transition ${
-            config.ambient_music ? 'bg-blue-500' : 'bg-gray-700'
-          }`}
-        >
-          <div className={`w-4 h-4 rounded-full bg-white transition-transform ${
-            config.ambient_music ? 'translate-x-5' : 'translate-x-0.5'
-          }`} />
-        </button>
-      </div>
-
-      {/* Save */}
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700
-                   text-white font-mono rounded transition"
-      >
-        {saving ? 'Guardando...' : 'Guardar Configuração'}
-      </button>
+        </>
+      )}
 
       {/* Toast */}
       {toast && (
-        <div className={`p-3 rounded font-mono text-sm ${
-          toast.type === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'
+        <div className={`fixed bottom-5 right-5 z-50 px-3 py-2 rounded-lg text-[12px] font-medium shadow-lg border ${
+          toast.type === 'success'
+            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+            : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
         }`}>
           {toast.message}
         </div>
       )}
+    </main>
+  );
+}
+
+function SettingBlock({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-[11px] font-medium text-text-muted mb-2">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function RangeField({ label, value, min, max, step, display, onChange }: {
+  label: string; value: number; min: number; max: number; step: number; display: string;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div>
+      <div className="flex justify-between text-[11px] text-text-muted mb-1">
+        <span>{label}</span>
+        <span className="tabular-nums">{display}</span>
+      </div>
+      <input
+        type="range" min={min} max={max} step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-accent-blue h-1"
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import type * as Phaser from 'phaser';
-import type { Agent, ThemeName } from '@/lib/types';
+import type { Agent, Project, ThemeName } from '@/lib/types';
 
 let gameInstance: Phaser.Game | null = null;
 
@@ -24,6 +24,10 @@ export function syncAgents(agents: Agent[]): void {
 
 export function updateAgent(agent: Agent): void {
   emitToGame('update:agent', agent);
+}
+
+export function syncProjects(projects: Project[]): void {
+  emitToGame('sync:projects', projects);
 }
 
 export function setTheme(themeName: ThemeName): void {

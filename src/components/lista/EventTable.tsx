@@ -1,4 +1,4 @@
-import type { Event, AgentWithStats, Project } from '@/lib/types';
+import type { Event, AgentWithStats, Project, Terminal } from '@/lib/types';
 import { EventRow } from './EventRow';
 
 interface EventTableProps {
@@ -6,24 +6,26 @@ interface EventTableProps {
   loading: boolean;
   agents: AgentWithStats[];
   projects: Project[];
+  terminals: Terminal[];
   onRowClick: (event: Event) => void;
 }
 
-const COLUMNS = ['Timestamp', 'Projeto', 'Agente', 'Tipo', 'Tool', 'Resumo'];
+const COLUMNS = ['Timestamp', 'Projeto', 'Agente', 'Terminal', 'Tipo', 'Tool', 'Descrição'];
 
-export function EventTable({ events, loading, agents, projects, onRowClick }: EventTableProps) {
+export function EventTable({ events, loading, agents, projects, terminals, onRowClick }: EventTableProps) {
   const agentMap = new Map(agents.map((a) => [a.id, a]));
   const projectMap = new Map(projects.map((p) => [p.id, p]));
+  const terminalMap = new Map(terminals.map((t) => [t.id, t]));
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-800">
+    <div className="overflow-x-auto rounded-lg border border-border/40 bg-surface-1/30 w-full">
       <table className="w-full text-left border-collapse">
         <thead>
-          <tr className="bg-gray-800/80">
+          <tr className="border-b border-border/30 bg-surface-1/40">
             {COLUMNS.map((col) => (
               <th
                 key={col}
-                className="px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap"
+                className="px-4 py-2.5 text-[11px] font-medium text-text-muted tracking-wide whitespace-nowrap"
               >
                 {col}
               </th>
@@ -33,11 +35,11 @@ export function EventTable({ events, loading, agents, projects, onRowClick }: Ev
         <tbody>
           {loading && (
             <>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i} className="border-b border-gray-800">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <tr key={i} className="border-b border-border/20">
                   {COLUMNS.map((col) => (
                     <td key={col} className="px-4 py-2.5">
-                      <div className="h-4 bg-gray-800 rounded animate-pulse w-full max-w-[120px]" />
+                      <div className="h-3 shimmer rounded w-full max-w-[100px]" />
                     </td>
                   ))}
                 </tr>
@@ -47,8 +49,9 @@ export function EventTable({ events, loading, agents, projects, onRowClick }: Ev
 
           {!loading && events.length === 0 && (
             <tr>
-              <td colSpan={COLUMNS.length} className="px-4 py-12 text-center text-gray-500">
-                Nenhum evento ainda. Inicie o Claude Code em algum projeto.
+              <td colSpan={COLUMNS.length} className="px-4 py-12 text-center">
+                <p className="text-sm text-text-secondary font-medium">Nenhum evento registado</p>
+                <p className="text-[11px] text-text-muted mt-1.5">Inicie o Claude Code para monitorizar</p>
               </td>
             </tr>
           )}
@@ -57,6 +60,7 @@ export function EventTable({ events, loading, agents, projects, onRowClick }: Ev
             events.map((event) => {
               const agent = event.agent_id ? agentMap.get(event.agent_id) : undefined;
               const project = projectMap.get(event.project_id);
+              const terminal = event.terminal_id ? terminalMap.get(event.terminal_id) : undefined;
               return (
                 <EventRow
                   key={event.id}
@@ -64,6 +68,7 @@ export function EventTable({ events, loading, agents, projects, onRowClick }: Ev
                   agentName={agent?.name}
                   agentDisplayName={agent?.display_name}
                   projectName={project?.name}
+                  terminal={terminal}
                   onClick={() => onRowClick(event)}
                 />
               );

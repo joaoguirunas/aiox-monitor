@@ -1,12 +1,19 @@
 import type { EventType } from '@/lib/types';
-import { getAgentBgColor } from '@/components/empresa/config/agent-colors';
 
 const EVENT_TYPE_STYLES: Record<EventType, string> = {
-  PreToolUse: 'bg-blue-900 text-blue-300 border border-blue-700',
-  PostToolUse: 'bg-green-900 text-green-300 border border-green-700',
-  UserPromptSubmit: 'bg-purple-900 text-purple-300 border border-purple-700',
-  Stop: 'bg-gray-800 text-gray-400 border border-gray-600',
-  SubagentStop: 'bg-orange-900 text-orange-300 border border-orange-700',
+  PreToolUse: 'bg-accent-blue/10 text-accent-blue border-accent-blue/20',
+  PostToolUse: 'bg-accent-emerald/10 text-accent-emerald border-accent-emerald/20',
+  UserPromptSubmit: 'bg-accent-violet/10 text-accent-violet border-accent-violet/20',
+  Stop: 'bg-surface-3 text-text-muted border-border',
+  SubagentStop: 'bg-accent-amber/10 text-accent-amber border-accent-amber/20',
+};
+
+const EVENT_TYPE_LABELS: Record<EventType, string> = {
+  PreToolUse: 'Ação',
+  PostToolUse: 'Resultado',
+  UserPromptSubmit: 'Prompt',
+  Stop: 'Resposta',
+  SubagentStop: 'Sub-Resposta',
 };
 
 interface EventTypeBadgeProps {
@@ -15,10 +22,30 @@ interface EventTypeBadgeProps {
 
 export function EventTypeBadge({ type }: EventTypeBadgeProps) {
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${EVENT_TYPE_STYLES[type]}`}>
-      {type}
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium border ${EVENT_TYPE_STYLES[type]}`}>
+      {EVENT_TYPE_LABELS[type]}
     </span>
   );
+}
+
+// Agent color mapping (inline styles for dynamic agent colors)
+const AGENT_COLORS: Record<string, string> = {
+  '@dev': '#6366f1',
+  '@qa': '#34d399',
+  '@architect': '#a78bfa',
+  '@pm': '#fb923c',
+  '@sm': '#22d3ee',
+  '@po': '#fbbf24',
+  '@analyst': '#818cf8',
+  '@devops': '#f87171',
+  '@data-engineer': '#f472b6',
+  '@ux-design-expert': '#e879f9',
+  '@aiox-master': '#fbbf24',
+};
+
+function getAgentColor(name: string | null | undefined): string {
+  if (!name) return '#4a5272';
+  return AGENT_COLORS[name] ?? '#4a5272';
 }
 
 interface AgentBadgeProps {
@@ -28,10 +55,19 @@ interface AgentBadgeProps {
 
 export function AgentBadge({ name, displayName }: AgentBadgeProps) {
   const label = displayName ?? name ?? 'unknown';
-  const bg = getAgentBgColor(name);
+  const color = getAgentColor(name);
+  const initial = label.charAt(0).toUpperCase();
+
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold text-white ${bg}`}>
-      {label}
+    <span className="inline-flex items-center gap-1.5 text-2xs font-semibold">
+      {/* Avatar dot with initial */}
+      <span
+        className="flex items-center justify-center w-4.5 h-4.5 rounded-full text-[9px] font-bold text-white/90"
+        style={{ backgroundColor: color, width: '18px', height: '18px', fontSize: '9px' }}
+      >
+        {initial}
+      </span>
+      <span style={{ color }}>{label}</span>
     </span>
   );
 }

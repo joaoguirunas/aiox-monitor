@@ -5,11 +5,14 @@ export interface WsMessage {
   [key: string]: unknown;
 }
 
-let wss: WebSocketServer | null = null;
+// Use globalThis to share the WSS instance between esbuild bundle (server.ts)
+// and Next.js bundle (API routes). Without this, each bundle gets its own
+// module-level `wss` variable, and broadcast() from API routes silently fails.
+const g = globalThis as unknown as { __aiox_wss?: WebSocketServer };
 
 export function setBroadcaster(server: WebSocketServer): void {
-  if (wss) return; // protect against double-init
-  wss = server;
+  if (g.__aiox_wss) return; // protect against double-init
+  g.__aiox_wss = server;
   // Ping loop — keeps connections alive and detects dead clients
   setInterval(() => {
     broadcast({ type: 'ping' });
@@ -17,6 +20,7 @@ export function setBroadcaster(server: WebSocketServer): void {
 }
 
 export function broadcast(message: WsMessage): void {
+  const wss = g.__aiox_wss;
   if (!wss) return;
   const json = JSON.stringify(message);
   for (const client of wss.clients) {
@@ -32,5 +36,5 @@ export function broadcast(message: WsMessage): void {
 }
 
 export function getClientCount(): number {
-  return wss?.clients.size ?? 0;
+  return g.__aiox_wss?.clients.size ?? 0;
 }

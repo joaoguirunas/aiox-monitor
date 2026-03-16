@@ -59,6 +59,27 @@ export function getProjectWithDetails(id: number): ProjectWithDetails | null {
   return { ...project, agents, terminals };
 }
 
+export function deleteProject(id: number): { deleted: boolean } {
+  const result = db.prepare(`DELETE FROM projects WHERE id = ?`).run(id);
+  return { deleted: (result as { changes: number }).changes > 0 };
+}
+
+export function clearProjectEvents(id: number): { events: number; sessions: number } {
+  const events = db.prepare(`DELETE FROM events WHERE project_id = ?`).run(id);
+  const sessions = db.prepare(`DELETE FROM sessions WHERE project_id = ?`).run(id);
+  return {
+    events: (events as { changes: number }).changes,
+    sessions: (sessions as { changes: number }).changes,
+  };
+}
+
+export function getProjectStats(id: number): { events: number; agents: number; sessions: number } {
+  const ev = db.prepare(`SELECT COUNT(*) as count FROM events WHERE project_id = ?`).get(id) as { count: number };
+  const ag = db.prepare(`SELECT COUNT(*) as count FROM agents WHERE project_id = ?`).get(id) as { count: number };
+  const se = db.prepare(`SELECT COUNT(*) as count FROM sessions WHERE project_id = ?`).get(id) as { count: number };
+  return { events: ev.count, agents: ag.count, sessions: se.count };
+}
+
 // ─── Agents ──────────────────────────────────────────────────────────────────
 
 export function upsertAgent(
@@ -126,16 +147,35 @@ export function getAgents(filters?: { projectId?: number }): AgentWithStats[] {
 export function upsertTerminal(
   projectId: number,
   pid: number,
-  sessionId?: string,
+  opts?: {
+    sessionId?: string;
+    agentName?: string;
+    agentDisplayName?: string;
+    currentTool?: string;
+    currentInput?: string;
+  },
 ): Terminal {
+  const o = opts ?? {};
   db.prepare(`
-    INSERT INTO terminals (project_id, pid, session_id)
-    VALUES (?, ?, ?)
+    INSERT INTO terminals (project_id, pid, session_id, status, agent_name, agent_display_name, current_tool, current_input)
+    VALUES (?, ?, ?, 'processing', ?, ?, ?, ?)
     ON CONFLICT(project_id, pid) DO UPDATE SET
-      session_id  = COALESCE(excluded.session_id, session_id),
-      status      = 'active',
-      last_active = datetime('now')
-  `).run(projectId, pid, sessionId ?? null);
+      session_id         = COALESCE(excluded.session_id, session_id),
+      status             = 'processing',
+      agent_name         = COALESCE(excluded.agent_name, agent_name),
+      agent_display_name = COALESCE(excluded.agent_display_name, agent_display_name),
+      current_tool       = COALESCE(excluded.current_tool, current_tool),
+      current_input      = COALESCE(excluded.current_input, current_input),
+      last_active        = datetime('now')
+  `).run(
+    projectId,
+    pid,
+    o.sessionId ?? null,
+    o.agentName ?? null,
+    o.agentDisplayName ?? null,
+    o.currentTool ?? null,
+    o.currentInput ?? null,
+  );
 
   return row<Terminal>(
     db.prepare(`SELECT * FROM terminals WHERE project_id = ? AND pid = ?`).get(
@@ -153,11 +193,20 @@ export function deactivateTerminal(projectId: number, pid: number): void {
   `).run(projectId, pid);
 }
 
-export function deactivateStaleTerminals(olderThanSeconds = 600): void {
+export function deactivateStaleTerminals(olderThanSeconds = 7200): void {
   db.prepare(`
     UPDATE terminals
     SET status = 'inactive'
-    WHERE status = 'active'
+    WHERE status IN ('processing', 'active')
+      AND last_active < datetime('now', '-' || ? || ' seconds')
+  `).run(olderThanSeconds);
+}
+
+export function markTerminalsActive(olderThanSeconds = 30): void {
+  db.prepare(`
+    UPDATE terminals
+    SET status = 'active'
+    WHERE status = 'processing'
       AND last_active < datetime('now', '-' || ? || ' seconds')
   `).run(olderThanSeconds);
 }

@@ -6,7 +6,7 @@ export function createGameConfig(parent: string): Phaser.Types.Core.GameConfig {
   return {
     type: Phaser.AUTO,
     parent,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#08090f',
     scene: [BootScene, OfficeScene],
     scale: {
       mode: Phaser.Scale.RESIZE,

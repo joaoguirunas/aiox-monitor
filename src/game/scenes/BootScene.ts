@@ -11,14 +11,27 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor('#1a1a2e');
+    this.cameras.main.setBackgroundColor('#08090f');
 
     const { centerX, centerY } = this.cameras.main;
 
+    // Loading indicator — orbital dot
+    const dot = this.add.circle(centerX, centerY - 20, 4, 0x6366f1, 0.8);
+    this.tweens.add({
+      targets: dot,
+      alpha: { from: 0.3, to: 0.8 },
+      scaleX: { from: 0.8, to: 1.2 },
+      scaleY: { from: 0.8, to: 1.2 },
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
     this.add
-      .text(centerX, centerY, 'Carregando escritório...', {
-        fontSize: '18px',
-        color: '#8888aa',
+      .text(centerX, centerY + 10, 'a inicializar estação...', {
+        fontSize: '13px',
+        color: '#4a5272',
         fontFamily: 'monospace',
       })
       .setOrigin(0.5);
@@ -45,8 +58,8 @@ export class BootScene extends Phaser.Scene {
       this.addCanvasSpritesheet('agent-default', generateAgentSpritesheet({
         key: 'agent-default',
         accessory: 'none',
-        primaryColor: 0x6b7280,
-        secondaryColor: 0x4b5563,
+        primaryColor: 0x818cf8,
+        secondaryColor: 0x6366f1,
         skinTone: 0xe0c8b0,
         hairStyle: 'short',
         hairColor: 0x4a3728,
@@ -56,10 +69,6 @@ export class BootScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * Adiciona um HTMLCanvasElement como spritesheet no Phaser.
-   * Usa createCanvas + drawImage + frame generation manual.
-   */
   private addCanvasSpritesheet(key: string, sourceCanvas: HTMLCanvasElement): void {
     const canvasTex = this.textures.createCanvas(
       key,
@@ -71,14 +80,13 @@ export class BootScene extends Phaser.Scene {
     ctx.drawImage(sourceCanvas, 0, 0);
     canvasTex.refresh();
 
-    // Adicionar frames manualmente (simula spritesheet)
     const texture = this.textures.get(key);
     let frameIndex = 0;
     for (let row = 0; row < ATLAS_ROWS; row++) {
       for (let col = 0; col < ATLAS_COLS; col++) {
         texture.add(
           frameIndex,
-          0, // source index
+          0,
           col * FRAME_SIZE,
           row * FRAME_SIZE,
           FRAME_SIZE,

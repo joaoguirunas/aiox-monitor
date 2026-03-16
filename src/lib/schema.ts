@@ -28,14 +28,18 @@ export function initSchema(db: DatabaseSync): void {
     );
 
     CREATE TABLE IF NOT EXISTS terminals (
-      id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      project_id    INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      pid           INTEGER NOT NULL,
-      session_id    TEXT,
-      status        TEXT NOT NULL DEFAULT 'active'
-                    CHECK(status IN ('active','inactive')),
-      first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
-      last_active   TEXT NOT NULL DEFAULT (datetime('now')),
+      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id         INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      pid                INTEGER NOT NULL,
+      session_id         TEXT,
+      status             TEXT NOT NULL DEFAULT 'active'
+                         CHECK(status IN ('processing','active','inactive')),
+      agent_name         TEXT,
+      agent_display_name TEXT,
+      current_tool       TEXT,
+      current_input      TEXT,
+      first_seen_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      last_active        TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(project_id, pid)
     );
 
@@ -106,4 +110,20 @@ export function initSchema(db: DatabaseSync): void {
   } catch {
     // Column already exists — ignore
   }
+
+  // Migration: terminals new columns + status values
+  const terminalMigrations = [
+    `ALTER TABLE terminals ADD COLUMN agent_name TEXT`,
+    `ALTER TABLE terminals ADD COLUMN agent_display_name TEXT`,
+    `ALTER TABLE terminals ADD COLUMN current_tool TEXT`,
+    `ALTER TABLE terminals ADD COLUMN current_input TEXT`,
+  ];
+  for (const sql of terminalMigrations) {
+    try { db.exec(sql); } catch { /* Column already exists */ }
+  }
+
+  // Migrate old 'active' status to 'processing' is not needed —
+  // the CHECK constraint update is handled by SQLite allowing existing data
+  // We just need to ensure the CHECK allows the new values.
+  // SQLite doesn't enforce CHECK on existing rows, so old 'active' rows are fine.
 }

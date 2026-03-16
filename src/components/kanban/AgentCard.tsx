@@ -3,68 +3,90 @@
 import { useState, useEffect } from 'react';
 import type { Agent, AgentStatus } from '@/lib/types';
 
-const STATUS_STYLES: Record<AgentStatus, string> = {
-  working: 'bg-green-500 animate-pulse',
-  idle:    'bg-gray-500',
-  break:   'bg-yellow-500',
-  offline: 'bg-red-900',
+const STATUS_DOT: Record<AgentStatus, string> = {
+  working: 'bg-emerald-400',
+  idle:    'bg-zinc-500',
+  break:   'bg-amber-400',
+  offline: 'bg-zinc-700',
 };
 
-const STATUS_LABELS: Record<AgentStatus, string> = {
-  working: 'working',
-  idle:    'idle',
-  break:   'break',
-  offline: 'offline',
+const AGENT_COLORS: Record<string, string> = {
+  '@dev': '#6366f1',
+  '@qa': '#34d399',
+  '@architect': '#a78bfa',
+  '@pm': '#fb923c',
+  '@sm': '#22d3ee',
+  '@po': '#fbbf24',
+  '@analyst': '#818cf8',
+  '@devops': '#f87171',
+  '@data-engineer': '#f472b6',
+  '@ux-design-expert': '#e879f9',
+  '@aiox-master': '#fbbf24',
 };
 
 interface AgentCardProps {
   agent: Agent;
-  /** Increment this value to trigger a flash highlight */
   flashTrigger?: number;
+  variant?: 'chip' | 'card';
 }
 
-export function AgentCard({ agent, flashTrigger = 0 }: AgentCardProps) {
+export function AgentCard({ agent, flashTrigger = 0, variant = 'chip' }: AgentCardProps) {
   const [flash, setFlash] = useState(false);
 
-  // Flash on new event for this agent
   useEffect(() => {
     if (flashTrigger === 0) return;
     setFlash(true);
-    const t = setTimeout(() => setFlash(false), 600);
+    const t = setTimeout(() => setFlash(false), 500);
     return () => clearTimeout(t);
   }, [flashTrigger]);
 
-  return (
-    <article
-      aria-label={`Agente ${agent.display_name ?? agent.name}`}
-      className={`
-        bg-gray-800 rounded-lg p-3 transition-all duration-150
-        ${flash ? 'ring-2 ring-blue-400' : ''}
-      `}
-    >
-      {/* Header: name + status badge */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-gray-100 truncate">
-            {agent.display_name ?? agent.name}
-          </p>
-          <p className="text-xs text-gray-500 truncate">{agent.name}</p>
-        </div>
+  const agentColor = AGENT_COLORS[agent.name] ?? '#6366f1';
+  const displayName = agent.display_name ?? agent.name;
+  const initial = displayName.charAt(0).toUpperCase();
+
+  if (variant === 'card') {
+    return (
+      <div
+        className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-surface-2/50 border border-border/40 transition-colors duration-150 ${flash ? 'border-accent-blue/30' : ''}`}
+      >
+        {/* Avatar */}
         <span
-          aria-label={`Status: ${STATUS_LABELS[agent.status]}`}
-          className={`flex-shrink-0 inline-block w-2.5 h-2.5 rounded-full ${STATUS_STYLES[agent.status]}`}
-        />
+          className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-md text-[11px] font-bold text-white/90"
+          style={{ backgroundColor: agentColor }}
+        >
+          {initial}
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] font-medium text-text-primary truncate">{displayName}</p>
+          {agent.current_tool && (
+            <p className="text-[11px] text-text-muted font-mono truncate mt-0.5">
+              {agent.current_tool}
+            </p>
+          )}
+        </div>
+
+        {/* Pulse */}
+        <span className="relative flex-shrink-0">
+          <span className="block w-2 h-2 rounded-full bg-emerald-400" />
+          <span className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-400 animate-status-pulse" />
+        </span>
       </div>
+    );
+  }
 
-      {/* Current tool — only when working */}
-      {agent.status === 'working' && agent.current_tool && (
-        <p className="mt-1.5 text-xs text-blue-400 truncate">
-          ⚙ {agent.current_tool}
-        </p>
-      )}
-
-      {/* Status label */}
-      <p className="mt-1 text-xs text-gray-500 capitalize">{STATUS_LABELS[agent.status]}</p>
-    </article>
+  // Chip variant — compact horizontal pill
+  return (
+    <span
+      className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-surface-2/40 border border-border/30 transition-colors duration-150 hover:bg-surface-2/60 ${flash ? 'border-accent-blue/30' : ''}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[agent.status]}`} />
+      <span
+        className="text-[12px] font-medium truncate max-w-[120px]"
+        style={{ color: agentColor }}
+      >
+        {displayName}
+      </span>
+    </span>
   );
 }

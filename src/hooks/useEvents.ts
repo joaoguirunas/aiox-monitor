@@ -20,34 +20,51 @@ export function useEvents(filters: EventFilters = {}) {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
-  const { lastMessage } = useWebSocket();
+  const [refreshKey, setRefreshKey] = useState(0);
+  const { lastMessage, reconnectCount } = useWebSocket();
 
   const filtersKey = JSON.stringify(filters);
 
-  // Initial fetch — re-runs when filters change
+  const refresh = () => setRefreshKey((k) => k + 1);
+
+  // Initial fetch — re-runs when filters change, manual refresh, or WebSocket reconnects
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     const qs = buildQueryString(JSON.parse(filtersKey) as EventFilters);
     fetch(`/api/events?${qs}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data: { events: Event[]; total: number }) => {
+        if (cancelled) return;
         setEvents(data.events ?? []);
         setTotal(data.total ?? 0);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, [filtersKey]);
+      .catch(() => {
+        if (cancelled) return;
+        setEvents([]);
+        setTotal(0);
+        setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [filtersKey, refreshKey, reconnectCount]);
 
-  // Real-time updates via WebSocket
+  // Real-time updates via WebSocket — with deduplication
   useEffect(() => {
     if (!lastMessage || lastMessage.type !== 'event:new') return;
     const msg = lastMessage as WsEventNew;
-    // Only update if matches active project filter (or no filter set)
     const parsedFilters = JSON.parse(filtersKey) as EventFilters;
     if (parsedFilters.projectId && msg.projectId !== parsedFilters.projectId) return;
-    setEvents(prev => [msg.event, ...prev].slice(0, parsedFilters.limit ?? 100));
+    setEvents(prev => {
+      // Deduplicate: skip if event already exists
+      if (prev.some(e => e.id === msg.event.id)) return prev;
+      return [msg.event, ...prev].slice(0, parsedFilters.limit ?? 100);
+    });
     setTotal(prev => prev + 1);
   }, [lastMessage, filtersKey]);
 
-  return { events, loading, total };
+  return { events, loading, total, refresh };
 }

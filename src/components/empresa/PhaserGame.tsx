@@ -7,12 +7,13 @@ import { NAVBAR_HEIGHT } from '@/game/constants';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useProjectContext } from '@/contexts/ProjectContext';
 import {
-  setGameInstance, clearGameInstance, syncAgents, updateAgent, setTheme,
+  setGameInstance, clearGameInstance, syncAgents, syncProjects, updateAgent, setTheme,
 } from '@/game/bridge/react-phaser-bridge';
-import type { WsAgentUpdate, CompanyConfig, ThemeName } from '@/lib/types';
+import type { WsAgentUpdate, WsEventNew, CompanyConfig, ThemeName } from '@/lib/types';
 
 export function PhaserGame() {
   const gameRef = useRef<Phaser.Game | null>(null);
+  const lastSyncRef = useRef(0);
   const { lastMessage } = useWebSocket();
   const { selectedProjectId } = useProjectContext();
 
@@ -31,17 +32,20 @@ export function PhaserGame() {
         const url = selectedProjectId
           ? `/api/agents?project_id=${selectedProjectId}`
           : '/api/agents';
-        const [agentsRes, configRes] = await Promise.all([
+        const [agentsRes, configRes, projectsRes] = await Promise.all([
           fetch(url),
           fetch('/api/company-config'),
+          fetch('/api/projects'),
         ]);
         const agents = await agentsRes.json();
         const config: CompanyConfig = await configRes.json();
+        const projects = await projectsRes.json();
         const waitForScene = setInterval(() => {
           const scene = game.scene.getScene('OfficeScene');
           if (scene && scene.scene.isActive()) {
             clearInterval(waitForScene);
             if (config.theme) setTheme(config.theme);
+            syncProjects(projects);
             syncAgents(agents);
           }
         }, 100);
@@ -76,6 +80,25 @@ export function PhaserGame() {
       const { agent, projectId } = lastMessage as WsAgentUpdate;
       if (selectedProjectId && projectId !== selectedProjectId) return;
       updateAgent(agent);
+    }
+
+    if (lastMessage.type === 'event:new') {
+      // Throttled re-fetch: max once every 3 seconds
+      const now = Date.now();
+      if (now - lastSyncRef.current < 3000) return;
+      lastSyncRef.current = now;
+      const { projectId } = lastMessage as WsEventNew;
+      if (selectedProjectId && projectId !== selectedProjectId) return;
+      const url = selectedProjectId
+        ? `/api/agents?project_id=${selectedProjectId}`
+        : '/api/agents';
+      Promise.all([fetch(url), fetch('/api/projects')])
+        .then(([agentsRes, projRes]) => Promise.all([agentsRes.json(), projRes.json()]))
+        .then(([agents, projects]) => {
+          syncProjects(projects);
+          syncAgents(agents);
+        })
+        .catch(() => {});
     }
 
     if (lastMessage.type === 'theme:change') {

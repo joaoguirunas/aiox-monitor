@@ -1,6 +1,6 @@
 import type { AgentSpriteConfig } from '../data/agent-sprite-config';
 
-export const FRAME_SIZE = 32;
+export const FRAME_SIZE = 48;
 export const ATLAS_COLS = 6;
 export const ATLAS_ROWS = 3;
 export const TOTAL_FRAMES = ATLAS_COLS * ATLAS_ROWS; // 18
@@ -15,7 +15,7 @@ interface FramePosition {
 }
 
 /**
- * Gera um spritesheet pixel art 192×96 (18 frames de 32×32) para um agente.
+ * Gera spritesheet pixel art 288×144 (18 frames de 48×48) para um agente.
  *
  * Layout:
  *   Row 0: idle(2) + walk-down(4)
@@ -68,7 +68,7 @@ function getFramePositions(): FramePosition[] {
 }
 
 // ──────────────────────────────────────────────
-// Frame drawing
+// Frame drawing — 48×48 enhanced sprites
 // ──────────────────────────────────────────────
 
 function drawAgentFrame(
@@ -79,71 +79,113 @@ function drawAgentFrame(
   animType: AnimType,
   frameIndex: number,
 ): void {
-  const cx = ox + 16; // horizontal center
-  const headTop = oy + 4; // top of head area
+  const cx = ox + 24; // horizontal center
+  const headTop = oy + 5; // top of head area
+  const walkBob = getWalkBob(animType, frameIndex);
 
-  // ── Head ──
-  fillPixelCircle(ctx, cx, headTop + 4, 4, config.skinTone);
+  // ── Ground glow (subtle agent color circle under feet) ──
+  const glowAlpha = animType === 'type' ? 0.08 : 0.04;
+  ctx.fillStyle = hexToRgba(config.primaryColor, glowAlpha);
+  fillPixelEllipse(ctx, cx, oy + 42, 10, 4);
 
-  // ── Hair ──
-  drawHair(ctx, cx, headTop, config.hairStyle, config.hairColor);
+  // ── Shadow under feet ──
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  fillPixelEllipse(ctx, cx, oy + 41, 8, 3);
 
-  // ── Body ──
-  const bodyY = headTop + 9;
-  const sitOffset = animType === 'sit' ? 2 : 0;
+  // ── Legs ──
+  const sitOffset = animType === 'sit' ? 3 : 0;
+  const legY = headTop + 26 + sitOffset + walkBob;
+  const legLen = animType === 'sit' ? 4 : 8;
+  const spread = getWalkLegSpread(animType, frameIndex);
+  ctx.fillStyle = hexToRgb(0x1a1e30);
+  ctx.fillRect(cx - 4 - spread, legY, 4, legLen);
+  ctx.fillRect(cx + spread, legY, 4, legLen);
 
+  // ── Boots ──
+  if (animType !== 'sit') {
+    ctx.fillStyle = hexToRgb(0x0f1320);
+    ctx.fillRect(cx - 5 - spread, legY + legLen, 5, 3);
+    ctx.fillRect(cx + spread - 1, legY + legLen, 5, 3);
+    // Boot highlight
+    ctx.fillStyle = 'rgba(100,130,200,0.1)';
+    ctx.fillRect(cx - 5 - spread, legY + legLen, 5, 1);
+    ctx.fillRect(cx + spread - 1, legY + legLen, 5, 1);
+  }
+
+  // ── Body (gradient: primary top → darker bottom) ──
+  const bodyY = headTop + 14 + sitOffset + walkBob;
+  const darkPrimary = darkenColor(config.primaryColor, 0.7);
+  // Bottom portion (darker)
+  ctx.fillStyle = hexToRgb(darkPrimary);
+  ctx.fillRect(cx - 7, bodyY + 5, 14, 7);
+  // Top portion (lighter primary)
   ctx.fillStyle = hexToRgb(config.primaryColor);
-  ctx.fillRect(cx - 5, bodyY + sitOffset, 10, 10);
+  ctx.fillRect(cx - 7, bodyY, 14, 6);
+  // Collar detail
+  ctx.fillStyle = hexToRgb(config.secondaryColor);
+  ctx.fillRect(cx - 4, bodyY, 8, 2);
+  // Body edge highlight (subtle metallic)
+  ctx.fillStyle = 'rgba(150,170,220,0.08)';
+  ctx.fillRect(cx - 7, bodyY, 1, 12);
+  ctx.fillRect(cx + 6, bodyY, 1, 12);
 
-  // ── Arms (vibrate when typing) ──
+  // ── Arms (with typing vibration) ──
   const armVibrate = animType === 'type' && frameIndex % 2 === 1 ? 1 : 0;
+  const armSwing = getArmSwing(animType, frameIndex);
   ctx.fillStyle = hexToRgb(config.primaryColor);
-  ctx.fillRect(cx - 7, bodyY + 1 + sitOffset + armVibrate, 2, 6);
-  ctx.fillRect(cx + 5, bodyY + 1 + sitOffset - armVibrate, 2, 6);
+  ctx.fillRect(cx - 10, bodyY + 2 + armVibrate + armSwing, 3, 8);
+  ctx.fillRect(cx + 7, bodyY + 2 - armVibrate - armSwing, 3, 8);
 
   // ── Hands (skin) ──
   ctx.fillStyle = hexToRgb(config.skinTone);
-  ctx.fillRect(cx - 7, bodyY + 7 + sitOffset + armVibrate, 2, 2);
-  ctx.fillRect(cx + 5, bodyY + 7 + sitOffset - armVibrate, 2, 2);
+  ctx.fillRect(cx - 10, bodyY + 10 + armVibrate + armSwing, 3, 3);
+  ctx.fillRect(cx + 7, bodyY + 10 - armVibrate - armSwing, 3, 3);
 
-  // ── Legs ──
-  const legY = bodyY + 10 + sitOffset;
-  const legLen = animType === 'sit' ? 3 : 5;
-  const spread = getWalkLegSpread(animType, frameIndex);
-  ctx.fillStyle = hexToRgb(0x333344);
-  ctx.fillRect(cx - 3 - spread, legY, 3, legLen);
-  ctx.fillRect(cx + spread, legY, 3, legLen);
+  // ── Head ──
+  const headY = headTop + 5 + walkBob;
+  // Head shadow (darker skin on bottom)
+  fillPixelCircle(ctx, cx, headY + 1, 6, darkenColor(config.skinTone, 0.9));
+  // Main head
+  fillPixelCircle(ctx, cx, headY, 6, config.skinTone);
 
-  // ── Shoes ──
-  ctx.fillStyle = hexToRgb(0x222233);
-  if (animType !== 'sit') {
-    ctx.fillRect(cx - 4 - spread, legY + legLen, 4, 2);
-    ctx.fillRect(cx + spread - 1, legY + legLen, 4, 2);
+  // ── Hair ──
+  drawHair(ctx, cx, headTop + walkBob, config.hairStyle, config.hairColor);
+
+  // ── Eyes ──
+  if (animType === 'idle' && frameIndex === 1) {
+    // Blink frame
+    ctx.fillStyle = hexToRgb(darkenColor(config.skinTone, 0.85));
+    ctx.fillRect(cx - 3, headY + 1, 2, 1);
+    ctx.fillRect(cx + 1, headY + 1, 2, 1);
+  } else {
+    // Open eyes (2×2 with highlight)
+    ctx.fillStyle = '#0a0a14';
+    ctx.fillRect(cx - 3, headY, 2, 2);
+    ctx.fillRect(cx + 1, headY, 2, 2);
+    // Eye shine (white pixel, top-left of each eye)
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillRect(cx - 3, headY, 1, 1);
+    ctx.fillRect(cx + 1, headY, 1, 1);
+  }
+
+  // ── Mouth (subtle) ──
+  if (animType !== 'walk-up') {
+    ctx.fillStyle = hexToRgba(darkenColor(config.skinTone, 0.75), 0.5);
+    ctx.fillRect(cx - 1, headY + 3, 2, 1);
   }
 
   // ── Accessory ──
-  drawAccessory(ctx, cx, headTop, config.accessory, config.secondaryColor);
+  drawAccessory(ctx, cx, headTop + walkBob, config.accessory, config.secondaryColor);
 
-  // ── Idle breath bounce ──
-  if (animType === 'idle' && frameIndex === 1) {
-    // slight upward shift already handled by different frame — add subtle eye blink
-    ctx.fillStyle = hexToRgb(config.skinTone);
-    ctx.fillRect(cx - 2, headTop + 3, 1, 1);
-    ctx.fillRect(cx + 1, headTop + 3, 1, 1);
-  } else {
-    // Eyes (small dark pixels)
-    ctx.fillStyle = '#111111';
-    ctx.fillRect(cx - 2, headTop + 3, 1, 1);
-    ctx.fillRect(cx + 1, headTop + 3, 1, 1);
+  // ── Typing screen glow reflect on face ──
+  if (animType === 'type') {
+    ctx.fillStyle = 'rgba(0,200,255,0.06)';
+    fillPixelCircle(ctx, cx, headY, 7, -1, 'rgba(0,200,255,0.06)');
   }
-
-  // ── Walk bob (vertical offset for walk frames) ──
-  // Walk frames 1 and 3 are "up" positions — we shift body up 1px by drawing at oy-1
-  // This is already baked into the leg spread; the visual bob comes from leg positions.
 }
 
 // ──────────────────────────────────────────────
-// Hair styles
+// Hair styles — enhanced for 48px
 // ──────────────────────────────────────────────
 
 function drawHair(
@@ -154,48 +196,65 @@ function drawHair(
   color: number,
 ): void {
   ctx.fillStyle = hexToRgb(color);
+  const highlightColor = lightenColor(color, 1.3);
 
   switch (style) {
     case 'short':
-      // Cap-like hair on top half
-      ctx.fillRect(cx - 4, headTop, 8, 3);
-      ctx.fillRect(cx - 5, headTop + 1, 1, 2);
-      ctx.fillRect(cx + 4, headTop + 1, 1, 2);
+      ctx.fillRect(cx - 6, headTop + 1, 12, 4);
+      ctx.fillRect(cx - 7, headTop + 2, 1, 3);
+      ctx.fillRect(cx + 6, headTop + 2, 1, 3);
+      // Highlight
+      ctx.fillStyle = hexToRgb(highlightColor);
+      ctx.fillRect(cx - 2, headTop + 1, 3, 1);
       break;
     case 'long':
-      // Hair flowing down sides
-      ctx.fillRect(cx - 4, headTop, 8, 3);
-      ctx.fillRect(cx - 5, headTop + 1, 2, 8);
-      ctx.fillRect(cx + 3, headTop + 1, 2, 8);
+      ctx.fillRect(cx - 6, headTop + 1, 12, 4);
+      ctx.fillRect(cx - 7, headTop + 2, 2, 12);
+      ctx.fillRect(cx + 5, headTop + 2, 2, 12);
+      // Tips
+      ctx.fillRect(cx - 7, headTop + 13, 1, 2);
+      ctx.fillRect(cx + 6, headTop + 13, 1, 2);
+      // Highlight
+      ctx.fillStyle = hexToRgb(highlightColor);
+      ctx.fillRect(cx - 3, headTop + 1, 4, 1);
       break;
     case 'spiky':
-      // Spikes pointing up
-      ctx.fillRect(cx - 3, headTop, 6, 2);
-      ctx.fillRect(cx - 4, headTop - 1, 2, 2);
-      ctx.fillRect(cx, headTop - 2, 2, 2);
-      ctx.fillRect(cx + 2, headTop - 1, 2, 2);
+      ctx.fillRect(cx - 5, headTop + 1, 10, 3);
+      ctx.fillRect(cx - 5, headTop - 1, 2, 3);
+      ctx.fillRect(cx - 1, headTop - 3, 2, 3);
+      ctx.fillRect(cx + 3, headTop - 1, 2, 3);
+      // Extra spike
+      ctx.fillRect(cx + 1, headTop - 2, 2, 2);
+      // Highlight
+      ctx.fillStyle = hexToRgb(highlightColor);
+      ctx.fillRect(cx - 1, headTop - 3, 1, 1);
       break;
     case 'bun':
-      // Hair with bun on top
-      ctx.fillRect(cx - 4, headTop, 8, 3);
-      ctx.fillRect(cx - 2, headTop - 2, 4, 3);
+      ctx.fillRect(cx - 6, headTop + 1, 12, 4);
+      ctx.fillRect(cx - 3, headTop - 2, 6, 4);
+      // Bun decoration
+      ctx.fillStyle = hexToRgb(highlightColor);
+      ctx.fillRect(cx - 1, headTop - 2, 2, 1);
       break;
     case 'bald':
-      // Just a subtle shine highlight
-      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      // Shine highlights
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(cx - 2, headTop + 2, 3, 1);
       ctx.fillRect(cx - 1, headTop + 1, 2, 1);
       break;
     case 'ponytail':
-      // Hair on top + tail hanging right
-      ctx.fillRect(cx - 4, headTop, 8, 3);
-      ctx.fillRect(cx + 4, headTop + 2, 2, 6);
-      ctx.fillRect(cx + 3, headTop + 7, 2, 2);
+      ctx.fillRect(cx - 6, headTop + 1, 12, 4);
+      ctx.fillRect(cx + 6, headTop + 3, 2, 8);
+      ctx.fillRect(cx + 5, headTop + 10, 2, 3);
+      // Hair band
+      ctx.fillStyle = hexToRgb(highlightColor);
+      ctx.fillRect(cx + 5, headTop + 3, 3, 1);
       break;
   }
 }
 
 // ──────────────────────────────────────────────
-// Accessories
+// Accessories — enhanced
 // ──────────────────────────────────────────────
 
 function drawAccessory(
@@ -209,64 +268,95 @@ function drawAccessory(
 
   switch (accessory) {
     case 'glasses':
-      // Two rectangles over eyes + bridge
-      ctx.fillRect(cx - 3, headTop + 2, 3, 2);
-      ctx.fillRect(cx, headTop + 2, 3, 2);
-      ctx.fillRect(cx - 1, headTop + 2, 2, 1);
+      // Lens frames
+      ctx.fillRect(cx - 5, headTop + 4, 4, 3);
+      ctx.fillRect(cx + 1, headTop + 4, 4, 3);
+      // Lens (lighter)
+      ctx.fillStyle = 'rgba(120,160,255,0.25)';
+      ctx.fillRect(cx - 4, headTop + 5, 2, 1);
+      ctx.fillRect(cx + 2, headTop + 5, 2, 1);
+      // Bridge
+      ctx.fillStyle = hexToRgb(color);
+      ctx.fillRect(cx - 1, headTop + 4, 2, 1);
       break;
     case 'headset':
-      // Arc over head + ear pieces
-      ctx.fillRect(cx - 5, headTop + 2, 1, 3);
-      ctx.fillRect(cx + 4, headTop + 2, 1, 3);
-      ctx.fillRect(cx - 4, headTop, 8, 1);
+      // Band over head
+      ctx.fillRect(cx - 7, headTop + 3, 1, 4);
+      ctx.fillRect(cx + 6, headTop + 3, 1, 4);
+      ctx.fillRect(cx - 6, headTop + 1, 12, 1);
+      // Ear cups
+      ctx.fillRect(cx - 8, headTop + 5, 2, 3);
+      ctx.fillRect(cx + 6, headTop + 5, 2, 3);
       // Mic boom
-      ctx.fillRect(cx - 6, headTop + 4, 2, 1);
+      ctx.fillRect(cx - 9, headTop + 6, 2, 1);
+      ctx.fillRect(cx - 10, headTop + 7, 2, 2);
+      // Mic LED
+      ctx.fillStyle = '#00ff88';
+      ctx.fillRect(cx - 10, headTop + 7, 1, 1);
       break;
     case 'beret':
-      // Flat hat tilted
-      ctx.fillRect(cx - 5, headTop - 1, 8, 2);
-      ctx.fillRect(cx - 6, headTop, 3, 1);
+      ctx.fillRect(cx - 7, headTop, 12, 3);
+      ctx.fillRect(cx - 8, headTop + 1, 3, 1);
+      // Top decoration
+      ctx.fillStyle = hexToRgb(lightenColor(color, 1.2));
+      ctx.fillRect(cx - 2, headTop, 2, 1);
       break;
     case 'tie':
-      // Small tie below neck
-      ctx.fillRect(cx - 1, headTop + 9, 2, 4);
-      ctx.fillRect(cx - 2, headTop + 9, 4, 1);
+      ctx.fillRect(cx - 1, headTop + 14, 2, 6);
+      ctx.fillRect(cx - 2, headTop + 13, 4, 2);
+      // Tie knot
+      ctx.fillStyle = hexToRgb(lightenColor(color, 1.2));
+      ctx.fillRect(cx - 1, headTop + 13, 2, 1);
       break;
     case 'scarf':
-      // Wrap around neck
-      ctx.fillRect(cx - 5, headTop + 7, 10, 2);
-      ctx.fillRect(cx + 4, headTop + 8, 2, 3);
+      ctx.fillRect(cx - 7, headTop + 11, 14, 3);
+      ctx.fillRect(cx + 6, headTop + 13, 2, 4);
+      // Stripe
+      ctx.fillStyle = hexToRgb(lightenColor(color, 1.3));
+      ctx.fillRect(cx - 7, headTop + 12, 14, 1);
       break;
     case 'clipboard':
-      // Small board held at side
-      ctx.fillRect(cx + 6, headTop + 12, 4, 5);
+      ctx.fillRect(cx + 9, headTop + 17, 5, 7);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(cx + 7, headTop + 13, 2, 3);
+      ctx.fillRect(cx + 10, headTop + 18, 3, 1);
+      ctx.fillRect(cx + 10, headTop + 20, 3, 1);
+      ctx.fillRect(cx + 10, headTop + 22, 2, 1);
       break;
     case 'cap':
-      // Baseball cap
-      ctx.fillRect(cx - 5, headTop, 10, 2);
-      ctx.fillRect(cx - 6, headTop + 1, 4, 1);
+      ctx.fillRect(cx - 7, headTop + 1, 14, 3);
+      ctx.fillRect(cx - 9, headTop + 2, 4, 2);
+      // Visor shine
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.fillRect(cx - 8, headTop + 2, 3, 1);
       break;
     case 'headphones':
-      // Over-ear headphones
-      ctx.fillRect(cx - 5, headTop + 1, 1, 5);
-      ctx.fillRect(cx + 4, headTop + 1, 1, 5);
-      ctx.fillRect(cx - 6, headTop + 3, 2, 3);
-      ctx.fillRect(cx + 4, headTop + 3, 2, 3);
+      ctx.fillRect(cx - 7, headTop + 2, 1, 7);
+      ctx.fillRect(cx + 6, headTop + 2, 1, 7);
+      ctx.fillRect(cx - 8, headTop + 5, 2, 4);
+      ctx.fillRect(cx + 6, headTop + 5, 2, 4);
+      // Cup detail
+      ctx.fillStyle = hexToRgb(lightenColor(color, 1.3));
+      ctx.fillRect(cx - 8, headTop + 6, 1, 2);
+      ctx.fillRect(cx + 7, headTop + 6, 1, 2);
       break;
     case 'pen':
-      // Pen behind ear
-      ctx.fillRect(cx + 4, headTop, 1, 5);
+      ctx.fillRect(cx + 6, headTop + 1, 1, 7);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(cx + 4, headTop, 1, 1);
+      ctx.fillRect(cx + 6, headTop + 1, 1, 2);
+      // Pen clip
+      ctx.fillStyle = hexToRgb(color);
+      ctx.fillRect(cx + 5, headTop + 2, 1, 1);
       break;
     case 'crown':
-      // Small crown
-      ctx.fillRect(cx - 3, headTop - 2, 6, 2);
-      ctx.fillRect(cx - 3, headTop - 3, 1, 1);
-      ctx.fillRect(cx, headTop - 3, 1, 1);
-      ctx.fillRect(cx + 2, headTop - 3, 1, 1);
+      ctx.fillRect(cx - 4, headTop - 2, 8, 3);
+      ctx.fillRect(cx - 4, headTop - 4, 1, 2);
+      ctx.fillRect(cx - 1, headTop - 5, 2, 3);
+      ctx.fillRect(cx + 3, headTop - 4, 1, 2);
+      // Jewels
+      ctx.fillStyle = '#ff3366';
+      ctx.fillRect(cx - 3, headTop - 1, 1, 1);
+      ctx.fillStyle = '#00ccff';
+      ctx.fillRect(cx + 2, headTop - 1, 1, 1);
       break;
     case 'none':
       break;
@@ -279,9 +369,26 @@ function drawAccessory(
 
 function getWalkLegSpread(animType: AnimType, frameIndex: number): number {
   if (animType === 'walk-down' || animType === 'walk-up' || animType === 'walk-side') {
-    // Frames 0,2 = neutral; 1 = right forward; 3 = left forward
-    const spreads = [0, 2, 0, -2];
+    const spreads = [0, 3, 0, -3];
     return spreads[frameIndex] ?? 0;
+  }
+  return 0;
+}
+
+function getWalkBob(animType: AnimType, frameIndex: number): number {
+  if (animType === 'walk-down' || animType === 'walk-up' || animType === 'walk-side') {
+    return frameIndex % 2 === 1 ? -1 : 0;
+  }
+  if (animType === 'idle') {
+    return frameIndex === 1 ? -1 : 0; // Breathing
+  }
+  return 0;
+}
+
+function getArmSwing(animType: AnimType, frameIndex: number): number {
+  if (animType === 'walk-down' || animType === 'walk-up' || animType === 'walk-side') {
+    const swings = [1, -1, -1, 1];
+    return swings[frameIndex] ?? 0;
   }
   return 0;
 }
@@ -292,11 +399,24 @@ function fillPixelCircle(
   cy: number,
   radius: number,
   color: number,
+  colorOverride?: string,
 ): void {
-  ctx.fillStyle = hexToRgb(color);
-  // Pixel-art circle via filled rows
+  ctx.fillStyle = colorOverride ?? hexToRgb(color);
   for (let dy = -radius; dy <= radius; dy++) {
     const halfWidth = Math.round(Math.sqrt(radius * radius - dy * dy));
+    ctx.fillRect(cx - halfWidth, cy + dy, halfWidth * 2, 1);
+  }
+}
+
+function fillPixelEllipse(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+): void {
+  for (let dy = -ry; dy <= ry; dy++) {
+    const halfWidth = Math.round(rx * Math.sqrt(1 - (dy * dy) / (ry * ry)));
     ctx.fillRect(cx - halfWidth, cy + dy, halfWidth * 2, 1);
   }
 }
@@ -306,4 +426,25 @@ function hexToRgb(hex: number): string {
   const g = (hex >> 8) & 0xff;
   const b = hex & 0xff;
   return `rgb(${r},${g},${b})`;
+}
+
+function hexToRgba(hex: number, alpha: number): string {
+  const r = (hex >> 16) & 0xff;
+  const g = (hex >> 8) & 0xff;
+  const b = hex & 0xff;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function darkenColor(hex: number, factor: number): number {
+  const r = Math.round(((hex >> 16) & 0xff) * factor);
+  const g = Math.round(((hex >> 8) & 0xff) * factor);
+  const b = Math.round((hex & 0xff) * factor);
+  return (r << 16) | (g << 8) | b;
+}
+
+function lightenColor(hex: number, factor: number): number {
+  const r = Math.min(255, Math.round(((hex >> 16) & 0xff) * factor));
+  const g = Math.min(255, Math.round(((hex >> 8) & 0xff) * factor));
+  const b = Math.min(255, Math.round((hex & 0xff) * factor));
+  return (r << 16) | (g << 8) | b;
 }

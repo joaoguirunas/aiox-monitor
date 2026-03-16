@@ -6,7 +6,6 @@ import { AgentCard } from './AgentCard';
 interface ProjectColumnProps {
   project: Project;
   agents: Agent[];
-  /** Last event:new message — used to trigger flash on relevant agent cards */
   lastEventMessage: WsEventNew | null;
 }
 
@@ -16,35 +15,40 @@ export function ProjectColumn({ project, agents, lastEventMessage }: ProjectColu
   return (
     <section
       aria-label={`Projeto ${project.name}`}
-      className="flex flex-col gap-3 min-w-[280px] max-w-[320px]"
+      className="flex flex-col gap-3 min-w-[280px] max-w-[340px]"
     >
       {/* Column header */}
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-sm font-semibold text-gray-200 truncate" title={project.name}>
-          {project.name}
-        </h2>
-        <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
-          {activeCount > 0 ? (
-            <span className="text-green-400">{activeCount} ativo{activeCount !== 1 ? 's' : ''}</span>
-          ) : (
-            <span>{agents.length} agente{agents.length !== 1 ? 's' : ''}</span>
+        <div className="flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent-blue/60" />
+          <h2 className="text-[13px] font-semibold text-text-primary truncate font-display" title={project.name}>
+            {project.name}
+          </h2>
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {activeCount > 0 && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-accent-emerald/10 text-2xs font-medium text-accent-emerald">
+              {activeCount} ativo{activeCount !== 1 ? 's' : ''}
+            </span>
           )}
-        </span>
+          <span className="text-2xs text-text-muted">
+            {agents.length} agente{agents.length !== 1 ? 's' : ''}
+          </span>
+        </div>
       </div>
 
       {/* Agent cards */}
       <div className="flex flex-col gap-2">
         {agents.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-gray-600 bg-gray-800/40 rounded-lg">
-            <span className="text-2xl mb-1">😴</span>
-            <p className="text-xs">Nenhum agente ativo</p>
+          <div className="flex flex-col items-center justify-center py-10 text-text-muted bg-surface-1/30 rounded-xl border border-border/50 border-dashed">
+            <span className="text-xl opacity-30 mb-1.5">◉</span>
+            <p className="text-2xs">Nenhum agente ativo</p>
           </div>
         ) : (
           agents.map(agent => (
             <AgentCard
               key={agent.id}
               agent={agent}
-              // Use event.id as trigger — unique per event, fires flash once per real event
               flashTrigger={
                 lastEventMessage?.agentId === agent.id
                   ? lastEventMessage.event.id

@@ -16,12 +16,18 @@ export interface Agent {
   last_active: string;
 }
 
+export type TerminalStatus = 'processing' | 'active' | 'inactive';
+
 export interface Terminal {
   id: number;
   project_id: number;
   pid: number;
   session_id?: string;
-  status: 'active' | 'inactive';
+  status: TerminalStatus;
+  agent_name?: string;
+  agent_display_name?: string;
+  current_tool?: string;
+  current_input?: string;
   first_seen_at: string;
   last_active: string;
 }
@@ -138,6 +144,11 @@ export interface WsTerminalUpdate extends WsMessage {
   projectId: number;
 }
 
+export interface WsProjectUpdate extends WsMessage {
+  type: 'project:update';
+  project: Project;
+}
+
 export interface WsThemeChange extends WsMessage {
   type: 'theme:change';
   theme: ThemeName;
@@ -151,5 +162,6 @@ export type WsIncomingMessage =
   | WsEventNew
   | WsAgentUpdate
   | WsTerminalUpdate
+  | WsProjectUpdate
   | WsThemeChange
   | WsPing;

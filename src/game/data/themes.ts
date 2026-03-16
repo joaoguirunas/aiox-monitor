@@ -2,7 +2,7 @@ import type { ThemeName } from '@/lib/types';
 
 export interface ZoneColors {
   work: number;
-  lounge: number;
+  recreation: number;
   entrance: number;
 }
 
@@ -15,83 +15,111 @@ export interface OfficeTheme {
   floorGridAlpha: number;
   wallColor: number;
   wallAlpha: number;
+  /** Glow line on wall top edge */
+  wallGlowColor: number;
+  wallGlowAlpha: number;
   furnitureBaseColor: number;
   furnitureAccentColor: number;
+  /** Metallic edge highlight on furniture */
+  furnitureEdgeColor: number;
   screenGlowColor: number;
   screenOffColor: number;
   ambientEffect: 'stars' | 'scanlines' | 'grain' | 'none';
   ambientColor: number;
   ambientAlpha: number;
+  /** Floating dust particle color */
+  dustColor: number;
+  dustAlpha: number;
 }
 
 export const THEMES: Record<ThemeName, OfficeTheme> = {
   moderno: {
     name: 'moderno',
     displayName: 'Moderno',
-    backgroundColor: 0x1a1a2e,
-    floorColors: { work: 0x2a2a3e, lounge: 0x1a2a3e, entrance: 0x3e2a1a },
-    floorGridColor: 0x333344,
-    floorGridAlpha: 0.3,
-    wallColor: 0x555577,
-    wallAlpha: 0.8,
-    furnitureBaseColor: 0x444455,
-    furnitureAccentColor: 0x666677,
-    screenGlowColor: 0x4488ff,
-    screenOffColor: 0x222233,
-    ambientEffect: 'none',
-    ambientColor: 0x000000,
-    ambientAlpha: 0,
+    backgroundColor: 0x08090f,
+    floorColors: { work: 0x0f1525, recreation: 0x0c1220, entrance: 0x15100a },
+    floorGridColor: 0x1a2855,
+    floorGridAlpha: 0.25,
+    wallColor: 0x1c2240,
+    wallAlpha: 0.85,
+    wallGlowColor: 0x3355aa,
+    wallGlowAlpha: 0.4,
+    furnitureBaseColor: 0x1a2040,
+    furnitureAccentColor: 0x252e50,
+    furnitureEdgeColor: 0x2a3565,
+    screenGlowColor: 0x00ccff,
+    screenOffColor: 0x0a0f1a,
+    ambientEffect: 'stars',
+    ambientColor: 0xffffff,
+    ambientAlpha: 0.4,
+    dustColor: 0x4488ff,
+    dustAlpha: 0.06,
   },
   espacial: {
     name: 'espacial',
     displayName: 'Espacial',
-    backgroundColor: 0x0a0a1a,
-    floorColors: { work: 0x1a1a30, lounge: 0x0a1a30, entrance: 0x301a0a },
-    floorGridColor: 0x2244aa,
-    floorGridAlpha: 0.4,
-    wallColor: 0x3344aa,
-    wallAlpha: 0.6,
-    furnitureBaseColor: 0x333355,
-    furnitureAccentColor: 0x4466aa,
-    screenGlowColor: 0x00ccff,
-    screenOffColor: 0x111133,
+    backgroundColor: 0x040610,
+    floorColors: { work: 0x0a0f22, recreation: 0x080c1c, entrance: 0x180c06 },
+    floorGridColor: 0x2244cc,
+    floorGridAlpha: 0.35,
+    wallColor: 0x1a2266,
+    wallAlpha: 0.7,
+    wallGlowColor: 0x4466ff,
+    wallGlowAlpha: 0.5,
+    furnitureBaseColor: 0x151a35,
+    furnitureAccentColor: 0x202850,
+    furnitureEdgeColor: 0x3355aa,
+    screenGlowColor: 0x00eeff,
+    screenOffColor: 0x080c1a,
     ambientEffect: 'stars',
     ambientColor: 0xffffff,
-    ambientAlpha: 0.5,
+    ambientAlpha: 0.6,
+    dustColor: 0x44aaff,
+    dustAlpha: 0.08,
   },
   oldschool: {
     name: 'oldschool',
     displayName: 'Oldschool',
-    backgroundColor: 0x2e2a1a,
-    floorColors: { work: 0x3e3a2a, lounge: 0x2e3a2a, entrance: 0x4e3a1a },
-    floorGridColor: 0x554433,
-    floorGridAlpha: 0.3,
-    wallColor: 0x887755,
-    wallAlpha: 0.7,
-    furnitureBaseColor: 0x8b6914,
-    furnitureAccentColor: 0xaa8833,
+    backgroundColor: 0x1a1808,
+    floorColors: { work: 0x25220f, recreation: 0x1e2210, entrance: 0x2e2008 },
+    floorGridColor: 0x443322,
+    floorGridAlpha: 0.25,
+    wallColor: 0x554422,
+    wallAlpha: 0.75,
+    wallGlowColor: 0x33ff33,
+    wallGlowAlpha: 0.25,
+    furnitureBaseColor: 0x5a4020,
+    furnitureAccentColor: 0x7a5830,
+    furnitureEdgeColor: 0x8b6914,
     screenGlowColor: 0x33ff33,
-    screenOffColor: 0x1a2a1a,
+    screenOffColor: 0x0a1208,
     ambientEffect: 'grain',
     ambientColor: 0xaa9977,
-    ambientAlpha: 0.05,
+    ambientAlpha: 0.04,
+    dustColor: 0xaa8844,
+    dustAlpha: 0.04,
   },
   cyberpunk: {
     name: 'cyberpunk',
     displayName: 'Cyberpunk',
-    backgroundColor: 0x0a0a0a,
-    floorColors: { work: 0x1a0a2a, lounge: 0x0a1a2a, entrance: 0x2a0a1a },
+    backgroundColor: 0x050508,
+    floorColors: { work: 0x10081a, recreation: 0x08101a, entrance: 0x1a0810 },
     floorGridColor: 0xff00ff,
-    floorGridAlpha: 0.2,
-    wallColor: 0xff00aa,
-    wallAlpha: 0.5,
-    furnitureBaseColor: 0x222233,
-    furnitureAccentColor: 0x00ffff,
+    floorGridAlpha: 0.15,
+    wallColor: 0x330033,
+    wallAlpha: 0.6,
+    wallGlowColor: 0xff00aa,
+    wallGlowAlpha: 0.5,
+    furnitureBaseColor: 0x151520,
+    furnitureAccentColor: 0x1a1a30,
+    furnitureEdgeColor: 0x00ffff,
     screenGlowColor: 0xff00ff,
-    screenOffColor: 0x110011,
+    screenOffColor: 0x080008,
     ambientEffect: 'scanlines',
     ambientColor: 0x00ffff,
-    ambientAlpha: 0.03,
+    ambientAlpha: 0.025,
+    dustColor: 0xff44ff,
+    dustAlpha: 0.06,
   },
 };
 

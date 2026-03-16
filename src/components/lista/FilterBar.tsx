@@ -25,6 +25,13 @@ interface FilterBarProps {
 
 export type { ViewMode };
 
+function truncateTitle(title: string, max = 25): string {
+  // Show last meaningful part of path-like titles (e.g. "~/Desktop/my-project" → "my-project")
+  const parts = title.replace(/^~\//, '').split('/');
+  const last = parts[parts.length - 1] || title;
+  return last.length > max ? last.slice(0, max) + '…' : last;
+}
+
 export function FilterBar({ filters, onFiltersChange, projects, agents, terminals, viewMode, onViewModeChange }: FilterBarProps) {
   const hasFilters =
     filters.projectId !== undefined ||
@@ -63,13 +70,10 @@ export function FilterBar({ filters, onFiltersChange, projects, agents, terminal
                     : 'bg-surface-1/50 text-text-secondary border-border/50 hover:border-border hover:text-text-primary'
                   }
                 `}
-                title={`PID ${t.pid}${t.agent_name ? ` · ${t.agent_display_name ?? t.agent_name}` : ''}${t.current_tool ? ` · ${t.current_tool}` : ''}`}
+                title={`PID ${t.pid}${t.window_title ? ` — ${t.window_title}` : ''}${t.agent_name ? ` · ${t.agent_display_name ?? t.agent_name}` : ''}${t.current_tool ? ` · ${t.current_tool}` : ''}`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isProcessing ? 'bg-accent-emerald animate-pulse' : 'bg-accent-amber'}`} />
-                <span>PID {t.pid}</span>
-                {t.agent_display_name && (
-                  <span className="text-text-muted font-sans">· {t.agent_display_name}</span>
-                )}
+                <span>{t.window_title ? truncateTitle(t.window_title) : `PID ${t.pid}`}</span>
               </button>
             );
           })}

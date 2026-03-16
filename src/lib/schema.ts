@@ -38,6 +38,7 @@ export function initSchema(db: DatabaseSync): void {
       agent_display_name TEXT,
       current_tool       TEXT,
       current_input      TEXT,
+      window_title       TEXT,
       first_seen_at      TEXT NOT NULL DEFAULT (datetime('now')),
       last_active        TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(project_id, pid)
@@ -117,6 +118,7 @@ export function initSchema(db: DatabaseSync): void {
     `ALTER TABLE terminals ADD COLUMN agent_display_name TEXT`,
     `ALTER TABLE terminals ADD COLUMN current_tool TEXT`,
     `ALTER TABLE terminals ADD COLUMN current_input TEXT`,
+    `ALTER TABLE terminals ADD COLUMN window_title TEXT`,
   ];
   for (const sql of terminalMigrations) {
     try { db.exec(sql); } catch { /* Column already exists */ }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import * as Phaser from 'phaser';
 import { createGameConfig } from '@/game/config';
 import { NAVBAR_HEIGHT } from '@/game/constants';
@@ -14,8 +14,25 @@ import type { WsAgentUpdate, WsEventNew, CompanyConfig, ThemeName } from '@/lib/
 export function PhaserGame() {
   const gameRef = useRef<Phaser.Game | null>(null);
   const lastSyncRef = useRef(0);
-  const { lastMessage } = useWebSocket();
+  const { lastMessage, reconnectCount } = useWebSocket();
   const { selectedProjectId } = useProjectContext();
+  const selectedProjectIdRef = useRef(selectedProjectId);
+  selectedProjectIdRef.current = selectedProjectId;
+
+  const fetchAndSync = useCallback(() => {
+    const pid = selectedProjectIdRef.current;
+    const agentsUrl = pid ? `/api/agents?project_id=${pid}` : '/api/agents';
+    Promise.all([fetch(agentsUrl), fetch('/api/projects'), fetch('/api/company-config')])
+      .then(([agentsRes, projRes, configRes]) =>
+        Promise.all([agentsRes.json(), projRes.json(), configRes.json()])
+      )
+      .then(([agents, projects, config]: [unknown, unknown, CompanyConfig]) => {
+        syncProjects(projects as import('@/lib/types').Project[]);
+        syncAgents(agents as import('@/lib/types').Agent[]);
+        if (config.theme) setTheme(config.theme);
+      })
+      .catch(() => {});
+  }, []);
 
   // Init game
   useEffect(() => {
@@ -26,32 +43,14 @@ export function PhaserGame() {
     gameRef.current = game;
     setGameInstance(game);
 
-    // Fetch agentes e tema quando OfficeScene estiver pronta
-    game.events.on('ready', async () => {
-      try {
-        const url = selectedProjectId
-          ? `/api/agents?project_id=${selectedProjectId}`
-          : '/api/agents';
-        const [agentsRes, configRes, projectsRes] = await Promise.all([
-          fetch(url),
-          fetch('/api/company-config'),
-          fetch('/api/projects'),
-        ]);
-        const agents = await agentsRes.json();
-        const config: CompanyConfig = await configRes.json();
-        const projects = await projectsRes.json();
-        const waitForScene = setInterval(() => {
-          const scene = game.scene.getScene('OfficeScene');
-          if (scene && scene.scene.isActive()) {
-            clearInterval(waitForScene);
-            if (config.theme) setTheme(config.theme);
-            syncProjects(projects);
-            syncAgents(agents);
-          }
-        }, 100);
-      } catch {
-        // silent — scene starts with defaults
-      }
+    game.events.on('ready', () => {
+      const waitForScene = setInterval(() => {
+        const scene = game.scene.getScene('OfficeScene');
+        if (scene && scene.scene.isActive()) {
+          clearInterval(waitForScene);
+          fetchAndSync();
+        }
+      }, 100);
     });
 
     return () => {
@@ -72,6 +71,12 @@ export function PhaserGame() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Refetch on WebSocket reconnection
+  useEffect(() => {
+    if (reconnectCount === 0) return;
+    fetchAndSync();
+  }, [reconnectCount, fetchAndSync]);
+
   // Push WS messages para Phaser
   useEffect(() => {
     if (!lastMessage) return;
@@ -83,9 +88,9 @@ export function PhaserGame() {
     }
 
     if (lastMessage.type === 'event:new') {
-      // Throttled re-fetch: max once every 3 seconds
+      // Throttled re-fetch: max once every 2 seconds
       const now = Date.now();
-      if (now - lastSyncRef.current < 3000) return;
+      if (now - lastSyncRef.current < 2000) return;
       lastSyncRef.current = now;
       const { projectId } = lastMessage as WsEventNew;
       if (selectedProjectId && projectId !== selectedProjectId) return;
@@ -108,10 +113,14 @@ export function PhaserGame() {
   }, [lastMessage, selectedProjectId]);
 
   return (
-    <div
-      id="phaser-container"
-      className="w-full"
-      style={{ height: `calc(100vh - ${NAVBAR_HEIGHT}px)` }}
-    />
+    <div className="relative w-full" style={{ height: `calc(100vh - ${NAVBAR_HEIGHT}px)` }}>
+      <div id="phaser-container" className="w-full h-full" />
+      <button
+        onClick={fetchAndSync}
+        className="absolute top-3 right-3 z-10 px-2.5 py-1 text-[11px] font-medium text-text-muted hover:text-text-secondary rounded-md border border-border/50 hover:border-border bg-surface-0/80 backdrop-blur-sm transition-colors"
+      >
+        Atualizar
+      </button>
+    </div>
   );
 }

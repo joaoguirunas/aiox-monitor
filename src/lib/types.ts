@@ -28,6 +28,7 @@ export interface Terminal {
   agent_display_name?: string;
   current_tool?: string;
   current_input?: string;
+  window_title?: string;
   first_seen_at: string;
   last_active: string;
 }

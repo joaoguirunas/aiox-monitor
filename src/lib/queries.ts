@@ -153,12 +153,13 @@ export function upsertTerminal(
     agentDisplayName?: string;
     currentTool?: string;
     currentInput?: string;
+    windowTitle?: string;
   },
 ): Terminal {
   const o = opts ?? {};
   db.prepare(`
-    INSERT INTO terminals (project_id, pid, session_id, status, agent_name, agent_display_name, current_tool, current_input)
-    VALUES (?, ?, ?, 'processing', ?, ?, ?, ?)
+    INSERT INTO terminals (project_id, pid, session_id, status, agent_name, agent_display_name, current_tool, current_input, window_title)
+    VALUES (?, ?, ?, 'processing', ?, ?, ?, ?, ?)
     ON CONFLICT(project_id, pid) DO UPDATE SET
       session_id         = COALESCE(excluded.session_id, session_id),
       status             = 'processing',
@@ -166,6 +167,7 @@ export function upsertTerminal(
       agent_display_name = COALESCE(excluded.agent_display_name, agent_display_name),
       current_tool       = COALESCE(excluded.current_tool, current_tool),
       current_input      = COALESCE(excluded.current_input, current_input),
+      window_title       = COALESCE(excluded.window_title, window_title),
       last_active        = datetime('now')
   `).run(
     projectId,
@@ -175,6 +177,7 @@ export function upsertTerminal(
     o.agentDisplayName ?? null,
     o.currentTool ?? null,
     o.currentInput ?? null,
+    o.windowTitle ?? null,
   );
 
   return row<Terminal>(

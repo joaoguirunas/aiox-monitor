@@ -90,10 +90,15 @@ export function SessionDetail({ session, agents, projects, terminals, onClose }:
             </Field>
             <Field label="Terminal">
               {terminal ? (
-                <span className="inline-flex items-center gap-1.5 text-xs font-mono">
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${terminal.status === 'processing' ? 'bg-accent-emerald animate-pulse' : terminal.status === 'active' ? 'bg-accent-amber' : 'bg-text-muted/40'}`} />
-                  PID {terminal.pid}
-                </span>
+                <div>
+                  <span className="inline-flex items-center gap-1.5 text-xs">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${terminal.status === 'processing' ? 'bg-accent-emerald animate-pulse' : terminal.status === 'active' ? 'bg-accent-amber' : 'bg-text-muted/40'}`} />
+                    {terminal.window_title || `PID ${terminal.pid}`}
+                  </span>
+                  {terminal.window_title && (
+                    <div className="text-[10px] text-text-muted font-mono mt-0.5">PID {terminal.pid}</div>
+                  )}
+                </div>
               ) : (
                 <span className="text-text-muted">—</span>
               )}

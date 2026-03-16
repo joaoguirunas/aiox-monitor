@@ -10,10 +10,18 @@ import type { Agent, AgentStatus, Project } from '@/lib/types';
 import type { OfficeScene } from '../scenes/OfficeScene';
 import type { ClusterManager } from './ClusterManager';
 
+/** Maps recreation position types to furniture indices based on tile matching */
+function findFurnitureIndex(
+  positions: { tileX: number; tileY: number }[],
+  tileX: number, tileY: number,
+): number {
+  return positions.findIndex(p => p.tileX === tileX && p.tileY === tileY);
+}
+
 const DISPLAY_NAMES: Record<string, string> = {
   '@dev': 'Dex', '@qa': 'Quinn', '@architect': 'Aria',
   '@pm': 'Morgan', '@sm': 'River', '@po': 'Pax',
-  '@analyst': 'Alex', '@devops': 'Gage',
+  '@analyst': 'Atlas', '@devops': 'Gage',
   '@data-engineer': 'Dara', '@ux-design-expert': 'Uma',
   '@aiox-master': 'AIOX',
 };
@@ -27,6 +35,8 @@ export class AgentManager {
   private sprites: Map<string, AgentSprite> = new Map();
   private deskAssignment: Map<string, DeskSlot> = new Map();
   private projectNames: Map<number, string> = new Map();
+  /** Tracks which recreation position each agent occupies, for furniture deactivation */
+  private recAssignment: Map<string, RecreationPosition> = new Map();
 
   constructor(
     private scene: OfficeScene,
@@ -51,20 +61,22 @@ export class AgentManager {
 
   // Carga inicial: posiciona instantaneamente (sem walk)
   syncAll(agents: Agent[]): void {
+    // Filter out @unknown agents — they clutter the office
+    const visible = agents.filter(a => a.name !== '@unknown');
     const activeKeys = new Set<string>();
 
-    // Ensure clusters exist for all projects with non-offline agents
-    const activeProjectIds = new Set<number>();
-    for (const agent of agents) {
-      if (agent.status !== 'offline') {
-        activeProjectIds.add(agent.project_id);
+    // Only create clusters for projects that have at least one 'working' agent
+    const workingProjectIds = new Set<number>();
+    for (const agent of visible) {
+      if (agent.status === 'working') {
+        workingProjectIds.add(agent.project_id);
       }
     }
-    for (const projectId of activeProjectIds) {
+    for (const projectId of workingProjectIds) {
       this.clusterManager.ensureCluster(projectId, this.getProjectName(projectId));
     }
 
-    for (const agent of agents) {
+    for (const agent of visible) {
       const key = this.agentKey(agent);
       activeKeys.add(key);
       const existing = this.sprites.get(key);
@@ -86,8 +98,11 @@ export class AgentManager {
 
   // Update individual via WS: usa walk animation
   updateAgent(agent: Agent): void {
-    // Ensure cluster for this project exists
-    if (agent.status !== 'offline') {
+    // Skip @unknown agents
+    if (agent.name === '@unknown') return;
+
+    // Only create cluster when agent is actually working
+    if (agent.status === 'working') {
       this.clusterManager.ensureCluster(agent.project_id, this.getProjectName(agent.project_id));
     }
 
@@ -147,9 +162,12 @@ export class AgentManager {
       }
     } else if (agent.status === 'idle' || agent.status === 'break') {
       this.releaseDesk(key);
+      this.releaseRecreation(key);
       const pos = this.getRecreationPosition(key, agent.status);
       sprite.setTilePosition(pos.tileX, pos.tileY);
       sprite.standIdle();
+      this.recAssignment.set(key, pos);
+      this.activateFurniture(pos, sprite.agentName);
     }
   }
 
@@ -159,6 +177,7 @@ export class AgentManager {
     if (!sprite) return;
 
     if (agent.status === 'offline') {
+      this.releaseRecreation(key);
       sprite.walkTo(ENTRANCE_POSITION.tileX, ENTRANCE_POSITION.tileY).then(() => {
         this.removeAgent(key);
       });
@@ -166,6 +185,7 @@ export class AgentManager {
     }
 
     if (agent.status === 'working') {
+      this.releaseRecreation(key);
       const slot = this.assignDesk(key, agent.project_id);
       if (slot) {
         const cluster = this.clusterManager.getCluster(slot.projectId);
@@ -185,10 +205,13 @@ export class AgentManager {
       }
     } else if (agent.status === 'idle' || agent.status === 'break') {
       this.releaseDesk(key);
+      this.releaseRecreation(key);
       const pos = this.getRecreationPosition(key, agent.status);
       sprite.walkTo(pos.tileX, pos.tileY).then(() => {
         if (!this.sprites.has(key)) return;
         sprite.standIdle();
+        this.recAssignment.set(key, pos);
+        this.activateFurniture(pos, sprite.agentName);
         if (agent.status === 'break' && pos.type === 'coffee-machine') {
           this.scene.coffeeMachine?.setSteamActive(true);
         }
@@ -225,6 +248,86 @@ export class AgentManager {
       return free[idx % free.length];
     }
     return available[idx % available.length];
+  }
+
+  /** Activate furniture at the given recreation position */
+  private activateFurniture(pos: RecreationPosition, agentName: string): void {
+    if (pos.type === 'gaming') {
+      const idx = findFurnitureIndex(
+        [FURNITURE_POSITIONS.gaming],
+        pos.tileX, pos.tileY,
+      );
+      if (idx >= 0 && idx < this.scene.gamingSetups.length) {
+        this.scene.gamingSetups[idx].setScreenOn(getAgentColor(agentName));
+      }
+    } else if (pos.type === 'massage') {
+      const idx = findFurnitureIndex(
+        [FURNITURE_POSITIONS.massage1, FURNITURE_POSITIONS.massage2],
+        pos.tileX, pos.tileY,
+      );
+      if (idx >= 0 && idx < this.scene.massageChairs.length) {
+        this.scene.massageChairs[idx].setInUse(true);
+      }
+    } else if (pos.type === 'bean-bag') {
+      const idx = findFurnitureIndex(
+        [FURNITURE_POSITIONS.beanBag1, FURNITURE_POSITIONS.beanBag2],
+        pos.tileX, pos.tileY,
+      );
+      if (idx >= 0 && idx < this.scene.beanBags.length) {
+        this.scene.beanBags[idx].setOccupied(true);
+      }
+    } else if (pos.type === 'bed') {
+      const idx = findFurnitureIndex(
+        [FURNITURE_POSITIONS.bed1, FURNITURE_POSITIONS.bed2, FURNITURE_POSITIONS.bed3],
+        pos.tileX, pos.tileY,
+      );
+      if (idx >= 0 && idx < this.scene.beds.length) {
+        this.scene.beds[idx].setOccupied(true);
+      }
+    }
+  }
+
+  /** Deactivate furniture at the given recreation position */
+  private deactivateFurniture(pos: RecreationPosition): void {
+    if (pos.type === 'gaming') {
+      const idx = findFurnitureIndex([FURNITURE_POSITIONS.gaming], pos.tileX, pos.tileY);
+      if (idx >= 0 && idx < this.scene.gamingSetups.length) {
+        this.scene.gamingSetups[idx].setScreenOff();
+      }
+    } else if (pos.type === 'massage') {
+      const idx = findFurnitureIndex(
+        [FURNITURE_POSITIONS.massage1, FURNITURE_POSITIONS.massage2],
+        pos.tileX, pos.tileY,
+      );
+      if (idx >= 0 && idx < this.scene.massageChairs.length) {
+        this.scene.massageChairs[idx].setInUse(false);
+      }
+    } else if (pos.type === 'bean-bag') {
+      const idx = findFurnitureIndex(
+        [FURNITURE_POSITIONS.beanBag1, FURNITURE_POSITIONS.beanBag2],
+        pos.tileX, pos.tileY,
+      );
+      if (idx >= 0 && idx < this.scene.beanBags.length) {
+        this.scene.beanBags[idx].setOccupied(false);
+      }
+    } else if (pos.type === 'bed') {
+      const idx = findFurnitureIndex(
+        [FURNITURE_POSITIONS.bed1, FURNITURE_POSITIONS.bed2, FURNITURE_POSITIONS.bed3],
+        pos.tileX, pos.tileY,
+      );
+      if (idx >= 0 && idx < this.scene.beds.length) {
+        this.scene.beds[idx].setOccupied(false);
+      }
+    }
+  }
+
+  /** Release recreation furniture when agent moves away */
+  private releaseRecreation(key: string): void {
+    const pos = this.recAssignment.get(key);
+    if (pos) {
+      this.deactivateFurniture(pos);
+      this.recAssignment.delete(key);
+    }
   }
 
   private checkCoffeeMachineState(): void {
@@ -284,5 +387,6 @@ export class AgentManager {
       this.sprites.delete(key);
     }
     this.releaseDesk(key);
+    this.releaseRecreation(key);
   }
 }

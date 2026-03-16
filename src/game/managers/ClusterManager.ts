@@ -25,7 +25,6 @@ export class ClusterManager {
   ensureCluster(projectId: number, projectName: string): ProjectCluster | null {
     const existing = this.clusters.get(projectId);
     if (existing) {
-      // Update name if changed
       if (existing.projectName !== projectName) {
         existing.projectName = projectName;
         existing.label.setText(projectName);
@@ -42,12 +41,12 @@ export class ClusterManager {
       }
     }
 
-    if (slotIndex < 0) return null; // All slots taken
+    if (slotIndex < 0) return null;
 
     const origin = CLUSTER_ORIGINS[slotIndex];
     const deskPositions = generateClusterDesks(origin, slotIndex);
 
-    // Create desk objects
+    // Create workstation desks (fully programmatic)
     const desks = deskPositions.map(pos => new Desk(this.scene, pos.tileX, pos.tileY));
 
     // Create project label above cluster
@@ -99,7 +98,6 @@ export class ClusterManager {
     cluster.desks.forEach(d => d.destroy());
     cluster.label.destroy();
 
-    // Find slot index
     for (let i = 0; i < CLUSTER_ORIGINS.length; i++) {
       const origin = CLUSTER_ORIGINS[i];
       if (origin.tileX === cluster.originTile.tileX && origin.tileY === cluster.originTile.tileY) {

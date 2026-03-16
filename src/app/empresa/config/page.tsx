@@ -195,16 +195,22 @@ export default function CompanyConfigPage() {
 
           {/* Timeouts */}
           <SettingBlock label="Timeouts de Inatividade">
+            <p className="text-[11px] text-text-muted/70 mb-3 leading-relaxed">
+              Controla o comportamento dos agentes no modo Empresa quando ficam sem atividade.
+              Após o primeiro timeout, o agente vai para o lounge. Após o segundo, vai tomar café.
+            </p>
             <div className="space-y-3">
               <RangeField
-                label="Working → Idle (lounge)"
+                label="Working → Lounge"
+                hint="Tempo sem eventos até o agente ir descansar no lounge"
                 value={config.idle_timeout_lounge}
                 min={60} max={1800} step={60}
                 display={`${Math.round(config.idle_timeout_lounge / 60)} min`}
                 onChange={(v) => setConfig({ ...config, idle_timeout_lounge: v })}
               />
               <RangeField
-                label="Idle → Break (café)"
+                label="Lounge → Café"
+                hint="Tempo adicional até o agente ir tomar café (pausa longa)"
                 value={config.idle_timeout_break}
                 min={300} max={3600} step={60}
                 display={`${Math.round(config.idle_timeout_break / 60)} min`}
@@ -335,14 +341,14 @@ function SettingBlock({ label, children }: { label: string; children: React.Reac
   );
 }
 
-function RangeField({ label, value, min, max, step, display, onChange }: {
-  label: string; value: number; min: number; max: number; step: number; display: string;
+function RangeField({ label, hint, value, min, max, step, display, onChange }: {
+  label: string; hint?: string; value: number; min: number; max: number; step: number; display: string;
   onChange: (v: number) => void;
 }) {
   return (
     <div>
       <div className="flex justify-between text-[11px] text-text-muted mb-1">
-        <span>{label}</span>
+        <span title={hint}>{label}</span>
         <span className="tabular-nums">{display}</span>
       </div>
       <input

@@ -8,11 +8,11 @@ import { ConnectionStatus } from '@/components/shared/ConnectionStatus';
 import { ProjectSelector } from '@/components/shared/ProjectSelector';
 
 const LINKS = [
-  { href: '/kanban', label: 'Kanban', icon: '⬡' },
-  { href: '/lista', label: 'Lista', icon: '☰' },
-  { href: '/terminais', label: 'Terminais', icon: '▣' },
-  { href: '/empresa', label: 'Empresa', icon: '◈' },
-  { href: '/empresa/config', label: 'Config', icon: '⚙' },
+  { href: '/kanban', label: 'Kanban' },
+  { href: '/lista', label: 'Lista' },
+  { href: '/terminais', label: 'Terminais' },
+  { href: '/empresa', label: 'Empresa' },
+  { href: '/empresa/config', label: 'Config' },
 ];
 
 export function Navbar() {
@@ -20,14 +20,13 @@ export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <nav className="sticky top-0 z-50 glass border-gradient-b">
-      <div className="flex items-center justify-between px-4 md:px-6 h-12">
+    <nav className="sticky top-0 z-50 bg-surface-0/80 backdrop-blur-md border-b border-border/40">
+      <div className="flex items-center justify-between px-4 h-11">
         {/* Left: Logo + Nav */}
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-5">
           <Logo />
 
-          {/* Separator */}
-          <div className="hidden md:block w-px h-5 bg-border" />
+          <div className="hidden md:block w-px h-4 bg-border/40" />
 
           {/* Desktop links */}
           <div className="hidden md:flex items-center gap-0.5">
@@ -37,15 +36,15 @@ export function Navbar() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`relative px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all duration-150 ${
+                  className={`relative px-2.5 py-1 rounded-md text-[12px] font-medium transition-colors duration-150 ${
                     active
-                      ? 'text-text-primary bg-surface-3/60'
-                      : 'text-text-secondary hover:text-text-primary hover:bg-surface-2/50'
+                      ? 'text-text-primary bg-white/[0.06]'
+                      : 'text-text-muted hover:text-text-secondary hover:bg-white/[0.03]'
                   }`}
                 >
                   {link.label}
                   {active && (
-                    <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-[2px] rounded-full bg-accent-blue shadow-glow-sm" />
+                    <span className="absolute -bottom-[7px] left-1/2 -translate-x-1/2 w-3 h-[1.5px] rounded-full bg-accent-blue" />
                   )}
                 </Link>
               );
@@ -53,19 +52,20 @@ export function Navbar() {
           </div>
         </div>
 
-        {/* Right: Project selector + Connection + Hamburger */}
+        {/* Right */}
         <div className="flex items-center gap-3">
           <div className="hidden sm:block">
             <ProjectSelector />
           </div>
           <ConnectionStatus />
+
           {/* Hamburger */}
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="md:hidden p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-2/50 transition-colors"
+            className="md:hidden p-1 rounded-md text-text-muted hover:text-text-secondary hover:bg-white/[0.04] transition-colors"
             aria-label="Menu"
           >
-            <svg className="w-4.5 h-4.5" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               {mobileOpen ? (
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
               ) : (
@@ -78,7 +78,7 @@ export function Navbar() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-border px-4 py-2 space-y-0.5 animate-fade-in">
+        <div className="md:hidden border-t border-border/30 px-4 py-1.5 space-y-0.5 animate-fade-in">
           {LINKS.map((link) => {
             const active = pathname === link.href;
             return (
@@ -86,18 +86,17 @@ export function Navbar() {
                 key={link.href}
                 href={link.href}
                 onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 ${
+                className={`block px-2.5 py-2 rounded-md text-[12px] font-medium transition-colors ${
                   active
-                    ? 'text-text-primary bg-surface-3/60'
-                    : 'text-text-secondary hover:text-text-primary hover:bg-surface-2/50'
+                    ? 'text-text-primary bg-white/[0.06]'
+                    : 'text-text-muted hover:text-text-secondary hover:bg-white/[0.03]'
                 }`}
               >
-                <span className="text-xs opacity-50">{link.icon}</span>
                 {link.label}
               </Link>
             );
           })}
-          <div className="sm:hidden pt-2 border-t border-border">
+          <div className="sm:hidden pt-1.5 border-t border-border/30">
             <ProjectSelector />
           </div>
         </div>

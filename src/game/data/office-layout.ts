@@ -9,7 +9,7 @@ export interface DeskPosition extends TilePosition {
 }
 
 export interface ZoneDefinition {
-  name: 'work' | 'recreation' | 'entrance';
+  name: 'work' | 'recreation' | 'entrance' | 'bedroom';
   color: number;
 }
 
@@ -59,8 +59,8 @@ export function generateClusterDesks(origin: TilePosition, clusterIndex: number)
 // ─── Posições da zona de recreação ────────────────────────────────────────────
 
 export interface RecreationPosition extends TilePosition {
-  type: 'sofa' | 'coffee-machine' | 'bookshelf' | 'water-cooler' | 'ping-pong' | 'hammock' | 'arcade' | 'standing';
-  interactionFor: ('idle' | 'break')[];
+  type: 'sofa' | 'coffee-machine' | 'bookshelf' | 'water-cooler' | 'ping-pong' | 'hammock' | 'arcade' | 'standing' | 'pool-table' | 'massage' | 'gaming' | 'bean-bag' | 'bed';
+  interactionFor: ('idle' | 'break' | 'sleep')[];
 }
 
 export const RECREATION_POSITIONS: RecreationPosition[] = [
@@ -90,15 +90,30 @@ export const RECREATION_POSITIONS: RecreationPosition[] = [
   { tileX: 12, tileY: 10, type: 'water-cooler',   interactionFor: ['break'] },
   { tileX: 14, tileY: 7,  type: 'bookshelf',      interactionFor: ['break', 'idle'] },
 
+  // Pool table area
+  { tileX: 10, tileY: 7,  type: 'pool-table', interactionFor: ['idle', 'break'] },
+  { tileX: 9,  tileY: 7,  type: 'standing',   interactionFor: ['idle', 'break'] },
+
+  // Gaming area
+  { tileX: 10, tileY: 10, type: 'gaming',     interactionFor: ['idle', 'break'] },
+  { tileX: 9,  tileY: 11, type: 'bean-bag',   interactionFor: ['idle', 'break'] },
+  { tileX: 11, tileY: 11, type: 'bean-bag',   interactionFor: ['idle', 'break'] },
+
+  // Massage area
+  { tileX: 13, tileY: 10, type: 'massage',    interactionFor: ['break'] },
+  { tileX: 13, tileY: 13, type: 'massage',    interactionFor: ['break'] },
+
+  // Bedroom (sleep zone)
+  { tileX: 3,  tileY: 19, type: 'bed',        interactionFor: ['sleep'] },
+  { tileX: 3,  tileY: 21, type: 'bed',        interactionFor: ['sleep'] },
+  { tileX: 3,  tileY: 23, type: 'bed',        interactionFor: ['sleep'] },
+
   // Standing overflow (spread across recreation)
   { tileX: 5,  tileY: 6,  type: 'standing',   interactionFor: ['idle', 'break'] },
-  { tileX: 9,  tileY: 7,  type: 'standing',   interactionFor: ['idle', 'break'] },
   { tileX: 5,  tileY: 10, type: 'standing',   interactionFor: ['idle', 'break'] },
-  { tileX: 9,  tileY: 11, type: 'standing',   interactionFor: ['idle', 'break'] },
   { tileX: 11, tileY: 9,  type: 'standing',   interactionFor: ['idle', 'break'] },
   { tileX: 5,  tileY: 13, type: 'standing',   interactionFor: ['idle', 'break'] },
   { tileX: 9,  tileY: 14, type: 'standing',   interactionFor: ['idle', 'break'] },
-  { tileX: 13, tileY: 13, type: 'standing',   interactionFor: ['idle', 'break'] },
   { tileX: 11, tileY: 15, type: 'standing',   interactionFor: ['idle', 'break'] },
 ];
 
@@ -120,6 +135,25 @@ export const FURNITURE_POSITIONS = {
   plant4:        { tileX: 15, tileY: 2 },
   plant5:        { tileX: 15, tileY: 12 },
   plant6:        { tileX: 17, tileY: 20 },
+
+  // New recreation furniture
+  poolTable:     { tileX: 10, tileY: 7 },
+  gaming:        { tileX: 10, tileY: 10 },
+  massage1:      { tileX: 13, tileY: 10 },
+  massage2:      { tileX: 13, tileY: 13 },
+  beanBag1:      { tileX: 9,  tileY: 11 },
+  beanBag2:      { tileX: 11, tileY: 11 },
+
+  // Bedroom furniture
+  bed1:          { tileX: 3,  tileY: 19 },
+  bed2:          { tileX: 3,  tileY: 21 },
+  bed3:          { tileX: 3,  tileY: 23 },
+  nightStand1:   { tileX: 5,  tileY: 19 },
+  nightStand2:   { tileX: 5,  tileY: 21 },
+  nightStand3:   { tileX: 5,  tileY: 23 },
+  bedroomPlant1: { tileX: 1,  tileY: 19 },
+  bedroomPlant2: { tileX: 1,  tileY: 23 },
+  bedroomDoor:   { tileX: 7,  tileY: 20 },
 };
 
 // Backward compat — kept for sofas in OfficeScene.placeFurniture
@@ -140,11 +174,13 @@ export const ZONES: ZoneDefinition[] = [
   { name: 'work',       color: 0x2a2a3e },
   { name: 'recreation', color: 0x1a2a3e },
   { name: 'entrance',   color: 0x3e2a1a },
+  { name: 'bedroom',    color: 0x1a1a2e },
 ];
 
 export function getZoneForTile(tileX: number, tileY: number): ZoneDefinition['name'] | null {
   if (tileX >= 17 && tileX <= 34 && tileY >= 1 && tileY <= 21) return 'work';
   if (tileX >= 1 && tileX <= 15 && tileY >= 1 && tileY <= 17)  return 'recreation';
+  if (tileX >= 1 && tileX <= 8 && tileY >= 18 && tileY <= 25)   return 'bedroom';
   if (tileX >= 10 && tileX <= 20 && tileY >= 19 && tileY <= 25) return 'entrance';
   return null;
 }

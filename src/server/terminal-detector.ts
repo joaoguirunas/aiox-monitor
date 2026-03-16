@@ -15,47 +15,54 @@ export interface SystemTerminalInfo {
   pid?: number;
 }
 
-function isAppRunning(appName: string): boolean {
+function runSilent(cmd: string, timeout = 5000): string {
   try {
-    const result = execSync(
-      `pgrep -x "${appName}" 2>/dev/null`,
-      { encoding: 'utf-8', timeout: 2000 },
-    ).trim();
-    return result.length > 0;
+    return execSync(cmd, {
+      encoding: 'utf-8',
+      timeout,
+      maxBuffer: 1024 * 1024,
+      env: { ...process.env, PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin' },
+    }).trim();
   } catch {
-    return false;
+    return '';
   }
+}
+
+function isAppRunning(appName: string): boolean {
+  return runSilent(`pgrep -x "${appName}" 2>/dev/null`, 2000).length > 0;
 }
 
 function detectITerm2(): SystemTerminalInfo[] {
   if (!isAppRunning('iTerm2')) return [];
 
   const script = `
-    const app = Application('iTerm2');
-    const results = [];
-    const wins = app.windows();
-    for (let w = 0; w < wins.length; w++) {
-      const win = wins[w];
-      const wId = win.id();
-      const wName = win.name();
-      const tabs = win.tabs();
-      for (let t = 0; t < tabs.length; t++) {
-        const tab = tabs[t];
-        const sessions = tab.sessions();
-        for (let s = 0; s < sessions.length; s++) {
-          const sess = sessions[s];
+    var app = Application('iTerm2');
+    var results = [];
+    var wins = app.windows();
+    for (var w = 0; w < wins.length; w++) {
+      var win = wins[w];
+      var wName = '' + (win.name() || '');
+      var tabs = win.tabs();
+      for (var t = 0; t < tabs.length; t++) {
+        var tab = tabs[t];
+        var sessions = tab.sessions();
+        for (var s = 0; s < sessions.length; s++) {
+          var sess = sessions[s];
+          var sName = '' + (sess.name() || '');
+          var sProfile = '' + (sess.profileName() || '');
+          var sTty = '' + (sess.tty() || '');
           results.push({
             app: 'iTerm2',
-            windowId: wId,
-            windowName: wName,
+            windowId: w,
+            windowName: sName || sProfile || wName,
             tabIndex: t,
-            sessionId: sess.uniqueId(),
-            tty: sess.tty() || '',
-            profileName: sess.profileName() || '',
-            isProcessing: sess.isProcessing(),
-            columns: sess.columns(),
-            rows: sess.rows(),
-            currentCommand: sess.name() || '',
+            sessionId: 'iterm-' + w + '-' + t + '-' + s,
+            tty: sTty,
+            profileName: sProfile,
+            isProcessing: false,
+            columns: 80,
+            rows: 24,
+            currentCommand: sName,
           });
         }
       }
@@ -63,11 +70,9 @@ function detectITerm2(): SystemTerminalInfo[] {
     JSON.stringify(results);
   `;
 
+  const raw = runSilent(`osascript -l JavaScript -e '${script.replace(/'/g, "'\\''")}' 2>/dev/null`);
+  if (!raw) return [];
   try {
-    const raw = execSync(
-      `osascript -l JavaScript -e '${script.replace(/'/g, "'\\''")}'`,
-      { encoding: 'utf-8', timeout: 5000 },
-    ).trim();
     const sessions: SystemTerminalInfo[] = JSON.parse(raw);
     return enrichWithPids(sessions);
   } catch {
@@ -79,40 +84,43 @@ function detectTerminalApp(): SystemTerminalInfo[] {
   if (!isAppRunning('Terminal')) return [];
 
   const script = `
-    const app = Application('Terminal');
-    const results = [];
-    const wins = app.windows();
-    for (let w = 0; w < wins.length; w++) {
-      const win = wins[w];
-      const wId = win.id();
-      const wName = win.name();
-      const tabs = win.tabs();
-      for (let t = 0; t < tabs.length; t++) {
-        const tab = tabs[t];
+    var app = Application('Terminal');
+    var results = [];
+    var wins = app.windows();
+    for (var w = 0; w < wins.length; w++) {
+      var win = wins[w];
+      var wName = '' + (win.name() || '');
+      var tabs = win.tabs();
+      for (var t = 0; t < tabs.length; t++) {
+        var tab = tabs[t];
+        var sTty = '' + (tab.tty() || '');
+        var sProfile = '';
+        var sCustomTitle = '';
+        try { sProfile = '' + tab.currentSettings().name(); } catch(e) {}
+        try { sCustomTitle = '' + (tab.customTitle() || ''); } catch(e) {}
         results.push({
           app: 'Terminal',
-          windowId: wId,
-          windowName: wName,
+          windowId: w,
+          windowName: sCustomTitle || wName || sProfile,
           tabIndex: t,
-          sessionId: 'terminal-' + wId + '-' + t,
-          tty: tab.tty() || '',
-          profileName: tab.currentSettings().name() || '',
-          isProcessing: tab.busy(),
-          columns: tab.numberOfColumns(),
-          rows: tab.numberOfRows(),
-          currentCommand: tab.processes().join(', ') || '',
+          sessionId: 'terminal-' + w + '-' + t,
+          tty: sTty,
+          profileName: sProfile,
+          isProcessing: false,
+          columns: 80,
+          rows: 24,
+          currentCommand: '',
         });
       }
     }
     JSON.stringify(results);
   `;
 
+  const raw = runSilent(`osascript -l JavaScript -e '${script.replace(/'/g, "'\\''")}' 2>/dev/null`);
+  if (!raw) return [];
   try {
-    const raw = execSync(
-      `osascript -l JavaScript -e '${script.replace(/'/g, "'\\''")}'`,
-      { encoding: 'utf-8', timeout: 5000 },
-    ).trim();
-    return JSON.parse(raw) as SystemTerminalInfo[];
+    const sessions: SystemTerminalInfo[] = JSON.parse(raw);
+    return enrichWithPids(sessions);
   } catch {
     return [];
   }
@@ -121,15 +129,21 @@ function detectTerminalApp(): SystemTerminalInfo[] {
 function enrichWithPids(sessions: SystemTerminalInfo[]): SystemTerminalInfo[] {
   for (const session of sessions) {
     if (!session.tty) continue;
-    try {
-      const ttyName = session.tty.replace('/dev/', '');
-      const pid = execSync(
+    const ttyName = session.tty.replace('/dev/', '');
+    // Find the `claude` process PID on this TTY — this matches what the hook sends via os.getppid()
+    const claudePid = runSilent(
+      `ps -t ${ttyName} -o pid= -o comm= 2>/dev/null | grep claude | head -1 | awk '{print $1}'`,
+      2000,
+    );
+    if (claudePid) {
+      session.pid = parseInt(claudePid, 10);
+    } else {
+      // Fallback: last foreground process (non-login, non-shell)
+      const pid = runSilent(
         `ps -t ${ttyName} -o pid= -o comm= 2>/dev/null | grep -v "^$" | tail -1 | awk '{print $1}'`,
-        { encoding: 'utf-8', timeout: 2000 },
-      ).trim();
+        2000,
+      );
       if (pid) session.pid = parseInt(pid, 10);
-    } catch {
-      // ignore
     }
   }
   return sessions;

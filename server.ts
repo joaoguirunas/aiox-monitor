@@ -5,6 +5,7 @@ import type { WebSocket as WsType } from 'ws';
 import { setBroadcaster } from './src/server/ws-broadcaster';
 import { startIdleDetector } from './src/server/idle-detector';
 import { cleanupOldEvents } from './src/server/cleanup';
+import { syncSystemTerminals, cleanupStaleTerminals } from './src/server/terminal-tracker';
 import { getCompanyConfig } from './src/lib/queries';
 
 // Process-level safety net — prevent crashes from unhandled errors
@@ -62,6 +63,12 @@ app.prepare().then(() => {
 
   setBroadcaster(wss);
   startIdleDetector();
+
+  // Terminal tracking: cleanup stale every 15s, sync system terminals every 30s
+  setInterval(cleanupStaleTerminals, 15_000);
+  setInterval(() => { syncSystemTerminals().catch(() => {}); }, 30_000);
+  // Initial sync after 3s
+  setTimeout(() => { syncSystemTerminals().catch(() => {}); }, 3_000);
 
   // Cleanup old events — run after 60s delay, then every 24h
   setTimeout(() => {

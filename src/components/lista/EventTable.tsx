@@ -10,7 +10,7 @@ interface EventTableProps {
   onRowClick: (event: Event) => void;
 }
 
-const COLUMNS = ['Timestamp', 'Projeto', 'Agente', 'Terminal', 'Tipo', 'Tool', 'Descrição'];
+const COLUMNS = ['Timestamp', 'Projeto', 'Agente', 'Terminal', 'COD', 'Tipo', 'Tool', 'Descrição'];
 
 export function EventTable({ events, loading, agents, projects, terminals, onRowClick }: EventTableProps) {
   const agentMap = new Map(agents.map((a) => [a.id, a]));

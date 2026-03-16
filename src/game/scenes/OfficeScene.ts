@@ -7,6 +7,11 @@ import {
 } from '../data/office-layout';
 import { tileToPixel } from '../utils/iso-utils';
 import { getTheme, type OfficeTheme } from '../data/themes';
+import {
+  floorTextureKey, rugTextureKey, getRugTypeForTile,
+  ZONE_NAMES, RUG_TYPES,
+  type ZoneName,
+} from '../data/floor-tiles';
 import { Sofa } from '../objects/Sofa';
 import { CoffeeTable } from '../objects/CoffeeTable';
 import { CoffeeMachine } from '../objects/CoffeeMachine';
@@ -17,6 +22,12 @@ import { Door } from '../objects/Door';
 import { PingPongTable } from '../objects/PingPongTable';
 import { Hammock } from '../objects/Hammock';
 import { ArcadeMachine } from '../objects/ArcadeMachine';
+import { PoolTable } from '../objects/PoolTable';
+import { MassageChair } from '../objects/MassageChair';
+import { GamingSetup } from '../objects/GamingSetup';
+import { Bed } from '../objects/Bed';
+import { BeanBag } from '../objects/BeanBag';
+import { NightStand } from '../objects/NightStand';
 import { ClusterManager } from '../managers/ClusterManager';
 import { AgentManager } from '../managers/AgentManager';
 import { AGENT_SPRITE_CONFIGS } from '../data/agent-sprite-config';
@@ -26,11 +37,19 @@ import type { Agent, Project, ThemeName } from '@/lib/types';
 export class OfficeScene extends Phaser.Scene {
   public coffeeMachine: CoffeeMachine | null = null;
   public clusterManager!: ClusterManager;
+  public gamingSetups: GamingSetup[] = [];
+  public massageChairs: MassageChair[] = [];
+  public beds: Bed[] = [];
+  public beanBags: BeanBag[] = [];
   private sofas: Sofa[] = [];
   private coffeeTables: CoffeeTable[] = [];
+  private poolTables: PoolTable[] = [];
+  private nightStands: NightStand[] = [];
   private agentManager!: AgentManager;
   private currentTheme!: OfficeTheme;
   private floorGraphics!: Phaser.GameObjects.Graphics;
+  private floorRT: Phaser.GameObjects.RenderTexture | null = null;
+  private rugSprites: Phaser.GameObjects.Image[] = [];
   private wallGraphics!: Phaser.GameObjects.Graphics;
   private starfield: Phaser.GameObjects.Graphics | null = null;
   private ambientLayer: Phaser.GameObjects.Graphics | null = null;
@@ -85,6 +104,12 @@ export class OfficeScene extends Phaser.Scene {
     this.applyAmbientEffect();
     this.sofas.forEach(s => s.applyTheme(this.currentTheme));
     this.coffeeTables.forEach(ct => ct.applyTheme(this.currentTheme));
+    this.poolTables.forEach(pt => pt.applyTheme(this.currentTheme));
+    this.gamingSetups.forEach(gs => gs.applyTheme(this.currentTheme));
+    this.massageChairs.forEach(mc => mc.applyTheme(this.currentTheme));
+    this.beds.forEach(b => b.applyTheme(this.currentTheme));
+    this.beanBags.forEach(bb => bb.applyTheme(this.currentTheme));
+    this.nightStands.forEach(ns => ns.applyTheme(this.currentTheme));
     // Apply theme to all dynamic cluster desks
     for (const desk of this.clusterManager.getAllDesks()) {
       desk.applyTheme(this.currentTheme);
@@ -159,7 +184,107 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   // ── Floor ──
+  private hasFloorSprites(): boolean {
+    const themeName = this.currentTheme.name;
+    return ZONE_NAMES.every(z => this.textures.exists(floorTextureKey(themeName, z)));
+  }
+
   private redrawFloor(): void {
+    if (this.hasFloorSprites()) {
+      this.redrawFloorSprites();
+    } else {
+      this.redrawFloorGraphics();
+    }
+  }
+
+  /** Sprite-based floor using RenderTexture (1 draw call for entire floor) */
+  private redrawFloorSprites(): void {
+    this.floorGraphics.clear();
+    const themeName = this.currentTheme.name;
+
+    // Calculate map pixel bounds for RT sizing
+    const topLeft = tileToPixel(0, 0);
+    const topRight = tileToPixel(MAP_WIDTH - 1, 0);
+    const bottomLeft = tileToPixel(0, MAP_HEIGHT - 1);
+    const bottomRight = tileToPixel(MAP_WIDTH - 1, MAP_HEIGHT - 1);
+
+    const minX = Math.min(topLeft.x, bottomLeft.x) - TILE_WIDTH;
+    const maxX = Math.max(topRight.x, bottomRight.x) + TILE_WIDTH;
+    const minY = Math.min(topLeft.y, topRight.y) - TILE_HEIGHT;
+    const maxY = Math.max(bottomLeft.y, bottomRight.y) + TILE_HEIGHT;
+
+    const rtW = maxX - minX;
+    const rtH = maxY - minY;
+
+    // Create or resize the RenderTexture
+    if (this.floorRT) {
+      this.floorRT.destroy();
+    }
+    this.floorRT = this.add.renderTexture(minX, minY, rtW, rtH).setOrigin(0, 0).setDepth(-1);
+
+    // Stamp floor tiles onto the RT
+    const stamp = this.add.image(0, 0, '__DEFAULT').setOrigin(0.5, 0.5).setVisible(false);
+
+    for (let y = 0; y < MAP_HEIGHT; y++) {
+      for (let x = 0; x < MAP_WIDTH; x++) {
+        const zone = getZoneForTile(x, y) as ZoneName | null;
+        if (!zone) continue;
+
+        const texKey = floorTextureKey(themeName, zone);
+        if (!this.textures.exists(texKey)) continue;
+
+        stamp.setTexture(texKey);
+        const { x: px, y: py } = tileToPixel(x, y);
+        // Stamp position is relative to the RT origin
+        this.floorRT.draw(stamp, px - minX, py - minY);
+      }
+    }
+
+    stamp.destroy();
+
+    // Redraw rug overlay sprites
+    this.redrawRugs();
+  }
+
+  /** Place rug sprites on top of the floor RT */
+  private redrawRugs(): void {
+    this.rugSprites.forEach(s => s.destroy());
+    this.rugSprites = [];
+
+    const themeName = this.currentTheme.name;
+
+    for (const rugType of RUG_TYPES) {
+      const texKey = rugTextureKey(themeName, rugType);
+      if (!this.textures.exists(texKey)) continue;
+
+      for (let y = 0; y < MAP_HEIGHT; y++) {
+        for (let x = 0; x < MAP_WIDTH; x++) {
+          const zone = getZoneForTile(x, y);
+          if (!zone) continue;
+
+          const rt = getRugTypeForTile(x, y);
+          if (rt !== rugType) continue;
+
+          const { x: px, y: py } = tileToPixel(x, y);
+          const rugImg = this.add.image(px, py, texKey)
+            .setOrigin(0.5, 0.5)
+            .setDepth(0.1);
+          this.rugSprites.push(rugImg);
+        }
+      }
+    }
+  }
+
+  /** Fallback: Graphics-based floor when sprite tiles are missing */
+  private redrawFloorGraphics(): void {
+    // Clean up sprite-based floor if it existed
+    if (this.floorRT) {
+      this.floorRT.destroy();
+      this.floorRT = null;
+    }
+    this.rugSprites.forEach(s => s.destroy());
+    this.rugSprites = [];
+
     this.floorGraphics.clear();
     const hw = TILE_WIDTH / 2;
     const hh = TILE_HEIGHT / 2;
@@ -173,6 +298,7 @@ export class OfficeScene extends Phaser.Scene {
         const color = t.floorColors[zone];
         const { x: px, y: py } = tileToPixel(x, y);
 
+        // Flat fill — clean and subtle
         this.floorGraphics.fillStyle(color, 1);
         this.floorGraphics.beginPath();
         this.floorGraphics.moveTo(px, py - hh);
@@ -182,13 +308,8 @@ export class OfficeScene extends Phaser.Scene {
         this.floorGraphics.closePath();
         this.floorGraphics.fillPath();
 
-        const tileVar = (x * 7 + y * 13) % 6;
-        if (tileVar < 2) {
-          this.floorGraphics.fillStyle(tileVar === 0 ? 0xffffff : 0x000000, tileVar === 0 ? 0.012 : 0.025);
-          this.floorGraphics.fillPath();
-        }
-
-        this.floorGraphics.lineStyle(1, t.floorGridColor, t.floorGridAlpha);
+        // Thin border line only
+        this.floorGraphics.lineStyle(1, t.floorGridColor, t.floorGridAlpha * 0.5);
         this.floorGraphics.beginPath();
         this.floorGraphics.moveTo(px, py - hh);
         this.floorGraphics.lineTo(px + hw, py);
@@ -197,29 +318,13 @@ export class OfficeScene extends Phaser.Scene {
         this.floorGraphics.closePath();
         this.floorGraphics.strokePath();
 
-        // Bevel
-        this.floorGraphics.lineStyle(1, 0xffffff, 0.02);
+        // Subtle top-left highlight
+        this.floorGraphics.lineStyle(1, 0xffffff, 0.015);
         this.floorGraphics.beginPath();
         this.floorGraphics.moveTo(px - hw + 1, py);
         this.floorGraphics.lineTo(px, py - hh + 1);
         this.floorGraphics.lineTo(px + hw - 1, py);
         this.floorGraphics.strokePath();
-
-        this.floorGraphics.lineStyle(1, 0x000000, 0.06);
-        this.floorGraphics.beginPath();
-        this.floorGraphics.moveTo(px + hw - 1, py);
-        this.floorGraphics.lineTo(px, py + hh - 1);
-        this.floorGraphics.lineTo(px - hw + 1, py);
-        this.floorGraphics.strokePath();
-
-        if ((x + y) % 4 === 0) {
-          this.floorGraphics.lineStyle(1, t.floorGridColor, t.floorGridAlpha * 0.3);
-          this.floorGraphics.lineBetween(px - hw * 0.4, py, px + hw * 0.4, py);
-        }
-        if ((x + y) % 3 === 0) {
-          this.floorGraphics.fillStyle(t.floorGridColor, t.floorGridAlpha * 0.5);
-          this.floorGraphics.fillCircle(px, py, 1);
-        }
       }
     }
   }
@@ -326,6 +431,14 @@ export class OfficeScene extends Phaser.Scene {
     const arcadePos = tileToPixel(11, 3);
     g.fillStyle(0xff00ff, 0.008);
     g.fillEllipse(arcadePos.x, arcadePos.y, 60, 24);
+    // Gaming setup glow
+    const gamingPos = tileToPixel(FURNITURE_POSITIONS.gaming.tileX, FURNITURE_POSITIONS.gaming.tileY);
+    g.fillStyle(0x6366f1, 0.008);
+    g.fillEllipse(gamingPos.x, gamingPos.y, 70, 30);
+    // Bedroom ambient (warm lamp glow)
+    const bedroomCenter = tileToPixel(4, 21);
+    g.fillStyle(0xffcc66, 0.005);
+    g.fillEllipse(bedroomCenter.x, bedroomCenter.y, 140, 80);
   }
 
   // ── Ambient Effects ──
@@ -385,6 +498,49 @@ export class OfficeScene extends Phaser.Scene {
     new Hammock(this, FURNITURE_POSITIONS.hammock1.tileX, FURNITURE_POSITIONS.hammock1.tileY);
     new Hammock(this, FURNITURE_POSITIONS.hammock2.tileX, FURNITURE_POSITIONS.hammock2.tileY);
     new Hammock(this, FURNITURE_POSITIONS.hammock3.tileX, FURNITURE_POSITIONS.hammock3.tileY);
+
+    // Recreation — Pool table
+    this.poolTables = [
+      new PoolTable(this, FURNITURE_POSITIONS.poolTable.tileX, FURNITURE_POSITIONS.poolTable.tileY),
+    ];
+
+    // Recreation — Gaming setup (TV + console)
+    this.gamingSetups = [
+      new GamingSetup(this, FURNITURE_POSITIONS.gaming.tileX, FURNITURE_POSITIONS.gaming.tileY),
+    ];
+
+    // Recreation — Bean bags (near gaming)
+    this.beanBags = [
+      new BeanBag(this, FURNITURE_POSITIONS.beanBag1.tileX, FURNITURE_POSITIONS.beanBag1.tileY, 0x4a3080),
+      new BeanBag(this, FURNITURE_POSITIONS.beanBag2.tileX, FURNITURE_POSITIONS.beanBag2.tileY, 0x305080),
+    ];
+
+    // Recreation — Massage chairs
+    this.massageChairs = [
+      new MassageChair(this, FURNITURE_POSITIONS.massage1.tileX, FURNITURE_POSITIONS.massage1.tileY),
+      new MassageChair(this, FURNITURE_POSITIONS.massage2.tileX, FURNITURE_POSITIONS.massage2.tileY),
+    ];
+
+    // Bedroom — Beds
+    this.beds = [
+      new Bed(this, FURNITURE_POSITIONS.bed1.tileX, FURNITURE_POSITIONS.bed1.tileY),
+      new Bed(this, FURNITURE_POSITIONS.bed2.tileX, FURNITURE_POSITIONS.bed2.tileY),
+      new Bed(this, FURNITURE_POSITIONS.bed3.tileX, FURNITURE_POSITIONS.bed3.tileY),
+    ];
+
+    // Bedroom — Night stands with lamps
+    this.nightStands = [
+      new NightStand(this, FURNITURE_POSITIONS.nightStand1.tileX, FURNITURE_POSITIONS.nightStand1.tileY),
+      new NightStand(this, FURNITURE_POSITIONS.nightStand2.tileX, FURNITURE_POSITIONS.nightStand2.tileY),
+      new NightStand(this, FURNITURE_POSITIONS.nightStand3.tileX, FURNITURE_POSITIONS.nightStand3.tileY),
+    ];
+
+    // Bedroom — Plants
+    new Plant(this, FURNITURE_POSITIONS.bedroomPlant1.tileX, FURNITURE_POSITIONS.bedroomPlant1.tileY);
+    new Plant(this, FURNITURE_POSITIONS.bedroomPlant2.tileX, FURNITURE_POSITIONS.bedroomPlant2.tileY);
+
+    // Bedroom — Door
+    new Door(this, FURNITURE_POSITIONS.bedroomDoor.tileX, FURNITURE_POSITIONS.bedroomDoor.tileY);
 
     // Plants
     new Plant(this, FURNITURE_POSITIONS.plant1.tileX, FURNITURE_POSITIONS.plant1.tileY);

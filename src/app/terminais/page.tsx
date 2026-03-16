@@ -58,7 +58,7 @@ export default function TerminaisPage() {
           {processing.length > 0 && (
             <TerminalSection label="Processando" count={processing.length} dot="bg-accent-blue">
               {processing.map(t => (
-                <TrackedTerminalCard key={t.id} pid={t.pid} status={t.status} projectName={t.project_name} agentName={t.agent_name} agentDisplayName={t.agent_display_name} currentTool={t.current_tool} currentInput={t.current_input} firstSeen={t.first_seen_at} lastActive={t.last_active} />
+                <TrackedTerminalCard key={t.id} pid={t.pid} status={t.status} projectName={t.project_name} windowTitle={t.window_title} agentName={t.agent_name} agentDisplayName={t.agent_display_name} currentTool={t.current_tool} currentInput={t.current_input} firstSeen={t.first_seen_at} lastActive={t.last_active} />
               ))}
             </TerminalSection>
           )}
@@ -67,7 +67,7 @@ export default function TerminaisPage() {
           {active.length > 0 && (
             <TerminalSection label="Ativos" count={active.length} dot="bg-emerald-400">
               {active.map(t => (
-                <TrackedTerminalCard key={t.id} pid={t.pid} status={t.status} projectName={t.project_name} agentName={t.agent_name} agentDisplayName={t.agent_display_name} currentTool={t.current_tool} currentInput={t.current_input} firstSeen={t.first_seen_at} lastActive={t.last_active} />
+                <TrackedTerminalCard key={t.id} pid={t.pid} status={t.status} projectName={t.project_name} windowTitle={t.window_title} agentName={t.agent_name} agentDisplayName={t.agent_display_name} currentTool={t.current_tool} currentInput={t.current_input} firstSeen={t.first_seen_at} lastActive={t.last_active} />
               ))}
             </TerminalSection>
           )}
@@ -76,7 +76,7 @@ export default function TerminaisPage() {
           {inactive.length > 0 && (
             <TerminalSection label="Inativos" count={inactive.length} dot="bg-zinc-500">
               {inactive.map(t => (
-                <TrackedTerminalCard key={t.id} pid={t.pid} status={t.status} projectName={t.project_name} agentName={t.agent_name} agentDisplayName={t.agent_display_name} currentTool={t.current_tool} currentInput={t.current_input} firstSeen={t.first_seen_at} lastActive={t.last_active} />
+                <TrackedTerminalCard key={t.id} pid={t.pid} status={t.status} projectName={t.project_name} windowTitle={t.window_title} agentName={t.agent_name} agentDisplayName={t.agent_display_name} currentTool={t.current_tool} currentInput={t.current_input} firstSeen={t.first_seen_at} lastActive={t.last_active} />
               ))}
             </TerminalSection>
           )}

@@ -3,6 +3,10 @@ import { tileToPixel, pixelToTile } from '../utils/iso-utils';
 import { getAgentColor, STATUS_COLORS } from '../data/agent-visuals';
 import { getAgentSpriteConfig } from '../data/agent-sprite-config';
 import { getZoneForTile } from '../data/office-layout';
+import {
+  pixelLabTextureKey, angleToDirection,
+  PIXELLAB_DISPLAY_SCALE, PIXELLAB_SPRITES,
+} from '../data/pixellab-sprites';
 import type { AgentAnimState } from '../animations/agent-animations';
 import type { AgentStatus } from '@/lib/types';
 
@@ -19,6 +23,14 @@ export class AgentSprite extends Phaser.GameObjects.Container {
   private glowTween: Phaser.Tweens.Tween | null = null;
   private labelTween: Phaser.Tweens.Tween | null = null;
   private lastZone: string | null = null;
+
+  // PixelLab mode
+  private isPixelLab = false;
+  private plAgentKey = '';
+  private breathTween: Phaser.Tweens.Tween | null = null;
+  private walkBobTween: Phaser.Tweens.Tween | null = null;
+  private activityTween: Phaser.Tweens.Tween | null = null;
+  private currentDirection = 'south';
 
   constructor(
     scene: Phaser.Scene,
@@ -37,24 +49,39 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     this.glowCircle = scene.add.circle(0, 6, 18, this.agentColor, 0.06);
     this.add(this.glowCircle);
 
-    // Sprite
-    this.spriteKey = scene.textures.exists(config.key)
-      ? config.key
-      : scene.textures.exists('agent-default')
-        ? 'agent-default'
-        : '';
+    // Detect PixelLab mode
+    const plEntry = Object.values(PIXELLAB_SPRITES).find(e => e.agentKey === config.key);
+    const plSouthKey = pixelLabTextureKey(config.key, 'south');
+    this.isPixelLab = !!plEntry && scene.textures.exists(plSouthKey);
 
-    if (this.spriteKey) {
-      this.sprite = scene.add.sprite(0, -10, this.spriteKey, 0);
+    if (this.isPixelLab) {
+      // PixelLab: use directional textures with tween-based animations
+      this.plAgentKey = config.key;
+      this.sprite = scene.add.sprite(0, -10, plSouthKey);
       this.sprite.setOrigin(0.5, 0.5);
-
-      if (this.spriteKey === 'agent-default' && config.key !== 'agent-default') {
-        this.sprite.setTint(this.agentColor);
-      }
+      this.sprite.setScale(PIXELLAB_DISPLAY_SCALE);
+      this.spriteKey = config.key;
+      this.startIdleBreathing();
     } else {
-      this.sprite = scene.add.sprite(0, -10, '__DEFAULT');
-      this.sprite.setVisible(false);
-      this.createFallbackGraphics();
+      // Procedural spritesheet mode
+      this.spriteKey = scene.textures.exists(config.key)
+        ? config.key
+        : scene.textures.exists('agent-default')
+          ? 'agent-default'
+          : '';
+
+      if (this.spriteKey) {
+        this.sprite = scene.add.sprite(0, -10, this.spriteKey, 0);
+        this.sprite.setOrigin(0.5, 0.5);
+
+        if (this.spriteKey === 'agent-default' && config.key !== 'agent-default') {
+          this.sprite.setTint(this.agentColor);
+        }
+      } else {
+        this.sprite = scene.add.sprite(0, -10, '__DEFAULT');
+        this.sprite.setVisible(false);
+        this.createFallbackGraphics();
+      }
     }
     this.add(this.sprite);
 
@@ -108,13 +135,10 @@ export class AgentSprite extends Phaser.GameObjects.Container {
   private drawStatusBadge(): void {
     this.statusBadge.clear();
     const color = STATUS_COLORS[this.currentStatus] ?? STATUS_COLORS.idle;
-    // Badge glow ring
     this.statusBadge.fillStyle(color, 0.25);
     this.statusBadge.fillCircle(12, -22, 6);
-    // Badge fill
     this.statusBadge.fillStyle(color, 1);
     this.statusBadge.fillCircle(12, -22, 3.5);
-    // Badge border
     this.statusBadge.lineStyle(1, 0xffffff, 0.5);
     this.statusBadge.strokeCircle(12, -22, 3.5);
   }
@@ -155,6 +179,110 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     this.setDepth(y + 1);
   }
 
+  // ─── PixelLab direction switching ─────────────────────────────
+
+  private setPixelLabDirection(direction: string): void {
+    if (!this.isPixelLab) return;
+    const texKey = pixelLabTextureKey(this.plAgentKey, direction);
+    if (this.scene.textures.exists(texKey)) {
+      this.sprite.setTexture(texKey);
+      this.sprite.setFlipX(false);
+      this.currentDirection = direction;
+    } else if (direction === 'west') {
+      // Fallback: flip east
+      const eastKey = pixelLabTextureKey(this.plAgentKey, 'east');
+      if (this.scene.textures.exists(eastKey)) {
+        this.sprite.setTexture(eastKey);
+        this.sprite.setFlipX(true);
+        this.currentDirection = direction;
+      }
+    }
+  }
+
+  // ─── PixelLab tween animations ────────────────────────────────
+
+  private stopPixelLabTweens(): void {
+    if (this.breathTween) { this.breathTween.stop(); this.breathTween = null; }
+    if (this.walkBobTween) { this.walkBobTween.stop(); this.walkBobTween = null; }
+    if (this.activityTween) { this.activityTween.stop(); this.activityTween = null; }
+    // Reset sprite transform
+    this.sprite.setScale(PIXELLAB_DISPLAY_SCALE);
+    this.sprite.y = -10;
+  }
+
+  private startIdleBreathing(): void {
+    if (!this.isPixelLab) return;
+    this.stopPixelLabTweens();
+    this.setPixelLabDirection('south');
+
+    const baseScale = PIXELLAB_DISPLAY_SCALE;
+    this.breathTween = this.scene.tweens.add({
+      targets: this.sprite,
+      scaleY: baseScale * 1.015,
+      y: -10.5,
+      duration: 2200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  private startWalkBob(): void {
+    if (!this.isPixelLab) return;
+    if (this.walkBobTween) { this.walkBobTween.stop(); this.walkBobTween = null; }
+
+    this.walkBobTween = this.scene.tweens.add({
+      targets: this.sprite,
+      y: { from: -10, to: -12 },
+      scaleX: { from: PIXELLAB_DISPLAY_SCALE, to: PIXELLAB_DISPLAY_SCALE * 0.97 },
+      scaleY: { from: PIXELLAB_DISPLAY_SCALE, to: PIXELLAB_DISPLAY_SCALE * 1.03 },
+      duration: 180,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  private startSitAnimation(): void {
+    if (!this.isPixelLab) return;
+    this.stopPixelLabTweens();
+    this.setPixelLabDirection('south');
+
+    const baseScale = PIXELLAB_DISPLAY_SCALE;
+    // Subtle settle - slight scale compress + gentle sway
+    this.sprite.y = -8; // Seated slightly lower
+    this.activityTween = this.scene.tweens.add({
+      targets: this.sprite,
+      scaleY: baseScale * 0.98,
+      y: -7.5,
+      duration: 3000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  private startTypeAnimation(): void {
+    if (!this.isPixelLab) return;
+    this.stopPixelLabTweens();
+    this.setPixelLabDirection('north');
+
+    const baseScale = PIXELLAB_DISPLAY_SCALE;
+    // Typing bounce - rapid subtle shoulder movement
+    this.sprite.y = -8;
+    this.activityTween = this.scene.tweens.add({
+      targets: this.sprite,
+      y: { from: -8, to: -8.8 },
+      scaleX: { from: baseScale, to: baseScale * 1.005 },
+      duration: 400,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  // ─── Movement ─────────────────────────────────────────────────
+
   walkTo(tileX: number, tileY: number): Promise<void> {
     return new Promise((resolve) => {
       this.stopCurrentAnimation();
@@ -166,13 +294,21 @@ export class AgentSprite extends Phaser.GameObjects.Container {
       const distance = Phaser.Math.Distance.Between(this.x, this.y, targetX, targetY);
       const duration = Phaser.Math.Clamp(distance * 4, 500, 3000);
 
-      const direction = this.getWalkDirection(deltaX, deltaY);
-      this.playAnimIfExists(`walk-${direction}`);
-
-      if (direction === 'side' && deltaX < 0) {
-        this.sprite.setFlipX(true);
+      if (this.isPixelLab) {
+        // PixelLab: use 4-direction texture swap + walk bob tween
+        const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
+        const dir = angleToDirection(angle);
+        this.setPixelLabDirection(dir);
+        this.startWalkBob();
       } else {
-        this.sprite.setFlipX(false);
+        // Procedural: use spritesheet frame animation
+        const direction = this.getWalkDirection(deltaX, deltaY);
+        this.playAnimIfExists(`walk-${direction}`);
+        if (direction === 'side' && deltaX < 0) {
+          this.sprite.setFlipX(true);
+        } else {
+          this.sprite.setFlipX(false);
+        }
       }
 
       this.currentTween = this.scene.tweens.add({
@@ -184,11 +320,30 @@ export class AgentSprite extends Phaser.GameObjects.Container {
         onUpdate: () => {
           this.setDepth(this.y + 1);
           this.checkZoneCrossing();
+
+          // PixelLab: update direction during walk for smooth turns
+          if (this.isPixelLab) {
+            const dx = targetX - this.x;
+            const dy = targetY - this.y;
+            if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+              const a = Math.atan2(dy, dx) * (180 / Math.PI);
+              const newDir = angleToDirection(a);
+              if (newDir !== this.currentDirection) {
+                this.setPixelLabDirection(newDir);
+              }
+            }
+          }
         },
         onComplete: () => {
           this.currentTween = null;
-          this.sprite.setFlipX(false);
-          this.stopSpriteAnim();
+          if (this.isPixelLab) {
+            this.stopPixelLabTweens();
+            this.setPixelLabDirection('south');
+            this.startIdleBreathing();
+          } else {
+            this.sprite.setFlipX(false);
+            this.stopSpriteAnim();
+          }
           this.animState = 'idle';
           resolve();
         },
@@ -209,7 +364,6 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     const tile = pixelToTile(this.x, this.y);
     const currentZone = getZoneForTile(tile.tileX, tile.tileY);
     if (currentZone && currentZone !== this.lastZone && this.lastZone !== null) {
-      // Zone crossing flash with agent color
       this.scene.tweens.add({
         targets: this.glowCircle,
         alpha: 0.25,
@@ -223,24 +377,38 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     this.lastZone = currentZone;
   }
 
+  // ─── State changes ────────────────────────────────────────────
+
   sitDown(): void {
     this.stopCurrentAnimation();
     this.animState = 'sit';
-    this.sprite.setFlipX(false);
-    this.playAnimIfExists('sit');
+    if (this.isPixelLab) {
+      this.startSitAnimation();
+    } else {
+      this.sprite.setFlipX(false);
+      this.playAnimIfExists('sit');
+    }
   }
 
   startTyping(): void {
     this.stopCurrentAnimation();
     this.animState = 'type';
-    this.playAnimIfExists('type');
+    if (this.isPixelLab) {
+      this.startTypeAnimation();
+    } else {
+      this.playAnimIfExists('type');
+    }
   }
 
   standIdle(): void {
     this.stopCurrentAnimation();
     this.animState = 'idle';
-    this.sprite.setFlipX(false);
-    this.playAnimIfExists('idle');
+    if (this.isPixelLab) {
+      this.startIdleBreathing();
+    } else {
+      this.sprite.setFlipX(false);
+      this.playAnimIfExists('idle');
+    }
   }
 
   getAnimState(): AgentAnimState {
@@ -266,7 +434,11 @@ export class AgentSprite extends Phaser.GameObjects.Container {
       this.currentTween.stop();
       this.currentTween = null;
     }
-    this.stopSpriteAnim();
+    if (this.isPixelLab) {
+      this.stopPixelLabTweens();
+    } else {
+      this.stopSpriteAnim();
+    }
   }
 
   getAgentName(): string {

@@ -1,4 +1,4 @@
-import { insertEvent, createSession, closeSession, getEvents } from '../lib/queries';
+import { insertEvent, createSession, closeSession, getEvents, getTerminalAgentByPid } from '../lib/queries';
 import { detectProject } from './project-detector';
 import { trackTerminal, deactivateTerminal } from './terminal-tracker';
 import { trackAgent, detectAgentFromPayload } from './agent-tracker';
@@ -68,9 +68,9 @@ export function processEvent(payload: EventPayload): ProcessedEvent {
   //    We do NOT scan tool output server-side — file contents cause false positives.
   let detected = payload.agent_name?.trim() || undefined;
 
-  // Server-side fallback: detect from Skill/Agent tool input (reliable sources only)
+  // Server-side fallback: detect from Skill/Agent tool input or UserPromptSubmit
   if (!detected || detected === '@unknown') {
-    if (payload.tool_name === 'Skill' || payload.tool_name === 'Agent') {
+    if (payload.tool_name === 'Skill' || payload.tool_name === 'Agent' || eventType === 'UserPromptSubmit') {
       const inputStr = typeof payload.input === 'string' ? payload.input : JSON.stringify(payload.input ?? '');
       const found = detectAgentFromPayload(inputStr);
       if (found !== '@unknown') detected = found;
@@ -82,18 +82,22 @@ export function processEvent(payload: EventPayload): ProcessedEvent {
 
   if (detected && detected !== '@unknown') {
     agentName = detected;
-    // Cache this known agent for the terminal (sticky until Stop)
+    // Cache this known agent for the terminal (sticky until a different agent is activated)
     if (pid !== undefined) terminalAgentCache.set(pid, detected);
   } else if (pid !== undefined && terminalAgentCache.has(pid)) {
-    // Reuse last known agent for this terminal
+    // Reuse last known agent for this terminal — persists across Stop events
     agentName = terminalAgentCache.get(pid)!;
+  } else if (pid !== undefined) {
+    // DB fallback: check terminal's stored agent_name (survives server restarts)
+    const dbAgent = getTerminalAgentByPid(pid);
+    if (dbAgent) {
+      agentName = dbAgent;
+      terminalAgentCache.set(pid, dbAgent); // re-warm the cache
+    } else {
+      agentName = '@unknown';
+    }
   } else {
     agentName = '@unknown';
-  }
-
-  // On Stop: clear the terminal cache so next session starts fresh
-  if (STOP_TYPES.has(eventType) && pid !== undefined) {
-    terminalAgentCache.delete(pid);
   }
 
   // 3. Track agent (before terminal, so we have display_name)

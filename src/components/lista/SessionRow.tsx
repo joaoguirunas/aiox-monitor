@@ -108,12 +108,19 @@ export function SessionRow({ session, agents, projects, terminals, onClick }: Se
       </td>
       <td className="px-4 py-2.5 whitespace-nowrap">
         {terminal ? (
-          <span className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary" title={`PID ${terminal.pid}${terminal.window_title ? ` — ${terminal.window_title}` : ''}`}>
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary">
             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${terminal.status === 'processing' ? 'bg-accent-emerald animate-pulse' : terminal.status === 'active' ? 'bg-accent-amber' : 'bg-text-muted/40'}`} />
-            <span className="truncate max-w-[120px]">{terminal.window_title || `PID ${terminal.pid}`}</span>
+            <span className="truncate max-w-[120px]">{terminal.window_title || '—'}</span>
           </span>
         ) : (
           <span className="text-text-muted text-[11px]">—</span>
+        )}
+      </td>
+      <td className="px-4 py-2.5 whitespace-nowrap">
+        {terminal ? (
+          <span className="text-[10px] font-mono text-text-muted">{terminal.pid}</span>
+        ) : (
+          <span className="text-text-muted text-[10px]">—</span>
         )}
       </td>
       <td className="px-4 py-2.5">

@@ -58,10 +58,12 @@ export function useEvents(filters: EventFilters = {}) {
     const msg = lastMessage as WsEventNew;
     const parsedFilters = JSON.parse(filtersKey) as EventFilters;
     if (parsedFilters.projectId && msg.projectId !== parsedFilters.projectId) return;
+    if (parsedFilters.agentId && msg.agentId !== parsedFilters.agentId) return;
+    if (parsedFilters.terminalId && msg.event.terminal_id !== parsedFilters.terminalId) return;
     setEvents(prev => {
       // Deduplicate: skip if event already exists
       if (prev.some(e => e.id === msg.event.id)) return prev;
-      return [msg.event, ...prev].slice(0, parsedFilters.limit ?? 100);
+      return [msg.event, ...prev];
     });
     setTotal(prev => prev + 1);
   }, [lastMessage, filtersKey]);

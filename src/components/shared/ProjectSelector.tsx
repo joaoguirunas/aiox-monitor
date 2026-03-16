@@ -16,7 +16,7 @@ export function ProjectSelector() {
           const val = e.target.value;
           setSelectedProjectId(val === '' ? null : parseInt(val, 10));
         }}
-        className="appearance-none bg-surface-2/60 text-text-secondary text-2xs font-medium rounded-lg pl-3 pr-7 py-1.5 border border-border hover:border-border-hover focus:outline-none focus:border-accent-blue/30 focus:ring-1 focus:ring-accent-blue/10 transition-all cursor-pointer"
+        className="appearance-none bg-white/[0.04] text-text-muted text-[11px] font-medium rounded-md pl-2.5 pr-6 py-1 border border-border/40 hover:border-border/60 focus:outline-none focus:border-accent-blue/30 transition-colors cursor-pointer"
       >
         <option value="">Todos os projetos</option>
         {projects.map(p => (
@@ -25,9 +25,8 @@ export function ProjectSelector() {
           </option>
         ))}
       </select>
-      {/* Custom chevron */}
       <svg
-        className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-text-muted"
+        className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-2.5 h-2.5 text-text-muted/60"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"

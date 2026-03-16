@@ -142,6 +142,42 @@ export function getAgents(filters?: { projectId?: number }): AgentWithStats[] {
   );
 }
 
+/**
+ * Returns one "agent instance" per active terminal with an agent assigned.
+ * This allows the same agent (e.g. @dev) to appear multiple times in Empresa
+ * when running in different terminals. Uses negative IDs (-(terminal.id)) to
+ * avoid collision with real agent IDs.
+ */
+export function getAgentInstances(filters?: { projectId?: number }): AgentWithStats[] {
+  const whereClause = filters?.projectId !== undefined
+    ? 'WHERE t.project_id = ? AND'
+    : 'WHERE';
+  const params = filters?.projectId !== undefined ? [filters.projectId] : [];
+
+  return rows<AgentWithStats>(
+    db.prepare(`
+      SELECT
+        -(t.id) as id,
+        t.project_id,
+        t.agent_name as name,
+        t.agent_display_name as display_name,
+        CASE
+          WHEN t.status = 'processing' THEN 'working'
+          WHEN t.status = 'active' THEN 'idle'
+          ELSE 'offline'
+        END as status,
+        t.current_tool,
+        t.last_active,
+        1 as terminal_count
+      FROM terminals t
+      ${whereClause} t.agent_name IS NOT NULL
+        AND t.agent_name <> '@unknown'
+        AND t.status <> 'inactive'
+      ORDER BY t.last_active DESC
+    `).all(...params) as Row[],
+  );
+}
+
 // ─── Terminals ───────────────────────────────────────────────────────────────
 
 export function upsertTerminal(
@@ -220,6 +256,29 @@ export function getTerminalsByProject(projectId: number): Terminal[] {
       SELECT * FROM terminals WHERE project_id = ? ORDER BY first_seen_at ASC
     `).all(projectId) as Row[],
   );
+}
+
+export function getAllTerminals(): Terminal[] {
+  return rows<Terminal>(
+    db.prepare(`SELECT * FROM terminals ORDER BY last_active DESC`).all() as Row[],
+  );
+}
+
+export function updateTerminalWindowTitle(id: number, windowTitle: string): void {
+  db.prepare(`UPDATE terminals SET window_title = ? WHERE id = ?`).run(windowTitle, id);
+}
+
+export function setTerminalActive(id: number): void {
+  db.prepare(`UPDATE terminals SET status = 'active', last_active = datetime('now') WHERE id = ? AND status = 'inactive'`).run(id);
+}
+
+export function getTerminalAgentByPid(pid: number): string | null {
+  const r = db.prepare(`
+    SELECT agent_name FROM terminals
+    WHERE pid = ? AND agent_name IS NOT NULL AND agent_name != '@unknown'
+    ORDER BY last_active DESC LIMIT 1
+  `).get(pid) as Row | undefined;
+  return r ? (r.agent_name as string) : null;
 }
 
 // ─── Sessions ────────────────────────────────────────────────────────────────

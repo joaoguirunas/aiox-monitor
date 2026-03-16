@@ -79,6 +79,10 @@ const config: Config = {
         'status-pulse': 'statusPulse 2s infinite ease-in-out',
         'orbital': 'orbital 3s infinite ease-in-out',
         'card-flash': 'cardFlash 600ms ease-out',
+        'logo-spin': 'logoSpin 8s infinite linear',
+        'logo-spin-reverse': 'logoSpinReverse 12s infinite linear',
+        'logo-pulse': 'logoPulse 3s infinite ease-in-out',
+        'logo-shimmer': 'logoShimmer 4s infinite linear',
       },
       keyframes: {
         shimmer: {
@@ -109,6 +113,22 @@ const config: Config = {
           '0%': { boxShadow: '0 0 0 0 rgba(99,102,241,0.5)' },
           '70%': { boxShadow: '0 0 0 8px rgba(99,102,241,0)' },
           '100%': { boxShadow: '0 0 0 0 rgba(99,102,241,0)' },
+        },
+        logoSpin: {
+          from: { transform: 'rotate(0deg)' },
+          to: { transform: 'rotate(360deg)' },
+        },
+        logoSpinReverse: {
+          from: { transform: 'rotate(360deg)' },
+          to: { transform: 'rotate(0deg)' },
+        },
+        logoPulse: {
+          '0%, 100%': { opacity: '0.6', transform: 'scale(1)' },
+          '50%': { opacity: '1', transform: 'scale(1.15)' },
+        },
+        logoShimmer: {
+          '0%': { backgroundPosition: '-200% center' },
+          '100%': { backgroundPosition: '200% center' },
         },
       },
       backdropBlur: {

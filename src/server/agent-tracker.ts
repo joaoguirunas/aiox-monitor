@@ -9,7 +9,7 @@ const DISPLAY_NAMES: Record<string, string> = {
   '@pm': 'Morgan',
   '@sm': 'River',
   '@po': 'Pax',
-  '@analyst': 'Alex',
+  '@analyst': 'Atlas',
   '@devops': 'Gage',
   '@data-engineer': 'Dara',
   '@ux-design-expert': 'Uma',
@@ -45,12 +45,20 @@ export function trackAgent(
   return updated;
 }
 
-/** Best-effort: scan payload text for @agent-name patterns */
+/** Best-effort: scan payload text for agent patterns in any format.
+ *  Matches: @name, AIOX:agents:name, agents:name, AIOX/agents/name, agents/name */
 export function detectAgentFromPayload(payload: unknown): string {
   const text = typeof payload === 'string' ? payload : JSON.stringify(payload ?? '');
   const agentNames = Object.keys(DISPLAY_NAMES);
   for (const name of agentNames) {
     if (text.includes(name)) return name;
+    const id = name.slice(1); // "@analyst" -> "analyst"
+    if (
+      text.includes(`AIOX:agents:${id}`) ||
+      text.includes(`agents:${id}`) ||
+      text.includes(`AIOX/agents/${id}`) ||
+      text.includes(`agents/${id}`)
+    ) return name;
   }
   return '@unknown';
 }

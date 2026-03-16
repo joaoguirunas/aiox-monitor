@@ -4,10 +4,39 @@ import {
   generateAgentSpritesheet,
   FRAME_SIZE, ATLAS_COLS, ATLAS_ROWS,
 } from '../utils/sprite-generator';
-
+import {
+  PIXELLAB_SPRITES, pixelLabTextureKey,
+} from '../data/pixellab-sprites';
+import {
+  THEME_NAMES, ZONE_NAMES, RUG_TYPES,
+  floorTextureKey, floorAssetPath,
+  rugTextureKey, rugAssetPath,
+} from '../data/floor-tiles';
 export class BootScene extends Phaser.Scene {
   constructor() {
     super({ key: 'BootScene' });
+  }
+
+  preload(): void {
+    // Carregar sprites PixelLab para agentes que os têm
+    for (const [, entry] of Object.entries(PIXELLAB_SPRITES)) {
+      for (const [dir, path] of Object.entries(entry.directions)) {
+        const key = pixelLabTextureKey(entry.agentKey, dir);
+        this.load.image(key, path);
+      }
+    }
+
+    // Desk workstations são 100% programáticos — zero sprites carregados
+
+    // Carregar floor tiles e rugs para todos os temas
+    for (const theme of THEME_NAMES) {
+      for (const zone of ZONE_NAMES) {
+        this.load.image(floorTextureKey(theme, zone), floorAssetPath(theme, zone));
+      }
+      for (const rug of RUG_TYPES) {
+        this.load.image(rugTextureKey(theme, rug), rugAssetPath(theme, rug));
+      }
+    }
   }
 
   create(): void {
@@ -36,7 +65,7 @@ export class BootScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // Gerar spritesheets procedurais para todos os agentes
+    // Gerar spritesheets — PixelLab primeiro, procedural como fallback
     this.generateAgentSpritesheets();
 
     this.time.delayedCall(500, () => {
@@ -46,10 +75,18 @@ export class BootScene extends Phaser.Scene {
 
   private generateAgentSpritesheets(): void {
     for (const config of Object.values(AGENT_SPRITE_CONFIGS)) {
-      try {
-        this.addCanvasSpritesheet(config.key, generateAgentSpritesheet(config));
-      } catch {
-        // Silent fallback — agent will use default sprite
+      // Verificar se temos sprite PixelLab para este agente
+      const plEntry = Object.values(PIXELLAB_SPRITES).find(
+        e => e.agentKey === config.key,
+      );
+
+      if (plEntry && this.textures.exists(pixelLabTextureKey(plEntry.agentKey, 'south'))) {
+        // PixelLab: texturas direcionais já carregadas no preload.
+        // AgentSprite usa texture-swap direto (sem spritesheet composto).
+        continue;
+      } else {
+        // Fallback: gerar proceduralmente
+        this.createProceduralSpritesheet(config);
       }
     }
 
@@ -66,6 +103,14 @@ export class BootScene extends Phaser.Scene {
       }));
     } catch {
       // Silent — programmatic fallback will be used
+    }
+  }
+
+  private createProceduralSpritesheet(config: Parameters<typeof generateAgentSpritesheet>[0]): void {
+    try {
+      this.addCanvasSpritesheet(config.key, generateAgentSpritesheet(config));
+    } catch {
+      // Silent fallback
     }
   }
 

@@ -4,6 +4,7 @@ export interface ZoneColors {
   work: number;
   recreation: number;
   entrance: number;
+  bedroom: number;
 }
 
 export interface OfficeTheme {
@@ -37,7 +38,7 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     name: 'moderno',
     displayName: 'Moderno',
     backgroundColor: 0x08090f,
-    floorColors: { work: 0x0f1525, recreation: 0x0c1220, entrance: 0x15100a },
+    floorColors: { work: 0x0f1525, recreation: 0x0c1220, entrance: 0x15100a, bedroom: 0x0a0c1a },
     floorGridColor: 0x1a2855,
     floorGridAlpha: 0.25,
     wallColor: 0x1c2240,
@@ -59,7 +60,7 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     name: 'espacial',
     displayName: 'Espacial',
     backgroundColor: 0x040610,
-    floorColors: { work: 0x0a0f22, recreation: 0x080c1c, entrance: 0x180c06 },
+    floorColors: { work: 0x0a0f22, recreation: 0x080c1c, entrance: 0x180c06, bedroom: 0x08091a },
     floorGridColor: 0x2244cc,
     floorGridAlpha: 0.35,
     wallColor: 0x1a2266,
@@ -81,7 +82,7 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     name: 'oldschool',
     displayName: 'Oldschool',
     backgroundColor: 0x1a1808,
-    floorColors: { work: 0x25220f, recreation: 0x1e2210, entrance: 0x2e2008 },
+    floorColors: { work: 0x25220f, recreation: 0x1e2210, entrance: 0x2e2008, bedroom: 0x1a1a0c },
     floorGridColor: 0x443322,
     floorGridAlpha: 0.25,
     wallColor: 0x554422,
@@ -103,7 +104,7 @@ export const THEMES: Record<ThemeName, OfficeTheme> = {
     name: 'cyberpunk',
     displayName: 'Cyberpunk',
     backgroundColor: 0x050508,
-    floorColors: { work: 0x10081a, recreation: 0x08101a, entrance: 0x1a0810 },
+    floorColors: { work: 0x10081a, recreation: 0x08101a, entrance: 0x1a0810, bedroom: 0x0a0812 },
     floorGridColor: 0xff00ff,
     floorGridAlpha: 0.15,
     wallColor: 0x330033,

@@ -87,13 +87,13 @@ export function PhaserGame() {
       updateAgent(agent);
     }
 
-    if (lastMessage.type === 'event:new') {
+    if (lastMessage.type === 'event:new' || lastMessage.type === 'terminal:update') {
       // Throttled re-fetch: max once every 2 seconds
       const now = Date.now();
       if (now - lastSyncRef.current < 2000) return;
       lastSyncRef.current = now;
-      const { projectId } = lastMessage as WsEventNew;
-      if (selectedProjectId && projectId !== selectedProjectId) return;
+      const projectId = 'projectId' in lastMessage ? (lastMessage as WsEventNew).projectId : undefined;
+      if (selectedProjectId && projectId && projectId !== selectedProjectId) return;
       const url = selectedProjectId
         ? `/api/agents?project_id=${selectedProjectId}`
         : '/api/agents';

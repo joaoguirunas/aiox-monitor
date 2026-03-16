@@ -11,7 +11,7 @@ interface SessionTableProps {
   onRowClick: (session: SessionGroup) => void;
 }
 
-const COLUMNS = ['Timestamp', 'Projeto', 'Agente', 'Terminal', 'Prompt / Resposta', 'Tools', 'Status'];
+const COLUMNS = ['Timestamp', 'Projeto', 'Agente', 'Terminal', 'COD', 'Prompt / Resposta', 'Tools', 'Status'];
 
 export function SessionTable({ sessions, loading, agents, projects, terminals, onRowClick }: SessionTableProps) {
   return (

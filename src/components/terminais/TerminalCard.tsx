@@ -7,6 +7,7 @@ interface TerminalCardProps {
   pid: number;
   status: TerminalStatus;
   projectName?: string;
+  windowTitle?: string;
   sessionId?: string;
   agentName?: string;
   agentDisplayName?: string;
@@ -52,8 +53,14 @@ const STATUS_LABEL: Record<TerminalStatus, string> = {
   inactive: 'inativo',
 };
 
+function cleanWindowTitle(raw: string): string {
+  return raw
+    .replace(/^[\u2800-\u28FF✳●◉◈⬤☐☑✓✔✕✖✗✘⚡⏳🔄\s]+/u, '')
+    .trim() || raw.trim();
+}
+
 export function TrackedTerminalCard({
-  pid, status, projectName, agentName, agentDisplayName,
+  pid, status, projectName, windowTitle, agentName, agentDisplayName,
   currentTool, currentInput, firstSeen, lastActive,
 }: TerminalCardProps) {
   const agentColor = getAgentTextColor(agentName);
@@ -63,16 +70,23 @@ export function TrackedTerminalCard({
       : currentTool
     : null;
 
+  const displayTitle = windowTitle ? cleanWindowTitle(windowTitle) : null;
+
   return (
     <div className={`rounded-lg border border-border/40 bg-surface-1/30 transition-colors hover:bg-white/[0.02] ${status === 'inactive' ? 'opacity-50' : ''}`}>
       <div className="px-4 py-3">
-        {/* Header: PID + status */}
+        {/* Header: Title + status */}
         <div className="flex items-center justify-between mb-2.5">
           <div className="flex items-center gap-2">
             <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[status]} ${status === 'processing' ? 'animate-pulse' : ''}`} />
-            <span className="text-[13px] font-mono font-medium text-text-primary">PID {pid}</span>
+            <span className="text-[13px] font-medium text-text-primary truncate">
+              {displayTitle || `PID ${pid}`}
+            </span>
           </div>
-          <span className="text-[11px] text-text-muted">{STATUS_LABEL[status]}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            {displayTitle && <span className="text-[10px] font-mono text-text-muted/50">{pid}</span>}
+            <span className="text-[11px] text-text-muted">{STATUS_LABEL[status]}</span>
+          </div>
         </div>
 
         {/* Agent */}

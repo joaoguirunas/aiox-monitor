@@ -8,6 +8,7 @@ import { cleanupOldEvents } from './src/server/cleanup';
 import { syncSystemTerminals, cleanupStaleTerminals } from './src/server/terminal-tracker';
 import { getCompanyConfig } from './src/lib/queries';
 import { startGangaEngine, stopGangaEngine } from './src/server/ganga/ganga-engine';
+import { startJsonlWatcher } from './src/server/jsonl-watcher';
 
 // Process-level safety net — prevent crashes from unhandled errors
 process.on('uncaughtException', (err) => {
@@ -70,6 +71,9 @@ app.prepare().then(() => {
   setInterval(() => { syncSystemTerminals().catch(() => {}); }, 30_000);
   // Initial sync after 3s
   setTimeout(() => { syncSystemTerminals().catch(() => {}); }, 3_000);
+
+  // JSONL transcript watcher — start after 5s to let terminals populate first
+  setTimeout(() => { startJsonlWatcher().catch(() => {}); }, 5_000);
 
   // Cleanup old events — run after 60s delay, then every 24h
   setTimeout(() => {

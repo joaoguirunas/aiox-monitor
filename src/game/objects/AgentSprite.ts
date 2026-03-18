@@ -35,6 +35,14 @@ export class AgentSprite extends Phaser.GameObjects.Container {
   // Typing code particles
   private codeParticles: Phaser.GameObjects.Text[] = [];
   private codeParticleTimer: Phaser.Time.TimerEvent | null = null;
+  // Tool detail label
+  private toolLabel: Phaser.GameObjects.Text | null = null;
+  // Permission bubble
+  private permissionBubble: Phaser.GameObjects.Container | null = null;
+  private permissionTween: Phaser.Tweens.Tween | null = null;
+  // Matrix spawn effect
+  private matrixColumns: Phaser.GameObjects.Text[] = [];
+  private matrixTimer: Phaser.Time.TimerEvent | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -553,11 +561,185 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     return this.agentName;
   }
 
+  // ─── Tool Detail Label ──────────────────────────────────────────
+
+  setToolDetail(detail: string | null): void {
+    if (!detail) {
+      if (this.toolLabel) {
+        this.toolLabel.destroy();
+        this.toolLabel = null;
+      }
+      return;
+    }
+
+    const truncated = detail.length > 35 ? detail.slice(0, 35) + '…' : detail;
+    if (this.toolLabel) {
+      this.toolLabel.setText(truncated);
+    } else {
+      this.toolLabel = this.scene.add.text(0, -60, truncated, {
+        fontSize: '8px',
+        color: '#aaddff',
+        fontFamily: 'monospace',
+        stroke: '#000000',
+        strokeThickness: 2,
+        backgroundColor: '#0a0e1a88',
+        padding: { x: 3, y: 1 },
+      }).setOrigin(0.5).setAlpha(0.85);
+      this.add(this.toolLabel);
+    }
+  }
+
+  // ─── Permission Bubble ──────────────────────────────────────────
+
+  setWaitingPermission(waiting: boolean): void {
+    if (!waiting) {
+      if (this.permissionBubble) {
+        if (this.permissionTween) { this.permissionTween.stop(); this.permissionTween = null; }
+        this.permissionBubble.destroy();
+        this.permissionBubble = null;
+      }
+      return;
+    }
+
+    if (this.permissionBubble) return; // Already showing
+
+    const container = this.scene.add.container(0, -72);
+
+    // Bubble background
+    const bg = this.scene.add.graphics();
+    bg.fillStyle(0x1a1a2e, 0.9);
+    bg.fillRoundedRect(-20, -10, 40, 18, 6);
+    bg.lineStyle(1.5, 0xffaa33, 0.8);
+    bg.strokeRoundedRect(-20, -10, 40, 18, 6);
+    container.add(bg);
+
+    // Amber dots (waiting indicator)
+    for (let i = 0; i < 3; i++) {
+      const dot = this.scene.add.circle(-6 + i * 6, -1, 2.5, 0xffaa33, 1);
+      container.add(dot);
+    }
+
+    this.add(container);
+    this.permissionBubble = container;
+
+    // Pulsating animation
+    this.permissionTween = this.scene.tweens.add({
+      targets: container,
+      alpha: { from: 1, to: 0.5 },
+      scaleX: { from: 1, to: 1.05 },
+      scaleY: { from: 1, to: 1.05 },
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  // ─── Matrix Spawn/Despawn Effect ────────────────────────────────
+
+  playSpawnEffect(): void {
+    this.sprite.setAlpha(0);
+    this.nameLabel.setAlpha(0);
+    this.statusBadge.setAlpha(0);
+    this.glowCircle.setAlpha(0);
+
+    const cols = 8;
+    const matrixChars = '01アイウエオカキクケコ{}/<>';
+    const colorHex = '#' + this.agentColor.toString(16).padStart(6, '0');
+
+    for (let i = 0; i < cols; i++) {
+      const xPos = -14 + i * 4;
+      const ch = matrixChars[Phaser.Math.Between(0, matrixChars.length - 1)];
+      const col = this.scene.add.text(xPos, -50, ch, {
+        fontSize: '9px',
+        color: '#22ff44',
+        fontFamily: 'monospace',
+        stroke: colorHex,
+        strokeThickness: 1,
+      }).setOrigin(0.5).setAlpha(0);
+      this.add(col);
+      this.matrixColumns.push(col);
+
+      // Staggered column sweep down
+      this.scene.tweens.add({
+        targets: col,
+        y: { from: -50, to: 10 },
+        alpha: { from: 0.9, to: 0 },
+        duration: 300,
+        delay: i * 30,
+        ease: 'Power2',
+        onComplete: () => {
+          col.destroy();
+          const idx = this.matrixColumns.indexOf(col);
+          if (idx >= 0) this.matrixColumns.splice(idx, 1);
+        },
+      });
+    }
+
+    // Reveal sprite after 150ms
+    this.scene.time.delayedCall(150, () => {
+      this.scene.tweens.add({
+        targets: [this.sprite, this.nameLabel, this.statusBadge, this.glowCircle],
+        alpha: { from: 0, to: 1 },
+        duration: 200,
+        ease: 'Power1',
+        onComplete: () => {
+          this.nameLabel.setAlpha(0.7);
+          this.glowCircle.setAlpha(0.06);
+        },
+      });
+    });
+  }
+
+  playDespawnEffect(onComplete: () => void): void {
+    const cols = 8;
+    const matrixChars = '01アイウエオカキクケコ{}/<>';
+    const colorHex = '#' + this.agentColor.toString(16).padStart(6, '0');
+
+    // Fade out sprite
+    this.scene.tweens.add({
+      targets: [this.sprite, this.nameLabel, this.statusBadge, this.glowCircle],
+      alpha: 0,
+      duration: 200,
+      ease: 'Power1',
+    });
+
+    for (let i = 0; i < cols; i++) {
+      const xPos = -14 + i * 4;
+      const ch = matrixChars[Phaser.Math.Between(0, matrixChars.length - 1)];
+      const col = this.scene.add.text(xPos, -30, ch, {
+        fontSize: '9px',
+        color: '#22ff44',
+        fontFamily: 'monospace',
+        stroke: colorHex,
+        strokeThickness: 1,
+      }).setOrigin(0.5).setAlpha(0.9);
+      this.add(col);
+
+      this.scene.tweens.add({
+        targets: col,
+        y: { from: -30, to: 20 },
+        alpha: { from: 0.9, to: 0 },
+        duration: 300,
+        delay: i * 25,
+        ease: 'Power2',
+        onComplete: () => {
+          col.destroy();
+          if (i === cols - 1) onComplete();
+        },
+      });
+    }
+  }
+
   destroy(fromScene?: boolean): void {
     this.stopCurrentAnimation();
     this.stopCodeParticles();
     if (this.glowTween) this.glowTween.stop();
     if (this.labelTween) this.labelTween.stop();
+    if (this.permissionTween) this.permissionTween.stop();
+    if (this.toolLabel) this.toolLabel.destroy();
+    if (this.permissionBubble) this.permissionBubble.destroy();
+    for (const col of this.matrixColumns) col.destroy();
     super.destroy(fromScene);
   }
 }

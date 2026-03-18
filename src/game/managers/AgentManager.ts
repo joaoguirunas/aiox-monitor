@@ -6,7 +6,7 @@ import {
 } from '../data/office-layout';
 import type { RecreationPosition } from '../data/office-layout';
 import { tileToPixel } from '../utils/iso-utils';
-import type { Agent, AgentStatus, Project } from '@/lib/types';
+import type { Agent, AgentStatus, AgentWithStats, Project } from '@/lib/types';
 import type { OfficeScene } from '../scenes/OfficeScene';
 import type { ClusterManager } from './ClusterManager';
 
@@ -168,9 +168,14 @@ export class AgentManager {
             this.positionInstant(key, agent);
             this.lastState.set(key, { status: agent.status, projectId: agent.project_id });
           }
+          // Always update tool detail and permission state
+          this.applyToolState(existing, agent);
         } else if (agent.status !== 'offline') {
           this.createAgent(agent, false);
           this.lastState.set(key, { status: agent.status, projectId: agent.project_id });
+          // Apply tool state to newly created sprite
+          const newSprite = this.sprites.get(key);
+          if (newSprite) this.applyToolState(newSprite, agent);
         }
       } catch (err) {
         console.error('[AgentManager] failed to sync agent', agent.name, agent.status, err);
@@ -201,6 +206,9 @@ export class AgentManager {
       return;
     }
     if (existing) {
+      // Always update tool state (even if status unchanged)
+      this.applyToolState(existing, agent);
+
       // Skip transition if status and project haven't changed
       const prev = this.lastState.get(key);
       if (prev && prev.status === agent.status && prev.projectId === agent.project_id) {
@@ -211,6 +219,13 @@ export class AgentManager {
       existing.setStatus(agent.status);
       this.transitionAgent(key, agent);
     }
+  }
+
+  /** Apply tool detail label and permission bubble to a sprite */
+  private applyToolState(sprite: AgentSprite, agent: Agent): void {
+    const aws = agent as AgentWithStats;
+    sprite.setToolDetail(aws.current_tool_detail ?? null);
+    sprite.setWaitingPermission(aws.waiting_permission === 1);
   }
 
   private createAgent(agent: Agent, withWalk: boolean): void {
@@ -224,7 +239,9 @@ export class AgentManager {
     sprite.setStatus(agent.status);
     this.sprites.set(key, sprite);
 
+    // Matrix spawn effect for new agents entering with walk
     if (withWalk) {
+      sprite.playSpawnEffect();
       this.transitionAgent(key, agent);
     } else {
       this.positionInstant(key, agent);
@@ -485,7 +502,10 @@ export class AgentManager {
   private removeAgent(key: string): void {
     const sprite = this.sprites.get(key);
     if (sprite) {
-      sprite.destroy();
+      // Play matrix despawn effect, then destroy
+      sprite.playDespawnEffect(() => {
+        sprite.destroy();
+      });
       this.sprites.delete(key);
     }
     this.releaseDesk(key);

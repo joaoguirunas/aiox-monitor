@@ -29,6 +29,8 @@ export interface Terminal {
   current_tool?: string;
   current_input?: string;
   window_title?: string;
+  current_tool_detail?: string;
+  waiting_permission?: 0 | 1;
   first_seen_at: string;
   last_active: string;
 }
@@ -131,6 +133,8 @@ export interface EventPayload {
 
 export interface AgentWithStats extends Agent {
   terminal_count: number;
+  current_tool_detail?: string;
+  waiting_permission?: 0 | 1;
 }
 
 export interface ProjectWithDetails extends Project {

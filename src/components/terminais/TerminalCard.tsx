@@ -13,6 +13,8 @@ interface TerminalCardProps {
   agentDisplayName?: string;
   currentTool?: string;
   currentInput?: string;
+  currentToolDetail?: string;
+  waitingPermission?: 0 | 1;
   firstSeen: string;
   lastActive: string;
 }
@@ -61,7 +63,8 @@ function cleanWindowTitle(raw: string): string {
 
 export function TrackedTerminalCard({
   pid, status, projectName, windowTitle, agentName, agentDisplayName,
-  currentTool, currentInput, firstSeen, lastActive,
+  currentTool, currentInput, currentToolDetail, waitingPermission,
+  firstSeen, lastActive,
 }: TerminalCardProps) {
   const agentColor = getAgentTextColor(agentName);
   const toolDisplay = currentTool
@@ -101,8 +104,26 @@ export function TrackedTerminalCard({
           </div>
         )}
 
-        {/* Tool */}
-        {toolDisplay && status === 'processing' && (
+        {/* Tool Detail (JSONL-enriched) */}
+        {currentToolDetail && (
+          <div className="mb-2.5 px-2.5 py-1.5 rounded-md bg-accent-blue/10 border border-accent-blue/20 flex items-center gap-2">
+            {waitingPermission === 1 && (
+              <span className="shrink-0 w-2 h-2 rounded-full bg-amber-400 animate-pulse" title="Waiting for permission" />
+            )}
+            <p className="text-[11px] font-mono text-accent-blue truncate">{currentToolDetail}</p>
+          </div>
+        )}
+
+        {/* Permission waiting (without tool detail) */}
+        {!currentToolDetail && waitingPermission === 1 && (
+          <div className="mb-2.5 px-2.5 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/20 flex items-center gap-2">
+            <span className="shrink-0 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <p className="text-[11px] font-medium text-amber-400">Aguardando permissão</p>
+          </div>
+        )}
+
+        {/* Tool (fallback to old hook data) */}
+        {!currentToolDetail && toolDisplay && status === 'processing' && (
           <div className="mb-2.5 px-2.5 py-1.5 rounded-md bg-surface-2/40 border border-border/30">
             <p className="text-[11px] font-mono text-text-muted truncate">{toolDisplay}</p>
           </div>

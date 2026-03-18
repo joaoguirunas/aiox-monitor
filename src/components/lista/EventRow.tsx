@@ -103,10 +103,26 @@ export function EventRow({
       </td>
       <td className="px-4 py-2.5 whitespace-nowrap">
         {terminal ? (
-          <span className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary">
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${terminal.status === 'processing' ? 'bg-accent-emerald animate-pulse' : terminal.status === 'active' ? 'bg-accent-amber' : 'bg-text-muted/40'}`} />
-            <span className="truncate max-w-[120px]">{terminal.window_title || '—'}</span>
-          </span>
+          <div className="flex flex-col gap-1">
+            <span className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary">
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${terminal.status === 'processing' ? 'bg-accent-emerald animate-pulse' : terminal.status === 'active' ? 'bg-accent-amber' : 'bg-text-muted/40'}`} />
+              <span className="truncate max-w-[120px]">{terminal.window_title || '—'}</span>
+            </span>
+            {terminal.current_tool_detail && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-accent-blue truncate max-w-[180px]">
+                {terminal.waiting_permission === 1 && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                )}
+                {terminal.current_tool_detail}
+              </span>
+            )}
+            {!terminal.current_tool_detail && terminal.waiting_permission === 1 && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                Aguardando permissão
+              </span>
+            )}
+          </div>
         ) : (
           <span className="text-text-muted text-[11px]">—</span>
         )}

@@ -119,6 +119,8 @@ export function initSchema(db: DatabaseSync): void {
     `ALTER TABLE terminals ADD COLUMN current_tool TEXT`,
     `ALTER TABLE terminals ADD COLUMN current_input TEXT`,
     `ALTER TABLE terminals ADD COLUMN window_title TEXT`,
+    `ALTER TABLE terminals ADD COLUMN current_tool_detail TEXT`,
+    `ALTER TABLE terminals ADD COLUMN waiting_permission INTEGER DEFAULT 0`,
   ];
   for (const sql of terminalMigrations) {
     try { db.exec(sql); } catch { /* Column already exists */ }

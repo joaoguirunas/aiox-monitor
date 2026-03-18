@@ -172,6 +172,8 @@ export function getAgentInstances(filters?: { projectId?: number }): AgentWithSt
           ELSE 'offline'
         END as status,
         t.current_tool,
+        t.current_tool_detail,
+        t.waiting_permission,
         t.last_active,
         1 as terminal_count
       FROM terminals t

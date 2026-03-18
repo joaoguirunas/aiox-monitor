@@ -7,6 +7,7 @@ import {
   pixelLabTextureKey, angleToDirection,
   PIXELLAB_DISPLAY_SCALE, PIXELLAB_SPRITES,
 } from '../data/pixellab-sprites';
+import { getAgentSkin } from '../data/skin-config';
 import type { AgentAnimState } from '../animations/agent-animations';
 import type { AgentStatus } from '@/lib/types';
 
@@ -31,6 +32,9 @@ export class AgentSprite extends Phaser.GameObjects.Container {
   private walkBobTween: Phaser.Tweens.Tween | null = null;
   private activityTween: Phaser.Tweens.Tween | null = null;
   private currentDirection = 'south';
+  // Typing code particles
+  private codeParticles: Phaser.GameObjects.Text[] = [];
+  private codeParticleTimer: Phaser.Time.TimerEvent | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -46,18 +50,31 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     const config = getAgentSpriteConfig(agentName);
 
     // Agent glow (aura under feet)
-    this.glowCircle = scene.add.circle(0, 6, 18, this.agentColor, 0.06);
+    this.glowCircle = scene.add.circle(0, 8, 22, this.agentColor, 0.06);
     this.add(this.glowCircle);
 
-    // Detect PixelLab mode
+    // Check for custom skin first, then PixelLab default
+    const skinDef = getAgentSkin(agentName);
+    const skinSouthKey = skinDef ? `skin-${skinDef.id}-south` : '';
+    const hasSkin = !!skinDef && scene.textures.exists(skinSouthKey);
+
     const plEntry = Object.values(PIXELLAB_SPRITES).find(e => e.agentKey === config.key);
     const plSouthKey = pixelLabTextureKey(config.key, 'south');
-    this.isPixelLab = !!plEntry && scene.textures.exists(plSouthKey);
+    this.isPixelLab = hasSkin || (!!plEntry && scene.textures.exists(plSouthKey));
 
-    if (this.isPixelLab) {
-      // PixelLab: use directional textures with tween-based animations
+    const spriteOffsetY = -14; // Raised to compensate for larger sprites
+    if (hasSkin) {
+      // Custom skin: use skin textures with tween-based animations
+      this.plAgentKey = `skin:${skinDef!.id}`;
+      this.sprite = scene.add.sprite(0, spriteOffsetY, skinSouthKey);
+      this.sprite.setOrigin(0.5, 0.5);
+      this.sprite.setScale(PIXELLAB_DISPLAY_SCALE);
+      this.spriteKey = config.key;
+      this.startIdleBreathing();
+    } else if (this.isPixelLab) {
+      // PixelLab default: use directional textures with tween-based animations
       this.plAgentKey = config.key;
-      this.sprite = scene.add.sprite(0, -10, plSouthKey);
+      this.sprite = scene.add.sprite(0, spriteOffsetY, plSouthKey);
       this.sprite.setOrigin(0.5, 0.5);
       this.sprite.setScale(PIXELLAB_DISPLAY_SCALE);
       this.spriteKey = config.key;
@@ -71,14 +88,14 @@ export class AgentSprite extends Phaser.GameObjects.Container {
           : '';
 
       if (this.spriteKey) {
-        this.sprite = scene.add.sprite(0, -10, this.spriteKey, 0);
+        this.sprite = scene.add.sprite(0, spriteOffsetY, this.spriteKey, 0);
         this.sprite.setOrigin(0.5, 0.5);
 
         if (this.spriteKey === 'agent-default' && config.key !== 'agent-default') {
           this.sprite.setTint(this.agentColor);
         }
       } else {
-        this.sprite = scene.add.sprite(0, -10, '__DEFAULT');
+        this.sprite = scene.add.sprite(0, spriteOffsetY, '__DEFAULT');
         this.sprite.setVisible(false);
         this.createFallbackGraphics();
       }
@@ -92,8 +109,8 @@ export class AgentSprite extends Phaser.GameObjects.Container {
 
     // Holographic name label
     const colorHex = '#' + this.agentColor.toString(16).padStart(6, '0');
-    this.nameLabel = scene.add.text(0, -38, displayName, {
-      fontSize: '9px',
+    this.nameLabel = scene.add.text(0, -48, displayName, {
+      fontSize: '10px',
       color: colorHex,
       fontFamily: 'monospace',
       stroke: '#000000',
@@ -116,16 +133,16 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     const tile = pixelToTile(x, y);
     this.lastZone = getZoneForTile(tile.tileX, tile.tileY);
 
-    this.setDepth(y + 1);
+    this.setDepth(y + 100);
     scene.add.existing(this);
   }
 
   private createFallbackGraphics(): void {
     const g = this.scene.add.graphics();
     g.fillStyle(0xddccbb, 1);
-    g.fillCircle(0, -20, 7);
+    g.fillCircle(0, -26, 9);
     g.fillStyle(this.agentColor, 1);
-    g.fillRoundedRect(-8, -13, 16, 18, 3);
+    g.fillRoundedRect(-10, -17, 20, 24, 4);
     g.fillStyle(0x1a1e30, 1);
     g.fillRect(-5, 5, 4, 7);
     g.fillRect(1, 5, 4, 7);
@@ -136,11 +153,11 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     this.statusBadge.clear();
     const color = STATUS_COLORS[this.currentStatus] ?? STATUS_COLORS.idle;
     this.statusBadge.fillStyle(color, 0.25);
-    this.statusBadge.fillCircle(12, -22, 6);
+    this.statusBadge.fillCircle(16, -30, 7);
     this.statusBadge.fillStyle(color, 1);
-    this.statusBadge.fillCircle(12, -22, 3.5);
+    this.statusBadge.fillCircle(16, -30, 4);
     this.statusBadge.lineStyle(1, 0xffffff, 0.5);
-    this.statusBadge.strokeCircle(12, -22, 3.5);
+    this.statusBadge.strokeCircle(16, -30, 4);
   }
 
   private updateGlow(): void {
@@ -150,19 +167,22 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     }
 
     if (this.currentStatus === 'working') {
-      this.glowCircle.setAlpha(0.1);
+      this.glowCircle.setAlpha(0.15);
       this.glowTween = this.scene.tweens.add({
         targets: this.glowCircle,
-        alpha: { from: 0.08, to: 0.18 },
-        scaleX: { from: 1, to: 1.15 },
-        scaleY: { from: 1, to: 1.1 },
-        duration: 1500,
+        alpha: { from: 0.12, to: 0.25 },
+        scaleX: { from: 1, to: 1.2 },
+        scaleY: { from: 1, to: 1.15 },
+        duration: 1200,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
       });
+    } else if (this.currentStatus === 'idle') {
+      this.glowCircle.setAlpha(0.06);
+      this.glowCircle.setScale(1);
     } else {
-      this.glowCircle.setAlpha(0.04);
+      this.glowCircle.setAlpha(0.03);
       this.glowCircle.setScale(1);
     }
   }
@@ -176,21 +196,29 @@ export class AgentSprite extends Phaser.GameObjects.Container {
   setTilePosition(tileX: number, tileY: number): void {
     const { x, y } = tileToPixel(tileX, tileY);
     this.setPosition(x, y);
-    this.setDepth(y + 1);
+    this.setDepth(y + 10);
   }
 
   // ─── PixelLab direction switching ─────────────────────────────
 
+  /** Resolve texture key for current direction (supports skins and PixelLab) */
+  private resolveDirectionKey(direction: string): string {
+    if (this.plAgentKey.startsWith('skin:')) {
+      const skinId = this.plAgentKey.slice(5);
+      return `skin-${skinId}-${direction}`;
+    }
+    return pixelLabTextureKey(this.plAgentKey, direction);
+  }
+
   private setPixelLabDirection(direction: string): void {
     if (!this.isPixelLab) return;
-    const texKey = pixelLabTextureKey(this.plAgentKey, direction);
+    const texKey = this.resolveDirectionKey(direction);
     if (this.scene.textures.exists(texKey)) {
       this.sprite.setTexture(texKey);
       this.sprite.setFlipX(false);
       this.currentDirection = direction;
     } else if (direction === 'west') {
-      // Fallback: flip east
-      const eastKey = pixelLabTextureKey(this.plAgentKey, 'east');
+      const eastKey = this.resolveDirectionKey('east');
       if (this.scene.textures.exists(eastKey)) {
         this.sprite.setTexture(eastKey);
         this.sprite.setFlipX(true);
@@ -205,9 +233,11 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     if (this.breathTween) { this.breathTween.stop(); this.breathTween = null; }
     if (this.walkBobTween) { this.walkBobTween.stop(); this.walkBobTween = null; }
     if (this.activityTween) { this.activityTween.stop(); this.activityTween = null; }
+    this.stopCodeParticles();
     // Reset sprite transform
     this.sprite.setScale(PIXELLAB_DISPLAY_SCALE);
-    this.sprite.y = -10;
+    this.sprite.y = -14;
+    this.sprite.x = 0;
   }
 
   private startIdleBreathing(): void {
@@ -219,7 +249,7 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     this.breathTween = this.scene.tweens.add({
       targets: this.sprite,
       scaleY: baseScale * 1.015,
-      y: -10.5,
+      y: -14.5,
       duration: 2200,
       yoyo: true,
       repeat: -1,
@@ -233,7 +263,7 @@ export class AgentSprite extends Phaser.GameObjects.Container {
 
     this.walkBobTween = this.scene.tweens.add({
       targets: this.sprite,
-      y: { from: -10, to: -12 },
+      y: { from: -14, to: -16 },
       scaleX: { from: PIXELLAB_DISPLAY_SCALE, to: PIXELLAB_DISPLAY_SCALE * 0.97 },
       scaleY: { from: PIXELLAB_DISPLAY_SCALE, to: PIXELLAB_DISPLAY_SCALE * 1.03 },
       duration: 180,
@@ -246,16 +276,17 @@ export class AgentSprite extends Phaser.GameObjects.Container {
   private startSitAnimation(): void {
     if (!this.isPixelLab) return;
     this.stopPixelLabTweens();
-    this.setPixelLabDirection('south');
+    // Face the desk (north = looking at monitor)
+    this.setPixelLabDirection('north');
 
     const baseScale = PIXELLAB_DISPLAY_SCALE;
-    // Subtle settle - slight scale compress + gentle sway
-    this.sprite.y = -8; // Seated slightly lower
+    this.sprite.y = -12;
+    // Gentle breathing while seated
     this.activityTween = this.scene.tweens.add({
       targets: this.sprite,
-      scaleY: baseScale * 0.98,
-      y: -7.5,
-      duration: 3000,
+      scaleY: baseScale * 0.985,
+      y: -11,
+      duration: 2800,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
@@ -265,20 +296,97 @@ export class AgentSprite extends Phaser.GameObjects.Container {
   private startTypeAnimation(): void {
     if (!this.isPixelLab) return;
     this.stopPixelLabTweens();
+    // Face the desk (north = looking at monitor)
     this.setPixelLabDirection('north');
 
     const baseScale = PIXELLAB_DISPLAY_SCALE;
-    // Typing bounce - rapid subtle shoulder movement
-    this.sprite.y = -8;
+    this.sprite.y = -12;
+
+    // Typing: rhythmic shoulder/arm bob — more visible
     this.activityTween = this.scene.tweens.add({
       targets: this.sprite,
-      y: { from: -8, to: -8.8 },
-      scaleX: { from: baseScale, to: baseScale * 1.005 },
-      duration: 400,
+      y: { from: -12, to: -13.5 },
+      scaleX: { from: baseScale, to: baseScale * 1.012 },
+      scaleY: { from: baseScale, to: baseScale * 0.988 },
+      duration: 350,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
+
+    // Add a secondary slow sway for naturalness
+    this.breathTween = this.scene.tweens.add({
+      targets: this.sprite,
+      x: { from: 0, to: 0.6 },
+      duration: 2400,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Start code particles floating above the agent
+    this.startCodeParticles();
+  }
+
+  // ─── Code Particles (typing indicator) ─────────────────────────
+
+  private static readonly CODE_SNIPPETS = [
+    '{', '}', '/>', '</', '()', '=>', '&&', '||', '==', '!=',
+    '[]', '...', '::',  '++', '--', '<<', '>>', '**', '??',
+    'fn', 'if', 'do', 'let', 'var', 'new', 'for',
+    '0x', '/**', '*/', '!=', '::', '/*',
+  ];
+
+  private startCodeParticles(): void {
+    this.stopCodeParticles();
+    const colorHex = '#' + this.agentColor.toString(16).padStart(6, '0');
+
+    this.codeParticleTimer = this.scene.time.addEvent({
+      delay: 800,
+      callback: () => {
+        if (this.codeParticles.length >= 3) return;
+
+        const snippet = AgentSprite.CODE_SNIPPETS[
+          Phaser.Math.Between(0, AgentSprite.CODE_SNIPPETS.length - 1)
+        ];
+        const offsetX = Phaser.Math.Between(-12, 12);
+        const particle = this.scene.add.text(offsetX, -52, snippet, {
+          fontSize: '7px',
+          color: colorHex,
+          fontFamily: 'monospace',
+          stroke: '#000000',
+          strokeThickness: 1,
+        }).setOrigin(0.5).setAlpha(0.6);
+        this.add(particle);
+        this.codeParticles.push(particle);
+
+        this.scene.tweens.add({
+          targets: particle,
+          y: particle.y - Phaser.Math.Between(14, 22),
+          x: particle.x + Phaser.Math.FloatBetween(-6, 6),
+          alpha: 0,
+          duration: Phaser.Math.Between(1200, 2000),
+          ease: 'Sine.easeOut',
+          onComplete: () => {
+            const idx = this.codeParticles.indexOf(particle);
+            if (idx >= 0) this.codeParticles.splice(idx, 1);
+            particle.destroy();
+          },
+        });
+      },
+      loop: true,
+    });
+  }
+
+  private stopCodeParticles(): void {
+    if (this.codeParticleTimer) {
+      this.codeParticleTimer.destroy();
+      this.codeParticleTimer = null;
+    }
+    for (const p of this.codeParticles) {
+      p.destroy();
+    }
+    this.codeParticles = [];
   }
 
   // ─── Movement ─────────────────────────────────────────────────
@@ -318,7 +426,7 @@ export class AgentSprite extends Phaser.GameObjects.Container {
         duration,
         ease: 'Power1',
         onUpdate: () => {
-          this.setDepth(this.y + 1);
+          this.setDepth(this.y + 10);
           this.checkZoneCrossing();
 
           // PixelLab: update direction during walk for smooth turns
@@ -447,6 +555,7 @@ export class AgentSprite extends Phaser.GameObjects.Container {
 
   destroy(fromScene?: boolean): void {
     this.stopCurrentAnimation();
+    this.stopCodeParticles();
     if (this.glowTween) this.glowTween.stop();
     if (this.labelTween) this.labelTween.stop();
     super.destroy(fromScene);

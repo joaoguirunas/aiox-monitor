@@ -72,4 +72,4 @@ export function angleToDirection(angleDeg: number): string {
 export const PIXELLAB_FRAME_SIZE = 96;
 
 /** Escala para renderizar sprites PixelLab no tamanho do jogo */
-export const PIXELLAB_DISPLAY_SCALE = 48 / PIXELLAB_FRAME_SIZE; // 0.5
+export const PIXELLAB_DISPLAY_SCALE = 72 / PIXELLAB_FRAME_SIZE; // 0.75

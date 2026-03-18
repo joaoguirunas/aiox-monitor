@@ -13,6 +13,8 @@ export interface SystemTerminalInfo {
   rows: number;
   currentCommand: string;
   pid?: number;
+  /** True if the PID was resolved from a `grep claude` match on the TTY */
+  isClaudeProcess?: boolean;
 }
 
 function runSilent(cmd: string, timeout = 5000): string {
@@ -137,13 +139,17 @@ function enrichWithPids(sessions: SystemTerminalInfo[]): SystemTerminalInfo[] {
     );
     if (claudePid) {
       session.pid = parseInt(claudePid, 10);
+      session.isClaudeProcess = true;
     } else {
       // Fallback: last foreground process (non-login, non-shell)
       const pid = runSilent(
         `ps -t ${ttyName} -o pid= -o comm= 2>/dev/null | grep -v "^$" | tail -1 | awk '{print $1}'`,
         2000,
       );
-      if (pid) session.pid = parseInt(pid, 10);
+      if (pid) {
+        session.pid = parseInt(pid, 10);
+        session.isClaudeProcess = false;
+      }
     }
   }
   return sessions;

@@ -128,4 +128,27 @@ export function initSchema(db: DatabaseSync): void {
   // the CHECK constraint update is handled by SQLite allowing existing data
   // We just need to ensure the CHECK allows the new values.
   // SQLite doesn't enforce CHECK on existing rows, so old 'active' rows are fine.
+
+  // ─── Ganga Ativo: migration ────────────────────────────────────────────────
+  const gangaMigrations = [
+    `ALTER TABLE company_config ADD COLUMN ganga_enabled INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE company_config ADD COLUMN ganga_scope TEXT NOT NULL DEFAULT 'safe-only'`,
+  ];
+  for (const sql of gangaMigrations) {
+    try { db.exec(sql); } catch { /* Column already exists */ }
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ganga_log (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      terminal_id    INTEGER REFERENCES terminals(id) ON DELETE SET NULL,
+      project_id     INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+      prompt_text    TEXT NOT NULL,
+      response       TEXT NOT NULL,
+      classification TEXT NOT NULL CHECK(classification IN ('safe','blocked','ambiguous')),
+      action         TEXT NOT NULL CHECK(action IN ('auto-responded','skipped','blocked')),
+      created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_ganga_log_created ON ganga_log(created_at);
+  `);
 }

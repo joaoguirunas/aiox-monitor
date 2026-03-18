@@ -71,6 +71,7 @@ export class OfficeScene extends Phaser.Scene {
     this.redrawWalls();
 
     this.createDustParticles();
+    this.placeRugs();
     this.placeFurniture();
     this.createLightPools();
     this.setupCamera();
@@ -80,15 +81,27 @@ export class OfficeScene extends Phaser.Scene {
     this.agentManager = new AgentManager(this, this.clusterManager);
 
     this.events.on('sync:agents', (agents: Agent[]) => {
-      this.agentManager.syncAll(agents);
+      try {
+        this.agentManager.syncAll(agents);
+      } catch (err) {
+        console.error('[OfficeScene] sync:agents handler failed', err);
+      }
     });
 
     this.events.on('update:agent', (agent: Agent) => {
-      this.agentManager.updateAgent(agent);
+      try {
+        this.agentManager.updateAgent(agent);
+      } catch (err) {
+        console.error('[OfficeScene] update:agent handler failed', err);
+      }
     });
 
     this.events.on('sync:projects', (projects: Project[]) => {
-      this.agentManager.syncProjects(projects);
+      try {
+        this.agentManager.syncProjects(projects);
+      } catch (err) {
+        console.error('[OfficeScene] sync:projects handler failed', err);
+      }
     });
 
     this.events.on('set:theme', (themeName: ThemeName) => {
@@ -298,7 +311,7 @@ export class OfficeScene extends Phaser.Scene {
         const color = t.floorColors[zone];
         const { x: px, y: py } = tileToPixel(x, y);
 
-        // Flat fill — clean and subtle
+        // Flat fill only — no grid lines, no highlights
         this.floorGraphics.fillStyle(color, 1);
         this.floorGraphics.beginPath();
         this.floorGraphics.moveTo(px, py - hh);
@@ -307,24 +320,6 @@ export class OfficeScene extends Phaser.Scene {
         this.floorGraphics.lineTo(px - hw, py);
         this.floorGraphics.closePath();
         this.floorGraphics.fillPath();
-
-        // Thin border line only
-        this.floorGraphics.lineStyle(1, t.floorGridColor, t.floorGridAlpha * 0.5);
-        this.floorGraphics.beginPath();
-        this.floorGraphics.moveTo(px, py - hh);
-        this.floorGraphics.lineTo(px + hw, py);
-        this.floorGraphics.lineTo(px, py + hh);
-        this.floorGraphics.lineTo(px - hw, py);
-        this.floorGraphics.closePath();
-        this.floorGraphics.strokePath();
-
-        // Subtle top-left highlight
-        this.floorGraphics.lineStyle(1, 0xffffff, 0.015);
-        this.floorGraphics.beginPath();
-        this.floorGraphics.moveTo(px - hw + 1, py);
-        this.floorGraphics.lineTo(px, py - hh + 1);
-        this.floorGraphics.lineTo(px + hw - 1, py);
-        this.floorGraphics.strokePath();
       }
     }
   }
@@ -335,7 +330,7 @@ export class OfficeScene extends Phaser.Scene {
     const t = this.currentTheme;
     const hw = TILE_WIDTH / 2;
     const hh = TILE_HEIGHT / 2;
-    const wallH = 22;
+    const wallH = 7; // Reduced from 22 to ~30% — removes "hole" effect
 
     for (let y = 0; y < MAP_HEIGHT; y++) {
       for (let x = 0; x < MAP_WIDTH; x++) {
@@ -394,7 +389,7 @@ export class OfficeScene extends Phaser.Scene {
 
   private drawWallConsoles(): void {
     const t = this.currentTheme;
-    const wallH = 22;
+    const wallH = 7;
     const consolePositions = [
       { tileX: 20, tileY: 1 },
       { tileX: 24, tileY: 1 },
@@ -423,19 +418,27 @@ export class OfficeScene extends Phaser.Scene {
   // ── Light Pools ──
   private createLightPools(): void {
     const g = this.add.graphics().setDepth(0.5);
-    // Recreation zone ambient
-    const recCenter = tileToPixel(8, 8);
-    g.fillStyle(0x22d3ee, 0.006);
-    g.fillEllipse(recCenter.x, recCenter.y, 200, 100);
-    // Arcade glow
-    const arcadePos = tileToPixel(11, 3);
-    g.fillStyle(0xff00ff, 0.008);
-    g.fillEllipse(arcadePos.x, arcadePos.y, 60, 24);
-    // Gaming setup glow
+    // Área de Jogos — green tint
+    const jogosCenter = tileToPixel(4, 5);
+    g.fillStyle(0x33aa55, 0.005);
+    g.fillEllipse(jogosCenter.x, jogosCenter.y, 140, 70);
+    // Área Gamer — arcade/neon glow
+    const gamerCenter = tileToPixel(11, 5);
+    g.fillStyle(0xff00ff, 0.006);
+    g.fillEllipse(gamerCenter.x, gamerCenter.y, 140, 70);
+    // Gaming TV glow
     const gamingPos = tileToPixel(FURNITURE_POSITIONS.gaming.tileX, FURNITURE_POSITIONS.gaming.tileY);
     g.fillStyle(0x6366f1, 0.008);
     g.fillEllipse(gamingPos.x, gamingPos.y, 70, 30);
-    // Bedroom ambient (warm lamp glow)
+    // Área de Redes — warm calm
+    const redesCenter = tileToPixel(4, 12);
+    g.fillStyle(0xffaa55, 0.004);
+    g.fillEllipse(redesCenter.x, redesCenter.y, 130, 70);
+    // Lounge de Leitura — warm amber
+    const loungeCenter = tileToPixel(12, 12);
+    g.fillStyle(0xffcc66, 0.005);
+    g.fillEllipse(loungeCenter.x, loungeCenter.y, 160, 80);
+    // Bedroom — lamp glow
     const bedroomCenter = tileToPixel(4, 21);
     g.fillStyle(0xffcc66, 0.005);
     g.fillEllipse(bedroomCenter.x, bedroomCenter.y, 140, 80);
@@ -471,84 +474,119 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  // ── Rugs (drawn as graphics overlays on the floor) ──
+  private placeRugs(): void {
+    const g = this.add.graphics().setDepth(0.2);
+
+    // Área de Jogos rug — green felt under ping pong + sinuca
+    const jogosCenter = tileToPixel(4, 5);
+    g.fillStyle(0x2a6633, 0.06);
+    g.fillEllipse(jogosCenter.x, jogosCenter.y, 150, 80);
+    g.lineStyle(1, 0x338844, 0.06);
+    g.strokeEllipse(jogosCenter.x, jogosCenter.y, 150, 80);
+
+    // Área Gamer rug — dark indigo/purple
+    const gamerCenter = tileToPixel(11, 5);
+    g.fillStyle(0x3322aa, 0.06);
+    g.fillEllipse(gamerCenter.x, gamerCenter.y, 150, 80);
+    g.lineStyle(1, 0x4433cc, 0.06);
+    g.strokeEllipse(gamerCenter.x, gamerCenter.y, 150, 80);
+
+    // Área de Redes rug — warm terracotta/earth
+    const redesCenter = tileToPixel(4, 12);
+    g.fillStyle(0x8b5e3c, 0.05);
+    g.fillEllipse(redesCenter.x, redesCenter.y, 140, 80);
+    g.lineStyle(1, 0xa06840, 0.06);
+    g.strokeEllipse(redesCenter.x, redesCenter.y, 140, 80);
+
+    // Lounge de Leitura rug — warm amber
+    const loungeCenter = tileToPixel(12, 12);
+    g.fillStyle(0xcc8833, 0.06);
+    g.fillEllipse(loungeCenter.x, loungeCenter.y, 160, 90);
+    g.lineStyle(1, 0xcc8833, 0.07);
+    g.strokeEllipse(loungeCenter.x, loungeCenter.y, 160, 90);
+    g.fillStyle(0xddaa44, 0.03);
+    g.fillEllipse(loungeCenter.x, loungeCenter.y, 100, 55);
+  }
+
   private placeFurniture(): void {
-    // Sofas
-    this.sofas = LOUNGE_POSITIONS.map(pos => new Sofa(this, pos.tileX, pos.tileY));
-
-    // Coffee table
-    this.coffeeTables = [
-      new CoffeeTable(this, COFFEE_TABLE_POSITION.tileX, COFFEE_TABLE_POSITION.tileY),
-    ];
-
-    // Coffee machine & water cooler
-    this.coffeeMachine = new CoffeeMachine(
-      this, FURNITURE_POSITIONS.coffeeMachine.tileX, FURNITURE_POSITIONS.coffeeMachine.tileY,
-    );
-    new WaterCooler(this, FURNITURE_POSITIONS.waterCooler.tileX, FURNITURE_POSITIONS.waterCooler.tileY);
-    new Bookshelf(this, FURNITURE_POSITIONS.bookshelf.tileX, FURNITURE_POSITIONS.bookshelf.tileY);
-
-    // Recreation — Ping-pong
+    // ═══ ÁREA DE JOGOS (topo-esquerda) ═══
     new PingPongTable(this, FURNITURE_POSITIONS.pingPong.tileX, FURNITURE_POSITIONS.pingPong.tileY);
-
-    // Recreation — Arcades
-    new ArcadeMachine(this, FURNITURE_POSITIONS.arcade1.tileX, FURNITURE_POSITIONS.arcade1.tileY);
-    new ArcadeMachine(this, FURNITURE_POSITIONS.arcade2.tileX, FURNITURE_POSITIONS.arcade2.tileY);
-
-    // Recreation — Hammocks
-    new Hammock(this, FURNITURE_POSITIONS.hammock1.tileX, FURNITURE_POSITIONS.hammock1.tileY);
-    new Hammock(this, FURNITURE_POSITIONS.hammock2.tileX, FURNITURE_POSITIONS.hammock2.tileY);
-    new Hammock(this, FURNITURE_POSITIONS.hammock3.tileX, FURNITURE_POSITIONS.hammock3.tileY);
-
-    // Recreation — Pool table
     this.poolTables = [
       new PoolTable(this, FURNITURE_POSITIONS.poolTable.tileX, FURNITURE_POSITIONS.poolTable.tileY),
     ];
 
-    // Recreation — Gaming setup (TV + console)
+    // ═══ ÁREA GAMER (topo-direita) ═══
+    new ArcadeMachine(this, FURNITURE_POSITIONS.arcade1.tileX, FURNITURE_POSITIONS.arcade1.tileY);
+    new ArcadeMachine(this, FURNITURE_POSITIONS.arcade2.tileX, FURNITURE_POSITIONS.arcade2.tileY);
     this.gamingSetups = [
       new GamingSetup(this, FURNITURE_POSITIONS.gaming.tileX, FURNITURE_POSITIONS.gaming.tileY),
     ];
-
-    // Recreation — Bean bags (near gaming)
     this.beanBags = [
       new BeanBag(this, FURNITURE_POSITIONS.beanBag1.tileX, FURNITURE_POSITIONS.beanBag1.tileY, 0x4a3080),
       new BeanBag(this, FURNITURE_POSITIONS.beanBag2.tileX, FURNITURE_POSITIONS.beanBag2.tileY, 0x305080),
     ];
 
-    // Recreation — Massage chairs
+    // ═══ ÁREA DE REDES (baixo-esquerda) ═══
+    new Hammock(this, FURNITURE_POSITIONS.hammock1.tileX, FURNITURE_POSITIONS.hammock1.tileY);
+    new Hammock(this, FURNITURE_POSITIONS.hammock2.tileX, FURNITURE_POSITIONS.hammock2.tileY);
+    new Hammock(this, FURNITURE_POSITIONS.hammock3.tileX, FURNITURE_POSITIONS.hammock3.tileY);
     this.massageChairs = [
       new MassageChair(this, FURNITURE_POSITIONS.massage1.tileX, FURNITURE_POSITIONS.massage1.tileY),
       new MassageChair(this, FURNITURE_POSITIONS.massage2.tileX, FURNITURE_POSITIONS.massage2.tileY),
     ];
 
-    // Bedroom — Beds
+    // ═══ LOUNGE DE LEITURA (baixo-direita) ═══
+    this.sofas = LOUNGE_POSITIONS.map(pos => new Sofa(this, pos.tileX, pos.tileY));
+    this.coffeeTables = [
+      new CoffeeTable(this, COFFEE_TABLE_POSITION.tileX, COFFEE_TABLE_POSITION.tileY),
+    ];
+    new Bookshelf(this, FURNITURE_POSITIONS.bookshelf.tileX, FURNITURE_POSITIONS.bookshelf.tileY);
+    this.coffeeMachine = new CoffeeMachine(
+      this, FURNITURE_POSITIONS.coffeeMachine.tileX, FURNITURE_POSITIONS.coffeeMachine.tileY,
+    );
+    new WaterCooler(this, FURNITURE_POSITIONS.waterCooler.tileX, FURNITURE_POSITIONS.waterCooler.tileY);
+
+    // ═══ BEDROOM ═══
     this.beds = [
       new Bed(this, FURNITURE_POSITIONS.bed1.tileX, FURNITURE_POSITIONS.bed1.tileY),
       new Bed(this, FURNITURE_POSITIONS.bed2.tileX, FURNITURE_POSITIONS.bed2.tileY),
       new Bed(this, FURNITURE_POSITIONS.bed3.tileX, FURNITURE_POSITIONS.bed3.tileY),
     ];
-
-    // Bedroom — Night stands with lamps
     this.nightStands = [
       new NightStand(this, FURNITURE_POSITIONS.nightStand1.tileX, FURNITURE_POSITIONS.nightStand1.tileY),
       new NightStand(this, FURNITURE_POSITIONS.nightStand2.tileX, FURNITURE_POSITIONS.nightStand2.tileY),
       new NightStand(this, FURNITURE_POSITIONS.nightStand3.tileX, FURNITURE_POSITIONS.nightStand3.tileY),
     ];
-
-    // Bedroom — Plants
     new Plant(this, FURNITURE_POSITIONS.bedroomPlant1.tileX, FURNITURE_POSITIONS.bedroomPlant1.tileY);
     new Plant(this, FURNITURE_POSITIONS.bedroomPlant2.tileX, FURNITURE_POSITIONS.bedroomPlant2.tileY);
-
-    // Bedroom — Door
     new Door(this, FURNITURE_POSITIONS.bedroomDoor.tileX, FURNITURE_POSITIONS.bedroomDoor.tileY);
 
-    // Plants
+    // ═══ PLANTS (decorative, zone borders & corners) ═══
+    // Recreation zone borders
     new Plant(this, FURNITURE_POSITIONS.plant1.tileX, FURNITURE_POSITIONS.plant1.tileY);
     new Plant(this, FURNITURE_POSITIONS.plant2.tileX, FURNITURE_POSITIONS.plant2.tileY);
     new Plant(this, FURNITURE_POSITIONS.plant3.tileX, FURNITURE_POSITIONS.plant3.tileY);
     new Plant(this, FURNITURE_POSITIONS.plant4.tileX, FURNITURE_POSITIONS.plant4.tileY);
     new Plant(this, FURNITURE_POSITIONS.plant5.tileX, FURNITURE_POSITIONS.plant5.tileY);
     new Plant(this, FURNITURE_POSITIONS.plant6.tileX, FURNITURE_POSITIONS.plant6.tileY);
+    // Zone dividers (between areas)
+    new Plant(this, 8, 5);    // Between jogos & gamer
+    new Plant(this, 8, 12);   // Between redes & lounge
+    new Plant(this, 1, 9);    // Redes left border
+    new Plant(this, 1, 14);   // Redes left border
+    new Plant(this, 15, 8);   // Right border mid
+    new Plant(this, 15, 14);  // Right border low
+    // Work zone
+    new Plant(this, 17, 2);
+    new Plant(this, 17, 10);
+    new Plant(this, 17, 16);
+    new Plant(this, 34, 2);
+    new Plant(this, 34, 10);
+    new Plant(this, 34, 20);
+    // Entrance
+    new Plant(this, 20, 20);
+    new Plant(this, 8, 19);
 
     // Entrance door
     new Door(this, ENTRANCE_POSITION.tileX, ENTRANCE_POSITION.tileY);

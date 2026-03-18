@@ -7,6 +7,7 @@ import { startIdleDetector } from './src/server/idle-detector';
 import { cleanupOldEvents } from './src/server/cleanup';
 import { syncSystemTerminals, cleanupStaleTerminals } from './src/server/terminal-tracker';
 import { getCompanyConfig } from './src/lib/queries';
+import { startGangaEngine, stopGangaEngine } from './src/server/ganga/ganga-engine';
 
 // Process-level safety net — prevent crashes from unhandled errors
 process.on('uncaughtException', (err) => {
@@ -84,6 +85,25 @@ app.prepare().then(() => {
       } catch { /* silent */ }
     }, 24 * 60 * 60 * 1000);
   }, 60_000);
+
+  // ─── Ganga Ativo: start/stop based on config ──────────────────────────────
+  let gangaInterval: ReturnType<typeof setInterval> | null = null;
+
+  function syncGangaState(): void {
+    try {
+      const config = getCompanyConfig();
+      if (config.ganga_enabled && !gangaInterval) {
+        gangaInterval = startGangaEngine();
+      } else if (!config.ganga_enabled && gangaInterval) {
+        stopGangaEngine(gangaInterval);
+        gangaInterval = null;
+      }
+    } catch { /* silent on startup */ }
+  }
+
+  syncGangaState();
+  // Re-check ganga state every 30s (picks up config changes)
+  setInterval(syncGangaState, 30_000);
 
   httpServer.listen(port, () => {
     console.log(`> Ready on http://localhost:${port}`);

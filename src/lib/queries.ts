@@ -11,6 +11,7 @@ import type {
   ThemeName,
   ProjectWithDetails,
   Stats,
+  GangaLog,
 } from './types';
 
 // node:sqlite returns Record<string, SQLOutputValue> — double-cast through unknown
@@ -160,7 +161,11 @@ export function getAgentInstances(filters?: { projectId?: number }): AgentWithSt
         -(t.id) as id,
         t.project_id,
         t.agent_name as name,
-        t.agent_display_name as display_name,
+        CASE
+          WHEN t.window_title IS NOT NULL AND t.window_title <> ''
+            THEN COALESCE(t.agent_display_name, t.agent_name) || ' (' || t.window_title || ')'
+          ELSE COALESCE(t.agent_display_name, t.agent_name)
+        END as display_name,
         CASE
           WHEN t.status = 'processing' THEN 'working'
           WHEN t.status = 'active' THEN 'idle'
@@ -270,6 +275,26 @@ export function updateTerminalWindowTitle(id: number, windowTitle: string): void
 
 export function setTerminalActive(id: number): void {
   db.prepare(`UPDATE terminals SET status = 'active', last_active = datetime('now') WHERE id = ? AND status = 'inactive'`).run(id);
+}
+
+/** Remove inactive terminals older than the given threshold, plus duplicates (same PID, keep newest). */
+export function purgeOldInactiveTerminals(olderThanSeconds = 86400): number {
+  // 1. Delete inactive terminals older than threshold
+  const r1 = db.prepare(`
+    DELETE FROM terminals
+    WHERE status = 'inactive'
+      AND last_active < datetime('now', '-' || ? || ' seconds')
+  `).run(olderThanSeconds);
+
+  // 2. Delete duplicate PIDs: keep the most recent row per (project_id, pid)
+  const r2 = db.prepare(`
+    DELETE FROM terminals
+    WHERE id NOT IN (
+      SELECT MAX(id) FROM terminals GROUP BY project_id, pid
+    )
+  `).run();
+
+  return (r1 as { changes: number }).changes + (r2 as { changes: number }).changes;
 }
 
 export function getTerminalAgentByPid(pid: number): string | null {
@@ -455,4 +480,45 @@ export function updateCompanyConfig(
 
 export function isValidTheme(value: unknown): value is ThemeName {
   return ['espacial', 'moderno', 'oldschool', 'cyberpunk'].includes(value as string);
+}
+
+// ─── Ganga Ativo ──────────────────────────────────────────────────────────────
+
+export function insertGangaLog(data: Omit<GangaLog, 'id' | 'created_at'>): GangaLog {
+  const result = db.prepare(`
+    INSERT INTO ganga_log (terminal_id, project_id, prompt_text, response, classification, action)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    data.terminal_id ?? null,
+    data.project_id ?? null,
+    data.prompt_text,
+    data.response,
+    data.classification,
+    data.action,
+  );
+  return row<GangaLog>(
+    db.prepare(`SELECT * FROM ganga_log WHERE id = ?`).get(Number(result.lastInsertRowid)) as Row,
+  );
+}
+
+export function getGangaLogs(limit = 50): GangaLog[] {
+  return rows<GangaLog>(
+    db.prepare(`SELECT * FROM ganga_log ORDER BY created_at DESC LIMIT ?`).all(limit) as Row[],
+  );
+}
+
+export function getGangaStats(): { autoResponses: number; blocked: number; skipped: number } {
+  const r = db.prepare(`
+    SELECT
+      SUM(CASE WHEN action = 'auto-responded' THEN 1 ELSE 0 END) as auto_responses,
+      SUM(CASE WHEN action = 'blocked' THEN 1 ELSE 0 END) as blocked,
+      SUM(CASE WHEN action = 'skipped' THEN 1 ELSE 0 END) as skipped
+    FROM ganga_log
+    WHERE created_at >= datetime('now', '-24 hours')
+  `).get() as Row;
+  return {
+    autoResponses: (r.auto_responses as number) ?? 0,
+    blocked: (r.blocked as number) ?? 0,
+    skipped: (r.skipped as number) ?? 0,
+  };
 }

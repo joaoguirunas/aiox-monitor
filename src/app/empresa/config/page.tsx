@@ -3,7 +3,25 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { setTheme } from '@/game/bridge/react-phaser-bridge';
 import { useWebSocket } from '@/hooks/useWebSocket';
+import {
+  ALIEN_SKINS, ANIMAL_SKINS,
+  loadSkinConfig, saveSkinConfig,
+  type SkinAssignment, type SkinDefinition,
+} from '@/game/data/skin-config';
+import { PIXELLAB_SPRITES } from '@/game/data/pixellab-sprites';
 import type { CompanyConfig, ThemeName, Project } from '@/lib/types';
+
+const AGENT_LIST = Object.entries(PIXELLAB_SPRITES).map(([name, entry]) => ({
+  name,
+  key: entry.agentKey,
+  label: name.replace('@', ''),
+}));
+
+const SKIN_OPTIONS: { value: string; label: string; group: string }[] = [
+  { value: 'default', label: 'Default (AIOX)', group: '' },
+  ...ALIEN_SKINS.map(s => ({ value: s.id, label: s.label, group: 'Aliens' })),
+  ...ANIMAL_SKINS.map(s => ({ value: s.id, label: s.label, group: 'Animais' })),
+];
 
 const THEMES: { value: ThemeName; label: string; description: string }[] = [
   { value: 'moderno', label: 'Moderno', description: 'Clean, minimal, cores neutras' },
@@ -24,6 +42,7 @@ export default function CompanyConfigPage() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ projectId: number; action: 'delete' | 'clear'; name: string } | null>(null);
+  const [skinConfig, setSkinConfig] = useState<SkinAssignment>({});
   const { lastMessage, reconnectCount } = useWebSocket();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -48,6 +67,7 @@ export default function CompanyConfigPage() {
       .then((r) => r.json())
       .then(setConfig)
       .catch(() => setToast({ type: 'error', message: 'Erro ao carregar configuração' }));
+    setSkinConfig(loadSkinConfig());
     loadProjects();
   }, [loadProjects]);
 
@@ -82,15 +102,30 @@ export default function CompanyConfigPage() {
           ambient_music: config.ambient_music,
           idle_timeout_lounge: config.idle_timeout_lounge,
           idle_timeout_break: config.idle_timeout_break,
+          ganga_enabled: config.ganga_enabled,
+          ganga_scope: config.ganga_scope,
         }),
       });
       if (!res.ok) throw new Error();
-      showToast('success', 'Configuração guardada!');
+      saveSkinConfig(skinConfig);
+      showToast('success', 'Configuração guardada! Recarregue o jogo para ver as skins.');
     } catch {
       showToast('error', 'Erro ao guardar');
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleSkinChange(agentName: string, skinId: string) {
+    setSkinConfig(prev => {
+      const next = { ...prev };
+      if (skinId === 'default') {
+        delete next[agentName];
+      } else {
+        next[agentName] = skinId;
+      }
+      return next;
+    });
   }
 
   async function handleProjectAction() {
@@ -230,6 +265,91 @@ export default function CompanyConfigPage() {
               </div>
               <span className="text-[11px] text-text-muted">{config.ambient_music ? 'Ligada' : 'Desligada'}</span>
             </button>
+          </SettingBlock>
+
+          {/* Ganga Ativo */}
+          <SettingBlock label="Ganga Ativo">
+            <p className="text-[11px] text-text-muted/70 mb-3 leading-relaxed">
+              Modo operacional autônomo. Quando ativo, o sistema verifica terminais a cada 5 minutos
+              e auto-responde prompts seguros (yes/proceed/continue) dentro do escopo aprovado.
+              Prompts destrutivos são sempre bloqueados.
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={() => setConfig({ ...config, ganga_enabled: config.ganga_enabled ? 0 : 1 })}
+                className="flex items-center gap-2.5"
+              >
+                <div className={`w-9 h-5 rounded-full transition-colors ${config.ganga_enabled ? 'bg-emerald-500' : 'bg-surface-3'}`}>
+                  <div className={`w-4 h-4 mt-0.5 rounded-full bg-white transition-transform ${config.ganga_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+                </div>
+                <span className={`text-[11px] font-medium ${config.ganga_enabled ? 'text-emerald-400' : 'text-text-muted'}`}>
+                  {config.ganga_enabled ? 'Ativo' : 'Desativado'}
+                </span>
+              </button>
+              {config.ganga_enabled ? (
+                <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+                  <div className="flex items-center gap-2 text-[11px] text-emerald-400 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Heartbeat a cada 5 min — auto-yes para prompts seguros
+                  </div>
+                  <div className="text-[10px] text-text-muted mt-1">
+                    Scope: {config.ganga_scope === 'safe-only' ? 'Apenas prompts seguros (y/n)' : 'Seguros + ambíguos'}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </SettingBlock>
+
+          {/* Skins dos Agentes */}
+          <SettingBlock label="Skins dos Agentes">
+            <p className="text-[11px] text-text-muted/70 mb-3 leading-relaxed">
+              Escolha uma aparência alternativa para cada agente. Requer recarregar o jogo após guardar.
+            </p>
+            <div className="space-y-2">
+              {AGENT_LIST.map((agent) => {
+                const currentSkin = skinConfig[agent.name] || 'default';
+                const skinDef = [...ALIEN_SKINS, ...ANIMAL_SKINS].find(s => s.id === currentSkin);
+                return (
+                  <div key={agent.name} className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 min-w-[120px]">
+                      {skinDef ? (
+                        <img
+                          src={`${skinDef.basePath}-south.png`}
+                          alt={skinDef.label}
+                          className="w-8 h-8 object-contain image-rendering-pixelated"
+                          style={{ imageRendering: 'pixelated' }}
+                        />
+                      ) : (
+                        <img
+                          src={PIXELLAB_SPRITES[agent.name]?.directions.south || ''}
+                          alt={agent.label}
+                          className="w-8 h-8 object-contain"
+                          style={{ imageRendering: 'pixelated' }}
+                        />
+                      )}
+                      <span className="text-[12px] font-medium text-text-primary capitalize">{agent.label}</span>
+                    </div>
+                    <select
+                      value={currentSkin}
+                      onChange={(e) => handleSkinChange(agent.name, e.target.value)}
+                      className="flex-1 bg-surface-1/50 border border-border/50 rounded-md px-2 py-1.5 text-[11px] text-text-primary focus:border-accent-blue/40 focus:outline-none transition-colors appearance-none cursor-pointer"
+                    >
+                      <option value="default">Default (AIOX)</option>
+                      <optgroup label="Aliens">
+                        {ALIEN_SKINS.map(s => (
+                          <option key={s.id} value={s.id}>{s.label}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Animais">
+                        {ANIMAL_SKINS.map(s => (
+                          <option key={s.id} value={s.id}>{s.label}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
           </SettingBlock>
         </div>
 

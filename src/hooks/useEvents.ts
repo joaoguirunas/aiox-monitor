@@ -45,8 +45,7 @@ export function useEvents(filters: EventFilters = {}) {
       })
       .catch(() => {
         if (cancelled) return;
-        setEvents([]);
-        setTotal(0);
+        // On error, keep existing data — don't wipe the list
         setLoading(false);
       });
     return () => { cancelled = true; };

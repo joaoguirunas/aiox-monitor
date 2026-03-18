@@ -7,9 +7,9 @@ import { NAVBAR_HEIGHT } from '@/game/constants';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useProjectContext } from '@/contexts/ProjectContext';
 import {
-  setGameInstance, clearGameInstance, syncAgents, syncProjects, updateAgent, setTheme,
+  setGameInstance, clearGameInstance, syncAgents, syncProjects, setTheme,
 } from '@/game/bridge/react-phaser-bridge';
-import type { WsAgentUpdate, WsEventNew, CompanyConfig, ThemeName } from '@/lib/types';
+import type { WsEventNew, CompanyConfig, ThemeName } from '@/lib/types';
 
 export function PhaserGame() {
   const gameRef = useRef<Phaser.Game | null>(null);
@@ -21,7 +21,7 @@ export function PhaserGame() {
 
   const fetchAndSync = useCallback(() => {
     const pid = selectedProjectIdRef.current;
-    const agentsUrl = pid ? `/api/agents?project_id=${pid}` : '/api/agents';
+    const agentsUrl = pid ? `/api/agents?expand=terminals&project_id=${pid}` : '/api/agents?expand=terminals';
     Promise.all([fetch(agentsUrl), fetch('/api/projects'), fetch('/api/company-config')])
       .then(([agentsRes, projRes, configRes]) =>
         Promise.all([agentsRes.json(), projRes.json(), configRes.json()])
@@ -81,13 +81,11 @@ export function PhaserGame() {
   useEffect(() => {
     if (!lastMessage) return;
 
-    if (lastMessage.type === 'agent:update') {
-      const { agent, projectId } = lastMessage as WsAgentUpdate;
-      if (selectedProjectId && projectId !== selectedProjectId) return;
-      updateAgent(agent);
-    }
-
-    if (lastMessage.type === 'event:new' || lastMessage.type === 'terminal:update') {
+    if (
+      lastMessage.type === 'agent:update'
+      || lastMessage.type === 'event:new'
+      || lastMessage.type === 'terminal:update'
+    ) {
       // Throttled re-fetch: max once every 2 seconds
       const now = Date.now();
       if (now - lastSyncRef.current < 2000) return;
@@ -95,8 +93,8 @@ export function PhaserGame() {
       const projectId = 'projectId' in lastMessage ? (lastMessage as WsEventNew).projectId : undefined;
       if (selectedProjectId && projectId && projectId !== selectedProjectId) return;
       const url = selectedProjectId
-        ? `/api/agents?project_id=${selectedProjectId}`
-        : '/api/agents';
+        ? `/api/agents?expand=terminals&project_id=${selectedProjectId}`
+        : '/api/agents?expand=terminals';
       Promise.all([fetch(url), fetch('/api/projects')])
         .then(([agentsRes, projRes]) => Promise.all([agentsRes.json(), projRes.json()]))
         .then(([agents, projects]) => {

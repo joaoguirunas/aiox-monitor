@@ -70,6 +70,8 @@ export type AgentStatus = 'idle' | 'working' | 'break' | 'offline';
 
 export type ThemeName = 'espacial' | 'moderno' | 'oldschool' | 'cyberpunk';
 
+export type GangaScope = 'safe-only' | 'safe-and-ambiguous';
+
 export interface CompanyConfig {
   id: 1;
   name: string;
@@ -79,7 +81,29 @@ export interface CompanyConfig {
   idle_timeout_lounge: number;
   idle_timeout_break: number;
   event_retention_days: number;
+  ganga_enabled: 0 | 1;
+  ganga_scope: GangaScope;
   updated_at: string;
+}
+
+export interface GangaLog {
+  id: number;
+  terminal_id: number | null;
+  project_id: number | null;
+  prompt_text: string;
+  response: string;
+  classification: 'safe' | 'blocked' | 'ambiguous';
+  action: 'auto-responded' | 'skipped' | 'blocked';
+  created_at: string;
+}
+
+export interface GangaHeartbeat {
+  activeAgents: number;
+  workingProjects: string[];
+  autoResponses: number;
+  blockedPrompts: number;
+  skippedPrompts: number;
+  lastCheck: string;
 }
 
 export interface EventFilters {
@@ -159,10 +183,22 @@ export interface WsPing extends WsMessage {
   type: 'ping';
 }
 
+export interface WsGangaHeartbeat extends WsMessage {
+  type: 'ganga:heartbeat';
+  summary: GangaHeartbeat;
+}
+
+export interface WsGangaToggle extends WsMessage {
+  type: 'ganga:toggle';
+  enabled: boolean;
+}
+
 export type WsIncomingMessage =
   | WsEventNew
   | WsAgentUpdate
   | WsTerminalUpdate
   | WsProjectUpdate
   | WsThemeChange
+  | WsGangaHeartbeat
+  | WsGangaToggle
   | WsPing;

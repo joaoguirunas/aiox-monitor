@@ -31,27 +31,101 @@ interface DeskSlot {
   deskIndex: number;
 }
 
+interface AgentState {
+  status: AgentStatus;
+  projectId: number;
+}
+
 export class AgentManager {
   private sprites: Map<string, AgentSprite> = new Map();
   private deskAssignment: Map<string, DeskSlot> = new Map();
   private projectNames: Map<number, string> = new Map();
   /** Tracks which recreation position each agent occupies, for furniture deactivation */
   private recAssignment: Map<string, RecreationPosition> = new Map();
+  /** Tracks last known state to avoid redundant transitions */
+  private lastState: Map<string, AgentState> = new Map();
+  /** Tracks agents currently mid-walk (wander) to avoid interrupting */
+  private wandering: Set<string> = new Set();
+  private wanderTimer: Phaser.Time.TimerEvent | null = null;
 
   constructor(
     private scene: OfficeScene,
     private clusterManager: ClusterManager,
-  ) {}
+  ) {
+    this.startWanderTimer();
+  }
 
-  /** Chave única por agente: project_id + name */
+  /** Periodically moves idle/break agents to new recreation positions */
+  private startWanderTimer(): void {
+    this.wanderTimer = this.scene.time.addEvent({
+      delay: 8000,
+      callback: () => this.wanderIdleAgents(),
+      loop: true,
+    });
+  }
+
+  private wanderIdleAgents(): void {
+    const candidates: string[] = [];
+    for (const [key] of this.sprites) {
+      const state = this.lastState.get(key);
+      if (!state) continue;
+      if ((state.status === 'idle' || state.status === 'break') && !this.wandering.has(key)) {
+        candidates.push(key);
+      }
+    }
+    if (candidates.length === 0) return;
+
+    // Pick 1-2 random agents to move each cycle
+    const count = Math.min(candidates.length, Phaser.Math.Between(1, 2));
+    const shuffled = Phaser.Utils.Array.Shuffle([...candidates]);
+
+    for (let i = 0; i < count; i++) {
+      const key = shuffled[i];
+      const sprite = this.sprites.get(key);
+      const state = this.lastState.get(key);
+      if (!sprite || !state) continue;
+
+      const currentPos = this.recAssignment.get(key);
+      const newPos = this.getRecreationPosition(key, state.status, currentPos);
+
+      // Skip if same position
+      if (currentPos && newPos.tileX === currentPos.tileX && newPos.tileY === currentPos.tileY) continue;
+
+      // Release current furniture
+      if (currentPos) {
+        this.deactivateFurniture(currentPos);
+        this.recAssignment.delete(key);
+      }
+
+      this.wandering.add(key);
+      sprite.walkTo(newPos.tileX, newPos.tileY).then(() => {
+        this.wandering.delete(key);
+        if (!this.sprites.has(key)) return;
+        sprite.standIdle();
+        this.recAssignment.set(key, newPos);
+        this.activateFurniture(newPos, sprite.agentName);
+        if (state.status === 'break' && newPos.type === 'coffee-machine') {
+          this.scene.coffeeMachine?.setSteamActive(true);
+        }
+        this.checkCoffeeMachineState();
+      });
+    }
+  }
+
+  /** Chave estável por agente-instância.
+   *  Negative IDs (from getAgentInstances) are unique per terminal — use them directly.
+   *  Positive IDs (from getAgents) use project:name for deduplication. */
   private agentKey(agent: Agent): string {
+    if (agent.id < 0) return String(agent.id);
     return `${agent.project_id}:${agent.name}`;
   }
 
-  /** Atualiza mapa de nomes de projetos */
+  /** Atualiza mapa de nomes de projetos e garante clusters para todos */
   syncProjects(projects: Project[]): void {
     for (const p of projects) {
       this.projectNames.set(p.id, p.name);
+      // Ensure every project has a visible cluster with desks
+      this.clusterManager.ensureCluster(p.id, p.name);
     }
   }
 
@@ -63,17 +137,20 @@ export class AgentManager {
   syncAll(agents: Agent[]): void {
     // Filter out @unknown agents — they clutter the office
     const visible = agents.filter(a => a.name !== '@unknown');
+    console.log('[AgentManager] syncAll called with', visible.length, 'visible agents');
     const activeKeys = new Set<string>();
 
-    // Only create clusters for projects that have at least one 'working' agent
-    const workingProjectIds = new Set<number>();
+    // Ensure clusters exist for all projects that have agents
+    const projectIds = new Set<number>();
     for (const agent of visible) {
-      if (agent.status === 'working') {
-        workingProjectIds.add(agent.project_id);
-      }
+      projectIds.add(agent.project_id);
     }
-    for (const projectId of workingProjectIds) {
-      this.clusterManager.ensureCluster(projectId, this.getProjectName(projectId));
+    for (const projectId of projectIds) {
+      try {
+        this.clusterManager.ensureCluster(projectId, this.getProjectName(projectId));
+      } catch (err) {
+        console.error('[AgentManager] ensureCluster failed for project', projectId, err);
+      }
     }
 
     for (const agent of visible) {
@@ -81,11 +158,22 @@ export class AgentManager {
       activeKeys.add(key);
       const existing = this.sprites.get(key);
 
-      if (existing) {
-        existing.setStatus(agent.status);
-        this.positionInstant(key, agent);
-      } else if (agent.status !== 'offline') {
-        this.createAgent(agent, false);
+      try {
+        if (existing) {
+          // Only reposition if status or project changed
+          const prev = this.lastState.get(key);
+          if (!prev || prev.status !== agent.status || prev.projectId !== agent.project_id) {
+            this.wandering.delete(key);
+            existing.setStatus(agent.status);
+            this.positionInstant(key, agent);
+            this.lastState.set(key, { status: agent.status, projectId: agent.project_id });
+          }
+        } else if (agent.status !== 'offline') {
+          this.createAgent(agent, false);
+          this.lastState.set(key, { status: agent.status, projectId: agent.project_id });
+        }
+      } catch (err) {
+        console.error('[AgentManager] failed to sync agent', agent.name, agent.status, err);
       }
     }
 
@@ -113,6 +201,13 @@ export class AgentManager {
       return;
     }
     if (existing) {
+      // Skip transition if status and project haven't changed
+      const prev = this.lastState.get(key);
+      if (prev && prev.status === agent.status && prev.projectId === agent.project_id) {
+        return;
+      }
+      this.wandering.delete(key);
+      this.lastState.set(key, { status: agent.status, projectId: agent.project_id });
       existing.setStatus(agent.status);
       this.transitionAgent(key, agent);
     }
@@ -220,7 +315,7 @@ export class AgentManager {
     }
   }
 
-  private getRecreationPosition(key: string, status: AgentStatus): RecreationPosition {
+  private getRecreationPosition(key: string, status: AgentStatus, excludePos?: RecreationPosition): RecreationPosition {
     const statusKey = status as 'idle' | 'break';
     const available = RECREATION_POSITIONS.filter(
       p => p.interactionFor.includes(statusKey),
@@ -234,9 +329,16 @@ export class AgentManager {
     }
 
     const free = available.filter(p => {
+      // Exclude current position for wander
+      if (excludePos && p.tileX === excludePos.tileX && p.tileY === excludePos.tileY) return false;
       const { x, y } = tileToPixel(p.tileX, p.tileY);
       return !occupiedPositions.has(`${Math.round(x)},${Math.round(y)}`);
     });
+
+    // For wander (excludePos provided), pick randomly; otherwise use stable index
+    if (excludePos && free.length > 0) {
+      return free[Phaser.Math.Between(0, free.length - 1)];
+    }
 
     let idx = 0;
     for (const [k] of this.sprites) {
@@ -388,5 +490,7 @@ export class AgentManager {
     }
     this.releaseDesk(key);
     this.releaseRecreation(key);
+    this.lastState.delete(key);
+    this.wandering.delete(key);
   }
 }

@@ -8,6 +8,9 @@ import {
   PIXELLAB_SPRITES, pixelLabTextureKey,
 } from '../data/pixellab-sprites';
 import {
+  ALL_SKINS, loadSkinConfig, skinDirectionPaths,
+} from '../data/skin-config';
+import {
   THEME_NAMES, ZONE_NAMES, RUG_TYPES,
   floorTextureKey, floorAssetPath,
   rugTextureKey, rugAssetPath,
@@ -26,7 +29,17 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    // Desk workstations são 100% programáticos — zero sprites carregados
+    // Carregar skins alternativas (aliens/animals) que estejam configuradas
+    const skinConfig = loadSkinConfig();
+    const activeSkinIds = new Set(Object.values(skinConfig).filter(v => v !== 'default'));
+    for (const skin of ALL_SKINS) {
+      if (activeSkinIds.has(skin.id)) {
+        const paths = skinDirectionPaths(skin);
+        for (const [dir, path] of Object.entries(paths)) {
+          this.load.image(`skin-${skin.id}-${dir}`, path);
+        }
+      }
+    }
 
     // Carregar floor tiles e rugs para todos os temas
     for (const theme of THEME_NAMES) {

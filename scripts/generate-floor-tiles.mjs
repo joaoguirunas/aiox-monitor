@@ -96,12 +96,11 @@ function distanceToEdge(px, py) {
 
 /**
  * Generate a single isometric diamond tile as raw RGBA buffer.
+ * Flat colour only — no grid lines, no edge gradients, no highlights.
  */
 function generateTile(config) {
-  const { base, edge, grid, gridAlpha } = config;
+  const { base } = config;
   const baseRgb = hexToRgb(base);
-  const edgeRgb = hexToRgb(edge);
-  const gridRgb = hexToRgb(grid);
 
   const buf = Buffer.alloc(W * H * 4, 0); // RGBA, fully transparent
 
@@ -109,43 +108,10 @@ function generateTile(config) {
     for (let x = 0; x < W; x++) {
       if (!isInsideDiamond(x, y)) continue;
 
-      const d = distanceToEdge(x, y);
       const idx = (y * W + x) * 4;
-
-      // Base colour
-      let r = baseRgb.r, g = baseRgb.g, b = baseRgb.b;
-
-      // Subtle edge gradient (outer 15% blends toward edge colour)
-      if (d < 0.15) {
-        const t = d / 0.15;
-        const blended = blendColour(edgeRgb, baseRgb, t);
-        r = blended.r;
-        g = blended.g;
-        b = blended.b;
-      }
-
-      // Very subtle top-left highlight
-      const cx = x - HW;
-      const cy = y - HH;
-      if (cx + cy < -8 && d > 0.05) {
-        const hl = blendColour({ r, g, b }, { r: 255, g: 255, b: 255 }, 0.02);
-        r = hl.r; g = hl.g; b = hl.b;
-      }
-      // Very subtle bottom-right shadow
-      if (cx + cy > 8 && d > 0.05) {
-        const sh = blendColour({ r, g, b }, { r: 0, g: 0, b: 0 }, 0.04);
-        r = sh.r; g = sh.g; b = sh.b;
-      }
-
-      // Thin grid line at diamond edge (1px border)
-      if (d < 0.06 && d >= 0.0) {
-        const blended = blendColour({ r, g, b }, gridRgb, gridAlpha);
-        r = blended.r; g = blended.g; b = blended.b;
-      }
-
-      buf[idx] = r;
-      buf[idx + 1] = g;
-      buf[idx + 2] = b;
+      buf[idx] = baseRgb.r;
+      buf[idx + 1] = baseRgb.g;
+      buf[idx + 2] = baseRgb.b;
       buf[idx + 3] = 255;
     }
   }

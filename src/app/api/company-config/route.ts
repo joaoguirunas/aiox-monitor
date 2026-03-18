@@ -34,10 +34,26 @@ export async function PUT(req: NextRequest) {
       }
     }
 
+    // Validate ganga fields
+    if (body.ganga_enabled !== undefined) {
+      const val = Number(body.ganga_enabled);
+      if (val !== 0 && val !== 1) {
+        return NextResponse.json({ error: 'ganga_enabled must be 0 or 1' }, { status: 400 });
+      }
+    }
+    if (body.ganga_scope !== undefined) {
+      if (!['safe-only', 'safe-and-ambiguous'].includes(body.ganga_scope)) {
+        return NextResponse.json({ error: 'Invalid ganga_scope' }, { status: 400 });
+      }
+    }
+
     const updated = updateCompanyConfig(body);
 
     if (body.theme) {
       try { broadcast({ type: 'theme:change', theme: body.theme }); } catch { /* fire-and-forget */ }
+    }
+    if (body.ganga_enabled !== undefined) {
+      try { broadcast({ type: 'ganga:toggle', enabled: !!body.ganga_enabled }); } catch { /* fire-and-forget */ }
     }
 
     return NextResponse.json(updated);

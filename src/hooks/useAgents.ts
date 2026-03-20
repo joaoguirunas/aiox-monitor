@@ -16,8 +16,10 @@ export function useAgents(projectId?: number) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const qs = projectId !== undefined ? `?project_id=${projectId}` : '';
-    fetch(`/api/agents${qs}`)
+    const params = new URLSearchParams();
+    if (projectId !== undefined) params.set('project_id', String(projectId));
+    params.set('expand', 'terminals');
+    fetch(`/api/agents?${params}`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -45,8 +47,8 @@ export function useAgents(projectId?: number) {
       if (exists) {
         return prev.map(a => a.id === msg.agent.id ? { ...a, ...msg.agent } : a);
       }
-      // New agent appeared — add to list
-      return [...prev, { ...msg.agent, terminal_count: 0 } as AgentWithStats];
+      // New agent appeared — add to list, preserving enrichment fields from WS payload
+      return [...prev, { terminal_count: 0, ...msg.agent } as AgentWithStats];
     });
   }, [lastMessage, projectId]);
 

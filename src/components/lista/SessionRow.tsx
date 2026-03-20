@@ -1,6 +1,25 @@
-import type { Event, AgentWithStats, Project, Terminal } from '@/lib/types';
+import { useState, useEffect } from 'react';
+import type { Event, AgentWithStats, Project, Terminal, SessionWithSummary } from '@/lib/types';
 import { AgentBadge } from '@/components/shared/Badge';
 import { TimeAgo } from '@/components/shared/TimeAgo';
+
+function parseUTC(dateStr: string): Date {
+  const normalized = dateStr.endsWith('Z') ? dateStr : dateStr.replace(' ', 'T') + 'Z';
+  return new Date(normalized);
+}
+
+function formatDuration(startedAt: string, endedAt?: string | null): string {
+  const start = parseUTC(startedAt).getTime();
+  const end = endedAt ? parseUTC(endedAt).getTime() : Date.now();
+  const ms = end - start;
+  if (ms < 0) return '—';
+  const mins = Math.floor(ms / 60000);
+  const secs = Math.floor((ms % 60000) / 1000);
+  if (mins >= 60) return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  return `${mins}m ${secs}s`;
+}
+
+// ─── Legacy groupBySession (kept as fallback, AC9) ──────────────────────────
 
 export interface SessionGroup {
   sessionId: number | null;
@@ -16,7 +35,7 @@ export interface SessionGroup {
   isComplete: boolean;
 }
 
-/** Group events into sessions */
+/** Group events into sessions (legacy client-side grouping) */
 export function groupBySession(events: Event[]): SessionGroup[] {
   const map = new Map<string, Event[]>();
 
@@ -30,7 +49,6 @@ export function groupBySession(events: Event[]): SessionGroup[] {
   const groups: SessionGroup[] = [];
 
   for (const [, evts] of map) {
-    // Sort oldest first within session
     evts.sort((a, b) => a.id - b.id);
 
     const promptEvt = evts.find((e) => e.type === 'UserPromptSubmit');
@@ -45,7 +63,6 @@ export function groupBySession(events: Event[]): SessionGroup[] {
       }
     }
 
-    // Find first agent that isn't @unknown
     const agentId = promptEvt?.agent_id ?? stopEvt?.agent_id ?? evts[0]?.agent_id ?? null;
     const terminalId = promptEvt?.terminal_id ?? stopEvt?.terminal_id ?? evts[0]?.terminal_id ?? null;
 
@@ -67,8 +84,10 @@ export function groupBySession(events: Event[]): SessionGroup[] {
   return groups;
 }
 
+// ─── SessionRow (renders SessionWithSummary from API) ───────────────────────
+
 interface SessionRowProps {
-  session: SessionGroup;
+  session: SessionWithSummary;
   agents: AgentWithStats[];
   projects: Project[];
   terminals: Terminal[];
@@ -76,9 +95,17 @@ interface SessionRowProps {
 }
 
 export function SessionRow({ session, agents, projects, terminals, onClick }: SessionRowProps) {
-  const agent = session.agentId ? agents.find((a) => a.id === session.agentId) : undefined;
-  const project = projects.find((p) => p.id === session.projectId);
-  const terminal = session.terminalId ? terminals.find((t) => t.id === session.terminalId) : undefined;
+  const agent = session.agent_id ? agents.find((a) => a.id === session.agent_id) : undefined;
+  const project = projects.find((p) => p.id === session.project_id);
+  const terminal = session.terminal_id ? terminals.find((t) => t.id === session.terminal_id) : undefined;
+
+  // Live duration for active sessions — refresh every 30s
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (session.status !== 'active') return;
+    const interval = setInterval(() => setTick((t) => t + 1), 30000);
+    return () => clearInterval(interval);
+  }, [session.status]);
 
   const promptText = session.prompt
     ? session.prompt.length > 90 ? session.prompt.slice(0, 90) + '…' : session.prompt
@@ -88,13 +115,27 @@ export function SessionRow({ session, agents, projects, terminals, onClick }: Se
     ? session.response.length > 80 ? session.response.slice(0, 80) + '…' : session.response
     : null;
 
+  const statusBadge = session.status === 'completed' ? (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-accent-emerald/10 text-accent-emerald border-accent-emerald/20">
+      Completo
+    </span>
+  ) : session.status === 'interrupted' ? (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-red-500/10 text-red-400 border-red-500/20">
+      Interrompida
+    </span>
+  ) : (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-accent-amber/10 text-accent-amber border-accent-amber/20 animate-pulse">
+      Em curso
+    </span>
+  );
+
   return (
     <tr
       className="border-b border-border/20 hover:bg-white/[0.02] cursor-pointer transition-colors duration-150 group"
       onClick={onClick}
     >
       <td className="px-4 py-2.5 whitespace-nowrap">
-        <TimeAgo dateStr={session.startedAt} />
+        <TimeAgo dateStr={session.started_at} />
       </td>
       <td className="px-4 py-2.5 text-[13px] text-text-secondary truncate">
         {project?.name ?? <span className="text-text-muted">—</span>}
@@ -158,18 +199,15 @@ export function SessionRow({ session, agents, projects, terminals, onClick }: Se
             </span>
           )}
         </div>
-        <div className="text-[10px] text-text-muted mt-0.5">{session.toolCount} ações</div>
+        <div className="text-[10px] text-text-muted mt-0.5">{session.tool_count} ações</div>
       </td>
       <td className="px-4 py-2.5 whitespace-nowrap">
-        {session.isComplete ? (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-accent-emerald/10 text-accent-emerald border-accent-emerald/20">
-            Completo
-          </span>
-        ) : (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-accent-amber/10 text-accent-amber border-accent-amber/20 animate-pulse">
-            Em curso
-          </span>
-        )}
+        <span className={`text-[11px] font-mono ${session.status === 'active' ? 'text-accent-amber' : 'text-text-muted'}`}>
+          {formatDuration(session.started_at, session.ended_at)}
+        </span>
+      </td>
+      <td className="px-4 py-2.5 whitespace-nowrap">
+        {statusBadge}
       </td>
     </tr>
   );

@@ -132,12 +132,15 @@ export class Desk extends Phaser.GameObjects.Container {
       g.fillStyle(0xffffff, 0.04);
       g.fillRect(mx - mw + 1, my - mh + 1, mw * 2 - 2, 2);
     } else {
-      // Standby screen
+      // Standby screen — slightly brighter than pure off
       g.fillStyle(this.screenOffColor, 1);
       g.fillRect(mx - mw + 1, my - mh + 1, mw * 2 - 2, mh * 2 - 3);
-      // Standby dot
-      g.fillStyle(this.edgeColor, 0.3);
-      g.fillCircle(mx, my, 1);
+      // Subtle screen border glow (makes the monitor shape visible)
+      g.lineStyle(0.5, this.screenGlowColor, 0.08);
+      g.strokeRect(mx - mw + 1, my - mh + 1, mw * 2 - 2, mh * 2 - 3);
+      // Standby dot — brighter for visibility
+      g.fillStyle(this.screenGlowColor, 0.35);
+      g.fillCircle(mx, my, 1.2);
     }
 
     // Bezel border
@@ -198,7 +201,11 @@ export class Desk extends Phaser.GameObjects.Container {
     this.drawIMac(g, false);
     this.drawKeyboard(g, false);
     this.drawMouse(g);
+
+    // Subtle standby glow so desks stay visible when agents leave
     this.screenGlow.clear();
+    this.screenGlow.fillStyle(this.screenGlowColor, 0.015);
+    this.screenGlow.fillEllipse(0, -8, 24, 8);
   }
 
   private drawActive(color: number): void {

@@ -45,9 +45,9 @@ interface WatchedFile {
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects');
-const SCAN_INTERVAL_MS = 5_000;
+const SCAN_INTERVAL_MS = 30_000;  // Was 5s — scan for new files every 30s (not aggressive)
 const PERMISSION_TIMEOUT_MS = 7_000;
-const POLL_INTERVAL_MS = 1_000;
+const POLL_INTERVAL_MS = 5_000;   // Was 1s — poll fallback every 5s (fs.watch is primary)
 
 // ─── State ──────────────────────────────────────────────────────────────────
 
@@ -55,6 +55,32 @@ const watchedFiles = new Map<string, WatchedFile>();
 let scanInterval: ReturnType<typeof setInterval> | null = null;
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 let started = false;
+
+// ─── Project path cache (avoids SELECT on every JSONL event) ────────────────
+
+/** Map of Claude dir format → project ID, refreshed every 30s */
+let projectPathCache = new Map<string, number>();
+let projectPathCacheTime = 0;
+const PROJECT_CACHE_TTL_MS = 30_000;
+
+function getProjectPathCache(): Map<string, number> {
+  const now = Date.now();
+  if (now - projectPathCacheTime < PROJECT_CACHE_TTL_MS && projectPathCache.size > 0) {
+    return projectPathCache;
+  }
+  try {
+    const projects = db.prepare(`SELECT id, path FROM projects`).all() as Record<string, unknown>[];
+    const cache = new Map<string, number>();
+    for (const proj of projects) {
+      const projPath = proj.path as string;
+      const claudeFormat = '-' + projPath.slice(1).replace(/\//g, '-');
+      cache.set(claudeFormat, proj.id as number);
+    }
+    projectPathCache = cache;
+    projectPathCacheTime = now;
+  } catch { /* keep stale cache */ }
+  return projectPathCache;
+}
 
 // ─── DB helpers (direct SQL to avoid circular deps) ─────────────────────────
 
@@ -71,21 +97,22 @@ function findTerminalBySessionId(sessionId: string): { id: number; project_id: n
 /** Match JSONL to terminal by project directory path */
 function findTerminalByProjectDir(projectDirName: string): { id: number; project_id: number } | null {
   // projectDirName is like "-Users-joaoramos-Desktop-aiox-monitor"
-  // Convert to real path: replace leading "-" with "/", remaining "-" with "/"
-  const realPath = '/' + projectDirName.slice(1).replace(/-/g, '/');
+  // Uses cached path→projectId map (refreshed every 30s) to avoid SELECT on every call.
   try {
-    // Find project by path
-    const proj = db.prepare(
-      `SELECT id FROM projects WHERE path = ? OR path LIKE ? LIMIT 1`,
-    ).get(realPath, `%${realPath}%`) as Record<string, unknown> | undefined;
-    if (!proj) return null;
-    const projectId = proj.id as number;
+    const cache = getProjectPathCache();
+    const projectId = cache.get(projectDirName);
+    if (projectId === undefined) return null;
 
-    // Find most recently active terminal for this project
-    const row = db.prepare(
+    // Prefer terminal actively processing (executing a tool) — avoids cross-session enrichment
+    const processing = db.prepare(
+      `SELECT id, project_id FROM terminals WHERE project_id = ? AND status = 'processing' ORDER BY last_active DESC LIMIT 1`,
+    ).get(projectId) as Record<string, unknown> | undefined;
+    if (processing) return { id: processing.id as number, project_id: processing.project_id as number };
+    // Fallback: any non-inactive terminal
+    const active = db.prepare(
       `SELECT id, project_id FROM terminals WHERE project_id = ? AND status != 'inactive' ORDER BY last_active DESC LIMIT 1`,
     ).get(projectId) as Record<string, unknown> | undefined;
-    if (row) return { id: row.id as number, project_id: row.project_id as number };
+    if (active) return { id: active.id as number, project_id: active.project_id as number };
   } catch { /* ignore */ }
   return null;
 }
@@ -293,8 +320,9 @@ async function watchFile(filePath: string): Promise<void> {
     projectDirName: projectDirFromPath(filePath),
   };
 
-  // Try to match terminal immediately
-  const match = findTerminalBySessionId(sessionId);
+  // Try to match terminal immediately (session_id first, then project dir fallback)
+  const match = findTerminalBySessionId(sessionId)
+    ?? findTerminalByProjectDir(projectDirFromPath(filePath));
   if (match) wf.terminalId = match.id;
 
   // Set up fs.watch (may fail on some systems)

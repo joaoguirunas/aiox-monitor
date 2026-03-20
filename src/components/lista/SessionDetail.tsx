@@ -1,12 +1,22 @@
 'use client';
 
-import { useEffect } from 'react';
-import type { AgentWithStats, Project, Terminal } from '@/lib/types';
+import { useEffect, useState } from 'react';
+import type { Event, AgentWithStats, Project, Terminal, SessionWithSummary } from '@/lib/types';
 import { AgentBadge } from '@/components/shared/Badge';
-import type { SessionGroup } from './SessionRow';
+
+function formatDuration(startedAt: string, endedAt?: string | null): string {
+  const start = parseUTC(startedAt).getTime();
+  const end = endedAt ? parseUTC(endedAt).getTime() : Date.now();
+  const ms = end - start;
+  if (ms < 0) return '—';
+  const mins = Math.floor(ms / 60000);
+  const secs = Math.floor((ms % 60000) / 1000);
+  if (mins >= 60) return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  return `${mins}m ${secs}s`;
+}
 
 interface SessionDetailProps {
-  session: SessionGroup | null;
+  session: SessionWithSummary | null;
   agents: AgentWithStats[];
   projects: Project[];
   terminals: Terminal[];
@@ -19,6 +29,28 @@ function parseUTC(dateStr: string): Date {
 }
 
 export function SessionDetail({ session, agents, projects, terminals, onClose }: SessionDetailProps) {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+
+  // Fetch events on-demand when session is selected
+  useEffect(() => {
+    if (!session) {
+      setEvents([]);
+      return;
+    }
+
+    setLoadingEvents(true);
+    fetch(`/api/sessions/${session.id}/events`)
+      .then((r) => r.json())
+      .then((data: { events: Event[] }) => {
+        setEvents(data.events ?? []);
+        setLoadingEvents(false);
+      })
+      .catch(() => {
+        setLoadingEvents(false);
+      });
+  }, [session?.id]);
+
   useEffect(() => {
     if (!session) return;
     document.body.style.overflow = 'hidden';
@@ -34,13 +66,13 @@ export function SessionDetail({ session, agents, projects, terminals, onClose }:
 
   if (!session) return null;
 
-  const agent = session.agentId ? agents.find((a) => a.id === session.agentId) : undefined;
-  const project = projects.find((p) => p.id === session.projectId);
-  const terminal = session.terminalId ? terminals.find((t) => t.id === session.terminalId) : undefined;
-  const fullDate = parseUTC(session.startedAt).toLocaleString('pt-BR');
+  const agent = session.agent_id ? agents.find((a) => a.id === session.agent_id) : undefined;
+  const project = projects.find((p) => p.id === session.project_id);
+  const terminal = session.terminal_id ? terminals.find((t) => t.id === session.terminal_id) : undefined;
+  const fullDate = parseUTC(session.started_at).toLocaleString('pt-BR');
 
-  // Build timeline from events
-  const toolEvents = session.events.filter(
+  // Build timeline from fetched events
+  const toolEvents = events.filter(
     (e) => e.type === 'PreToolUse' && e.tool,
   );
 
@@ -63,6 +95,7 @@ export function SessionDetail({ session, agents, projects, terminals, onClose }:
           <div className="flex items-center gap-2.5">
             <span className="w-1.5 h-1.5 rounded-full bg-accent-violet" />
             <h2 className="text-[13px] font-semibold text-text-primary font-display">Sessão</h2>
+            <span className="text-[10px] text-text-muted font-mono">#{session.id}</span>
           </div>
           <button
             onClick={onClose}
@@ -79,7 +112,17 @@ export function SessionDetail({ session, agents, projects, terminals, onClose }:
         <div className="px-5 py-5 space-y-5 flex-1">
           {/* Metadata */}
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Timestamp">{fullDate}</Field>
+            <Field label="Início">{fullDate}</Field>
+            <Field label="Fim">
+              {session.ended_at
+                ? parseUTC(session.ended_at).toLocaleString('pt-BR')
+                : <span className="text-accent-amber text-xs">Em curso</span>}
+            </Field>
+            <Field label="Duração">
+              <span className={`font-mono text-xs ${session.status === 'active' ? 'text-accent-amber' : 'text-text-primary'}`}>
+                {formatDuration(session.started_at, session.ended_at)}
+              </span>
+            </Field>
             <Field label="Projeto">{project?.name ?? '—'}</Field>
             <Field label="Agente">
               {agent ? (
@@ -104,12 +147,15 @@ export function SessionDetail({ session, agents, projects, terminals, onClose }:
               )}
             </Field>
             <Field label="Status">
-              {session.isComplete ? (
+              {session.status === 'completed' ? (
                 <span className="text-accent-emerald text-xs font-medium">Completo</span>
+              ) : session.status === 'interrupted' ? (
+                <span className="text-red-400 text-xs font-medium">Interrompida</span>
               ) : (
                 <span className="text-accent-amber text-xs font-medium">Em curso</span>
               )}
             </Field>
+            <Field label="Eventos">{session.event_count}</Field>
           </div>
 
           {/* Prompt */}
@@ -128,10 +174,24 @@ export function SessionDetail({ session, agents, projects, terminals, onClose }:
           )}
 
           {/* Tools Timeline */}
-          {toolEvents.length > 0 && (
+          {loadingEvents ? (
             <div>
               <label className="block text-2xs font-medium text-text-muted uppercase tracking-widest mb-2">
-                Ações ({session.toolCount})
+                Ações
+              </label>
+              <div className="space-y-1.5">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-2 py-1.5 px-2">
+                    <div className="h-4 w-12 shimmer rounded" />
+                    <div className="h-3 shimmer rounded flex-1" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : toolEvents.length > 0 ? (
+            <div>
+              <label className="block text-2xs font-medium text-text-muted uppercase tracking-widest mb-2">
+                Ações ({session.tool_count})
               </label>
               <div className="space-y-1 max-h-[250px] overflow-y-auto">
                 {toolEvents.map((e) => (
@@ -146,7 +206,7 @@ export function SessionDetail({ session, agents, projects, terminals, onClose }:
                 ))}
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* Response */}
           {session.response && (

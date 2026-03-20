@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect, useRef } from 'react';
 import type { EventFilters, EventType, Project, AgentWithStats, Terminal } from '@/lib/types';
 
 type ViewMode = 'summary' | 'all' | EventType;
@@ -58,10 +59,30 @@ function bestPerTitle(terminals: Terminal[]): Terminal[] {
 }
 
 export function FilterBar({ filters, onFiltersChange, projects, agents, terminals, viewMode, onViewModeChange }: FilterBarProps) {
+  // Search with 300ms debounce
+  const [searchInput, setSearchInput] = useState(filters.search ?? '');
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Sync external filter changes (e.g. clear)
+  useEffect(() => {
+    setSearchInput(filters.search ?? '');
+  }, [filters.search]);
+
+  const handleSearchChange = (value: string) => {
+    setSearchInput(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onFiltersChange({ ...filters, search: value || undefined });
+    }, 300);
+  };
+
   const hasFilters =
     filters.projectId !== undefined ||
     filters.agentId !== undefined ||
     filters.terminalId !== undefined ||
+    filters.search !== undefined ||
+    filters.since !== undefined ||
+    filters.until !== undefined ||
     viewMode !== 'summary';
 
   const selectClass =
@@ -87,8 +108,33 @@ export function FilterBar({ filters, onFiltersChange, projects, agents, terminal
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Line 1: Dropdowns */}
+      {/* Line 1: Search + Dropdowns */}
       <div className="flex items-center gap-2 flex-wrap">
+        {/* Search field */}
+        <div className="relative">
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            placeholder="Pesquisar prompts, respostas, tools..."
+            className="bg-surface-1/50 border border-border/50 text-text-secondary text-[11px] font-medium rounded-md pl-7 pr-7 py-1.5 w-[220px] hover:border-border focus:outline-none focus:border-accent-blue/30 transition-colors placeholder:text-text-muted/40"
+          />
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-text-muted/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          {searchInput && (
+            <button
+              onClick={() => handleSearchChange('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 flex items-center justify-center text-text-muted/50 hover:text-text-secondary transition-colors"
+              aria-label="Limpar busca"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+
         <div className="relative">
           <select
             className={selectClass}
@@ -141,6 +187,38 @@ export function FilterBar({ filters, onFiltersChange, projects, agents, terminal
           </select>
           <ChevronIcon />
         </div>
+
+        <input
+          type="datetime-local"
+          value={filters.since ?? ''}
+          onChange={(e) => onFiltersChange({ ...filters, since: e.target.value || undefined })}
+          title="Desde"
+          placeholder="Desde"
+          className={`${selectClass} w-[155px] text-[10px] ${filters.since ? 'text-text-secondary' : 'text-text-muted/40'}`}
+        />
+        <input
+          type="datetime-local"
+          value={filters.until ?? ''}
+          onChange={(e) => onFiltersChange({ ...filters, until: e.target.value || undefined })}
+          title="Até"
+          placeholder="Até"
+          className={`${selectClass} w-[155px] text-[10px] ${filters.until ? 'text-text-secondary' : 'text-text-muted/40'}`}
+        />
+
+        {filters.search && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-accent-violet/10 text-accent-violet border border-accent-violet/20">
+            &ldquo;{filters.search.length > 20 ? filters.search.slice(0, 20) + '…' : filters.search}&rdquo;
+            <button
+              onClick={() => handleSearchChange('')}
+              className="hover:text-accent-violet/80 transition-colors"
+              aria-label="Remover busca"
+            >
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </span>
+        )}
 
         {hasFilters && (
           <button

@@ -7,9 +7,10 @@ interface ProjectRowProps {
   project: Project;
   agents: Agent[];
   lastEventMessage: WsEventNew | null;
+  onAgentClick?: (agent: Agent) => void;
 }
 
-const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+import { TWELVE_HOURS_MS } from '@/lib/constants';
 
 function categorizeAgents(agents: Agent[]) {
   const now = Date.now();
@@ -42,7 +43,7 @@ function getFlashTrigger(agent: Agent, msg: WsEventNew | null): number {
   return msg?.agentId === agent.id ? msg.event.id : 0;
 }
 
-export function ProjectRow({ project, agents, lastEventMessage }: ProjectRowProps) {
+export function ProjectRow({ project, agents, lastEventMessage, onAgentClick }: ProjectRowProps) {
   const { working, active, available } = categorizeAgents(agents);
 
   return (
@@ -75,7 +76,7 @@ export function ProjectRow({ project, agents, lastEventMessage }: ProjectRowProp
           {available.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {available.map(a => (
-                <AgentCard key={a.id} agent={a} variant="chip" flashTrigger={getFlashTrigger(a, lastEventMessage)} />
+                <AgentCard key={a.id} agent={a} variant="chip" flashTrigger={getFlashTrigger(a, lastEventMessage)} onClick={onAgentClick} />
               ))}
             </div>
           )}
@@ -90,7 +91,7 @@ export function ProjectRow({ project, agents, lastEventMessage }: ProjectRowProp
           {active.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {active.map(a => (
-                <AgentCard key={a.id} agent={a} variant="chip" flashTrigger={getFlashTrigger(a, lastEventMessage)} />
+                <AgentCard key={a.id} agent={a} variant="chip" flashTrigger={getFlashTrigger(a, lastEventMessage)} onClick={onAgentClick} />
               ))}
             </div>
           )}
@@ -106,7 +107,7 @@ export function ProjectRow({ project, agents, lastEventMessage }: ProjectRowProp
           {working.length > 0 && (
             <div className="flex flex-col gap-2">
               {working.map(a => (
-                <AgentCard key={a.id} agent={a} variant="card" flashTrigger={getFlashTrigger(a, lastEventMessage)} />
+                <AgentCard key={a.id} agent={a} variant="card" flashTrigger={getFlashTrigger(a, lastEventMessage)} onClick={onAgentClick} />
               ))}
             </div>
           )}

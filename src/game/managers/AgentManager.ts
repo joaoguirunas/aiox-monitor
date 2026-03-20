@@ -189,6 +189,25 @@ export class AgentManager {
     }
   }
 
+  /** Find all sprite keys matching a given agent name + project_id.
+   *  Needed because WS broadcasts use positive IDs (agents table) while
+   *  syncAll uses negative IDs (terminal instances). */
+  private findKeysByAgent(projectId: number, name: string): string[] {
+    const keys: string[] = [];
+    // Direct key lookup for positive-ID format
+    const directKey = `${projectId}:${name}`;
+    if (this.sprites.has(directKey)) keys.push(directKey);
+    // Scan for negative-ID terminal-instance keys
+    for (const [key, sprite] of this.sprites) {
+      if (key === directKey) continue; // already added
+      if (sprite.agentName === name) {
+        const state = this.lastState.get(key);
+        if (state && state.projectId === projectId) keys.push(key);
+      }
+    }
+    return keys;
+  }
+
   // Update individual via WS: usa walk animation
   updateAgent(agent: Agent): void {
     // Skip @unknown agents
@@ -199,20 +218,25 @@ export class AgentManager {
       this.clusterManager.ensureCluster(agent.project_id, this.getProjectName(agent.project_id));
     }
 
-    const key = this.agentKey(agent);
-    const existing = this.sprites.get(key);
-    if (!existing && agent.status !== 'offline') {
+    // Find all sprites for this agent (handles both positive/negative ID keys)
+    const matchingKeys = this.findKeysByAgent(agent.project_id, agent.name);
+
+    if (matchingKeys.length === 0 && agent.status !== 'offline') {
       this.createAgent(agent, true);
       return;
     }
-    if (existing) {
+
+    for (const key of matchingKeys) {
+      const existing = this.sprites.get(key);
+      if (!existing) continue;
+
       // Always update tool state (even if status unchanged)
       this.applyToolState(existing, agent);
 
       // Skip transition if status and project haven't changed
       const prev = this.lastState.get(key);
       if (prev && prev.status === agent.status && prev.projectId === agent.project_id) {
-        return;
+        continue;
       }
       this.wandering.delete(key);
       this.lastState.set(key, { status: agent.status, projectId: agent.project_id });

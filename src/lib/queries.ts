@@ -5,6 +5,8 @@ import type {
   AgentWithStats,
   Terminal,
   Session,
+  SessionWithSummary,
+  SessionFilters,
   Event,
   EventFilters,
   CompanyConfig,
@@ -204,13 +206,51 @@ export function upsertTerminal(
     INSERT INTO terminals (project_id, pid, session_id, status, agent_name, agent_display_name, current_tool, current_input, window_title)
     VALUES (?, ?, ?, 'processing', ?, ?, ?, ?, ?)
     ON CONFLICT(project_id, pid) DO UPDATE SET
-      session_id         = COALESCE(excluded.session_id, session_id),
+      session_id         = COALESCE(excluded.session_id, terminals.session_id),
       status             = 'processing',
-      agent_name         = COALESCE(excluded.agent_name, agent_name),
-      agent_display_name = COALESCE(excluded.agent_display_name, agent_display_name),
-      current_tool       = COALESCE(excluded.current_tool, current_tool),
-      current_input      = COALESCE(excluded.current_input, current_input),
-      window_title       = COALESCE(excluded.window_title, window_title),
+      agent_name         = CASE
+        WHEN excluded.session_id IS NOT NULL
+         AND excluded.session_id != COALESCE(terminals.session_id, '')
+        THEN excluded.agent_name
+        ELSE COALESCE(excluded.agent_name, terminals.agent_name)
+      END,
+      agent_display_name = CASE
+        WHEN excluded.session_id IS NOT NULL
+         AND excluded.session_id != COALESCE(terminals.session_id, '')
+        THEN excluded.agent_display_name
+        ELSE COALESCE(excluded.agent_display_name, terminals.agent_display_name)
+      END,
+      current_tool       = CASE
+        WHEN excluded.session_id IS NOT NULL
+         AND excluded.session_id != COALESCE(terminals.session_id, '')
+        THEN excluded.current_tool
+        ELSE COALESCE(excluded.current_tool, terminals.current_tool)
+      END,
+      current_input      = CASE
+        WHEN excluded.session_id IS NOT NULL
+         AND excluded.session_id != COALESCE(terminals.session_id, '')
+        THEN excluded.current_input
+        ELSE COALESCE(excluded.current_input, terminals.current_input)
+      END,
+      window_title       = COALESCE(excluded.window_title, terminals.window_title),
+      current_tool_detail = CASE
+        WHEN excluded.session_id IS NOT NULL
+         AND excluded.session_id != COALESCE(terminals.session_id, '')
+        THEN NULL
+        ELSE terminals.current_tool_detail
+      END,
+      waiting_permission = CASE
+        WHEN excluded.session_id IS NOT NULL
+         AND excluded.session_id != COALESCE(terminals.session_id, '')
+        THEN 0
+        ELSE terminals.waiting_permission
+      END,
+      first_seen_at      = CASE
+        WHEN excluded.session_id IS NOT NULL
+         AND excluded.session_id != COALESCE(terminals.session_id, '')
+        THEN datetime('now')
+        ELSE terminals.first_seen_at
+      END,
       last_active        = datetime('now')
   `).run(
     projectId,
@@ -335,6 +375,93 @@ export function closeSession(sessionId: number): void {
   `).run(sessionId);
 }
 
+export function getSessions(filters: SessionFilters = {}): {
+  sessions: SessionWithSummary[];
+  total: number;
+  hasMore: boolean;
+} {
+  const conditions: string[] = [];
+  const params: (string | number | null)[] = [];
+
+  if (filters.projectId !== undefined) {
+    conditions.push('s.project_id = ?');
+    params.push(filters.projectId);
+  }
+  if (filters.agentId !== undefined) {
+    conditions.push('s.agent_id = ?');
+    params.push(filters.agentId);
+  }
+  if (filters.terminalId !== undefined) {
+    conditions.push('s.terminal_id = ?');
+    params.push(filters.terminalId);
+  }
+  if (filters.status !== undefined) {
+    conditions.push('s.status = ?');
+    params.push(filters.status);
+  }
+  if (filters.since !== undefined) {
+    conditions.push('s.started_at >= ?');
+    params.push(filters.since);
+  }
+  if (filters.until !== undefined) {
+    conditions.push('s.started_at <= ?');
+    params.push(filters.until);
+  }
+  if (filters.search) {
+    conditions.push('EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND (e.input_summary LIKE ? OR e.output_summary LIKE ?))');
+    const like = `%${filters.search}%`;
+    params.push(like, like);
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const limit = filters.limit ?? 20;
+  const offset = filters.offset ?? 0;
+
+  const countRow = db
+    .prepare(`SELECT COUNT(*) AS total FROM sessions s ${where}`)
+    .get(...params) as Row;
+  const total = (countRow.total as number) ?? 0;
+
+  const sessionRows = rows<SessionWithSummary & { tools: string | null }>(
+    db
+      .prepare(`
+        SELECT s.*,
+          (SELECT e.input_summary FROM events e
+           WHERE e.session_id = s.id AND e.type = 'UserPromptSubmit'
+           ORDER BY e.id ASC LIMIT 1) as prompt,
+          (SELECT e.input_summary FROM events e
+           WHERE e.session_id = s.id AND e.type IN ('Stop', 'SubagentStop')
+           ORDER BY e.id DESC LIMIT 1) as response,
+          (SELECT COUNT(*) FROM events e
+           WHERE e.session_id = s.id AND e.type = 'PreToolUse') as tool_count,
+          (SELECT GROUP_CONCAT(DISTINCT e.tool) FROM events e
+           WHERE e.session_id = s.id AND e.tool IS NOT NULL
+           AND e.type IN ('PreToolUse', 'PostToolUse')) as tools
+        FROM sessions s
+        ${where}
+        ORDER BY s.started_at DESC
+        LIMIT ? OFFSET ?
+      `)
+      .all(...params, limit, offset) as Row[],
+  );
+
+  // Convert tools from comma-separated string to array
+  const sessions: SessionWithSummary[] = sessionRows.map((s) => ({
+    ...s,
+    tools: s.tools ? s.tools.split(',') : [],
+  }));
+
+  return { sessions, total, hasMore: offset + sessions.length < total };
+}
+
+export function getSessionEvents(sessionId: number): Event[] {
+  return rows<Event>(
+    db
+      .prepare(`SELECT * FROM events WHERE session_id = ? ORDER BY id ASC`)
+      .all(sessionId) as Row[],
+  );
+}
+
 // ─── Events ──────────────────────────────────────────────────────────────────
 
 export function insertEvent(data: Omit<Event, 'id' | 'created_at'>): Event {
@@ -396,6 +523,15 @@ export function getEvents(filters: EventFilters = {}): {
   if (filters.since !== undefined) {
     conditions.push('created_at >= ?');
     params.push(filters.since);
+  }
+  if (filters.until !== undefined) {
+    conditions.push('created_at <= ?');
+    params.push(filters.until);
+  }
+  if (filters.search) {
+    conditions.push('(input_summary LIKE ? OR output_summary LIKE ?)');
+    const like = `%${filters.search}%`;
+    params.push(like, like);
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';

@@ -1,13 +1,24 @@
 'use client';
 
+import { useState, useCallback } from 'react';
 import { useKanban } from '@/hooks/useKanban';
 import { useProjectContext } from '@/contexts/ProjectContext';
 import { ProjectRow } from '@/components/kanban/ProjectRow';
-import type { WsEventNew } from '@/lib/types';
+import { AgentDetailPanel } from '@/components/kanban/AgentDetailPanel';
+import type { Agent, WsEventNew } from '@/lib/types';
 
 export default function KanbanPage() {
   const { columns, loading, lastMessage, refresh } = useKanban();
   const { selectedProjectId } = useProjectContext();
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+
+  const handleAgentClick = useCallback((agent: Agent) => {
+    setSelectedAgent(agent);
+  }, []);
+
+  const handleClosePanel = useCallback(() => {
+    setSelectedAgent(null);
+  }, []);
 
   const lastEventMessage =
     lastMessage?.type === 'event:new' ? (lastMessage as WsEventNew) : null;
@@ -84,9 +95,18 @@ export default function KanbanPage() {
             project={col.project}
             agents={col.agents}
             lastEventMessage={lastEventMessage}
+            onAgentClick={handleAgentClick}
           />
         ))}
       </div>
+      {/* Agent Detail Panel */}
+      {selectedAgent && (
+        <AgentDetailPanel
+          key={selectedAgent.id}
+          agent={selectedAgent}
+          onClose={handleClosePanel}
+        />
+      )}
     </main>
   );
 }

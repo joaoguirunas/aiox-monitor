@@ -100,6 +100,7 @@ export function initSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_events_created     ON events(created_at);
     CREATE INDEX IF NOT EXISTS idx_events_agent       ON events(agent_id);
     CREATE INDEX IF NOT EXISTS idx_events_terminal    ON events(terminal_id);
+    CREATE INDEX IF NOT EXISTS idx_events_session_type ON events(session_id, type);
   `);
 
   // Seed singleton row for company_config

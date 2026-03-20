@@ -69,6 +69,52 @@
 | 5.5 | Responsive Design e Polish Visual | Draft | 4.5 |
 | 5.6 | Preparação para npm publish | Draft | 5.3 |
 
+### Fase 6 — Transcript Intelligence (COMPLETA)
+
+| Story | Título | Status | Depende |
+|-------|--------|--------|---------|
+| 6.1 | JSONL Transcript Intelligence — Tool Granularity, Permission Detection & Spawn Effects | Ready for Review | 5.6 |
+
+### Fase 7 — Config Module: Operational Excellence (ACTIVA)
+
+| Story | Título | Status | Depende |
+|-------|--------|--------|---------|
+| 7.0 | PM2 Fast Restart — Node Directo + Build Pipeline Optimizado | Ready for Review | 6.1 |
+| 7.1 | Ganga Dashboard — Logs, Stats, Scope Control & Heartbeat | Draft | 7.0 |
+| 7.2 | Config UX Polish — Dirty State, Debounce & Build Warnings | Draft | 7.0 |
+| 7.3 | Skins Server-Persisted — localStorage → SQLite | Draft | 7.2 |
+| 7.4 | Event Retention Config — Slider na UI + Cleanup Manual | Draft | 7.0 |
+| 7.5 | Logo & Branding — Upload, Persistência e Display | Draft | 7.2 |
+
+> **Epic completa:** `docs/stories/EPIC-7.md`
+
+### Fase 8 — Empresa 2.0: Clareza, Performance & Estabilidade (PRÓXIMA)
+
+| Story | Título | Status | Depende |
+|-------|--------|--------|---------|
+| 8.1 | Persistência de Clusters por Projeto — Mesas Nunca Desaparecem | Draft | 6.1 |
+| 8.2 | Separação Visual entre Projetos — Floor Highlight, Borda & Label | Draft | 8.1 |
+| 8.3 | Performance: Sync Incremental & Redução de Carga Visual | Draft | 8.1 |
+| 8.4 | Atribuição Determinística de Slots por Projeto | Draft | 8.1 |
+| 8.5 | Consolidação de Cores & Cleanup Técnico | Draft | 8.2 |
+
+> **Referência:** `docs/Empresa.md` — diagnóstico completo, regras de comportamento, métricas baseline
+
+### Fase 9 — Lista 2.0: Reflexo Completo do Banco (PLANNED)
+
+| Story | Título | Status | Depende |
+|-------|--------|--------|---------|
+| 9.1 | API de Sessões + Paginação Server-Side | Draft | 6.1 |
+| 9.2 | Vista de Sessões com Dados Completos | Draft | 9.1 |
+| 9.3 | Paginação de Eventos Individuais | Draft | 9.1 |
+| 9.4 | Contadores Fiéis e Indicadores de Completude | Draft | 9.2, 9.3 |
+| 9.5 | Busca Textual Server-Side | Draft | 9.1 |
+| 9.6 | Filtro por Período + Duração de Sessão | Draft | 9.2 |
+| 9.7 | Testes, Cleanup & Export | Draft | 9.2, 9.3 |
+
+> **Epic completa:** `docs/epics/EPIC-9-LISTA-COMPLETE.md`
+> **Análise:** `docs/Lista.md` — diagnóstico completo, causa raiz, gaps, dependências
+
 ## Arquitetura
 
 ### Fluxo de Dados
@@ -249,12 +295,22 @@ const DISPLAY_NAMES: Record<string, string> = {
 ## Comandos
 
 ```bash
-npm run dev          # tsx --watch server.ts (porta 8888)
-npm run build        # next build (MATAR dev server antes — DB lock)
-npm run start        # NODE_ENV=production tsx server.ts
+npm run build        # esbuild server.ts + next build (compila tudo)
+npm run start        # node .server/server.mjs (produção)
 npm run lint         # next lint
 npm run typecheck    # tsc --noEmit
 npm run install-hook # Instalar hook Python no Claude Code
+
+# PM2 (sistema permanente — auto-inicia com o Mac)
+npm run pm2:start    # pm2 start ecosystem.config.cjs
+npm run pm2:restart  # pm2 restart aiox-monitor
+npm run pm2:stop     # pm2 stop aiox-monitor
+npm run pm2:logs     # pm2 logs aiox-monitor --lines 50
+npm run pm2:startup  # pm2 startup launchd && pm2 save
+npm run pm2:status   # pm2 status
+
+# Deploy de mudanças (SEMPRE este combo):
+npm run build && pm2 restart aiox-monitor
 ```
 
 ## Gotchas

@@ -10,8 +10,13 @@ import {
   getProjects,
   purgeOldInactiveTerminals,
 } from '../lib/queries';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 import { broadcast } from './ws-broadcaster';
 import { detectSystemTerminals } from './terminal-detector';
+import { db } from '../lib/db';
 import type { Terminal } from '../lib/types';
 
 // Cache window titles by PID — detected once, reused across events
@@ -157,22 +162,50 @@ export async function syncSystemTerminals(): Promise<void> {
       }
     }
 
+    // Pre-compute PGIDs for active DB terminals — single ps call instead of N forks
+    const activeDbPgids = new Set<string>();
+    const activePids = dbTerminals.filter(t => t.status !== 'inactive').map(t => String(t.pid));
+    if (activePids.length > 0) {
+      try {
+        const { stdout } = await execFileAsync('ps', ['-o', 'pid=,pgid=', '-p', activePids.join(',')], { encoding: 'utf-8', timeout: 3000 });
+        for (const line of stdout.trim().split('\n')) {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length >= 2 && parts[1]) activeDbPgids.add(parts[1]);
+        }
+      } catch { /* ps failed — skip PGID dedup */ }
+    }
+
     // ── 2. Create NEW terminals for detected PIDs not in the DB ──
     for (const [pid, info] of detectedByPid) {
       if (dbPidSet.has(pid)) continue;
       // Only create entries for confirmed claude processes
       if (!info.isClaudeProcess) continue;
 
+      // Dedup by session_id: if this session already exists in DB, skip creation
+      if (info.sessionId) {
+        const existingSession = db.prepare(
+          `SELECT 1 FROM terminals WHERE session_id = ? AND status != 'inactive' LIMIT 1`,
+        ).get(info.sessionId);
+        if (existingSession) continue;
+      }
+
+      // Dedup by PGID: if another active terminal shares the same process group, skip
+      try {
+        const { stdout: pgidOut } = await execFileAsync('ps', ['-o', 'pgid=', '-p', String(pid)], { encoding: 'utf-8', timeout: 2000 });
+        const pgidRaw = pgidOut.trim();
+        if (pgidRaw && activeDbPgids.has(pgidRaw)) continue;
+      } catch { /* ps failed — process died, proceed normally */ }
+
       // Determine which project this terminal belongs to.
-      // Try to match by window title to an existing project name, else use first project.
+      // Try to match by window title to an existing project name.
       const title = cleanTitle(info.windowName || info.profileName || '');
       let projectId: number | undefined;
       if (projects.length > 0) {
-        // Try matching by project name in window title
         const matched = projects.find(p =>
           title.toLowerCase().includes(p.name.toLowerCase()),
         );
-        projectId = matched?.id ?? projects[0].id;
+        projectId = matched?.id;
+        if (!projectId) continue; // Don't guess — skip terminals without verified project match
       }
       if (!projectId) continue;
 

@@ -4,7 +4,7 @@ import { WebSocketServer } from 'ws';
 import type { WebSocket as WsType } from 'ws';
 import { setBroadcaster } from './src/server/ws-broadcaster';
 import { startIdleDetector } from './src/server/idle-detector';
-import { cleanupOldEvents } from './src/server/cleanup';
+import { cleanupOldEvents, markStaleSessions } from './src/server/cleanup';
 import { syncSystemTerminals, cleanupStaleTerminals } from './src/server/terminal-tracker';
 import { getCompanyConfig } from './src/lib/queries';
 import { startGangaEngine, stopGangaEngine } from './src/server/ganga/ganga-engine';
@@ -89,6 +89,15 @@ app.prepare().then(() => {
       } catch { /* silent */ }
     }, 24 * 60 * 60 * 1000);
   }, 60_000);
+
+  // Mark stale active sessions as interrupted — run after 90s, then every 15 min
+  setTimeout(() => {
+    try { markStaleSessions(); } catch { /* silent on startup */ }
+
+    setInterval(() => {
+      try { markStaleSessions(); } catch { /* silent */ }
+    }, 15 * 60 * 1000);
+  }, 90_000);
 
   // ─── Ganga Ativo: start/stop based on config ──────────────────────────────
   let gangaInterval: ReturnType<typeof setInterval> | null = null;

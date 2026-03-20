@@ -4,15 +4,18 @@ import { EventRow } from './EventRow';
 interface EventTableProps {
   events: Event[];
   loading: boolean;
+  loadingMore?: boolean;
+  hasMore?: boolean;
   agents: AgentWithStats[];
   projects: Project[];
   terminals: Terminal[];
   onRowClick: (event: Event) => void;
+  onLoadMore?: () => void;
 }
 
 const COLUMNS = ['Timestamp', 'Projeto', 'Agente', 'Terminal', 'COD', 'Tipo', 'Tool', 'Descrição'];
 
-export function EventTable({ events, loading, agents, projects, terminals, onRowClick }: EventTableProps) {
+export function EventTable({ events, loading, loadingMore, hasMore, agents, projects, terminals, onRowClick, onLoadMore }: EventTableProps) {
   const agentMap = new Map(agents.map((a) => [a.id, a]));
   const projectMap = new Map(projects.map((p) => [p.id, p]));
   const terminalMap = new Map(terminals.map((t) => [t.id, t]));
@@ -75,6 +78,26 @@ export function EventTable({ events, loading, agents, projects, terminals, onRow
             })}
         </tbody>
       </table>
+
+      {/* Load more button */}
+      {hasMore && !loading && (
+        <div className="flex justify-center py-3 border-t border-border/20">
+          <button
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            className="px-4 py-1.5 text-[11px] font-medium text-text-muted hover:text-text-secondary rounded-md border border-border/50 hover:border-border transition-colors disabled:opacity-50"
+          >
+            {loadingMore ? (
+              <span className="flex items-center gap-2">
+                <span className="w-3 h-3 border border-text-muted/40 border-t-text-muted rounded-full animate-spin" />
+                A carregar...
+              </span>
+            ) : (
+              'Carregar mais'
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

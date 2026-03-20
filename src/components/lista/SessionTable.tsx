@@ -1,19 +1,21 @@
-import type { AgentWithStats, Project, Terminal } from '@/lib/types';
+import type { AgentWithStats, Project, Terminal, SessionWithSummary } from '@/lib/types';
 import { SessionRow } from './SessionRow';
-import type { SessionGroup } from './SessionRow';
 
 interface SessionTableProps {
-  sessions: SessionGroup[];
+  sessions: SessionWithSummary[];
   loading: boolean;
+  loadingMore?: boolean;
+  hasMore?: boolean;
   agents: AgentWithStats[];
   projects: Project[];
   terminals: Terminal[];
-  onRowClick: (session: SessionGroup) => void;
+  onRowClick: (session: SessionWithSummary) => void;
+  onLoadMore?: () => void;
 }
 
-const COLUMNS = ['Timestamp', 'Projeto', 'Agente', 'Terminal', 'COD', 'Prompt / Resposta', 'Tools', 'Status'];
+const COLUMNS = ['Timestamp', 'Projeto', 'Agente', 'Terminal', 'COD', 'Prompt / Resposta', 'Tools', 'Duração', 'Status'];
 
-export function SessionTable({ sessions, loading, agents, projects, terminals, onRowClick }: SessionTableProps) {
+export function SessionTable({ sessions, loading, loadingMore, hasMore, agents, projects, terminals, onRowClick, onLoadMore }: SessionTableProps) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border/40 bg-surface-1/30 w-full">
       <table className="w-full text-left border-collapse">
@@ -54,9 +56,9 @@ export function SessionTable({ sessions, loading, agents, projects, terminals, o
           )}
 
           {!loading &&
-            sessions.map((session, i) => (
+            sessions.map((session) => (
               <SessionRow
-                key={session.sessionId ?? `s-${i}`}
+                key={session.id}
                 session={session}
                 agents={agents}
                 projects={projects}
@@ -66,6 +68,26 @@ export function SessionTable({ sessions, loading, agents, projects, terminals, o
             ))}
         </tbody>
       </table>
+
+      {/* Load more button */}
+      {hasMore && !loading && (
+        <div className="flex justify-center py-3 border-t border-border/20">
+          <button
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            className="px-4 py-1.5 text-[11px] font-medium text-text-muted hover:text-text-secondary rounded-md border border-border/50 hover:border-border transition-colors disabled:opacity-50"
+          >
+            {loadingMore ? (
+              <span className="flex items-center gap-2">
+                <span className="w-3 h-3 border border-text-muted/40 border-t-text-muted rounded-full animate-spin" />
+                A carregar...
+              </span>
+            ) : (
+              'Carregar mais'
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

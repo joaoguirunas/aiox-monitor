@@ -5,7 +5,7 @@
  * Inspired by pixel-agents (github.com/pablodelucca/pixel-agents).
  */
 
-import { readFile, stat } from 'node:fs/promises';
+import { open, stat } from 'node:fs/promises';
 
 // ─── Tool Status Mapping ────────────────────────────────────────────────────
 
@@ -91,9 +91,21 @@ export async function parseIncremental(
 
   if (fileSize <= state.offset) return [];
 
-  // Read only the new bytes
-  const buf = await readFile(filePath);
-  const newData = buf.subarray(state.offset).toString('utf-8');
+  // Read ONLY the new bytes using file handle with offset (not the entire file)
+  const bytesToRead = fileSize - state.offset;
+  let newData: string;
+  try {
+    const fh = await open(filePath, 'r');
+    try {
+      const buf = Buffer.alloc(bytesToRead);
+      await fh.read(buf, 0, bytesToRead, state.offset);
+      newData = buf.toString('utf-8');
+    } finally {
+      await fh.close();
+    }
+  } catch {
+    return [];
+  }
   state.offset = fileSize;
 
   // Combine with any partial line from last read

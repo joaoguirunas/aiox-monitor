@@ -1,4 +1,7 @@
-import { execSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 export interface SystemTerminalInfo {
   app: string;
@@ -17,25 +20,43 @@ export interface SystemTerminalInfo {
   isClaudeProcess?: boolean;
 }
 
-function runSilent(cmd: string, timeout = 5000): string {
+const SHELL_ENV = { ...process.env, PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin' };
+
+async function runAsync(cmd: string, args: string[], timeout = 5000): Promise<string> {
   try {
-    return execSync(cmd, {
+    const { stdout } = await execFileAsync(cmd, args, {
       encoding: 'utf-8',
       timeout,
       maxBuffer: 1024 * 1024,
-      env: { ...process.env, PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin' },
-    }).trim();
+      env: SHELL_ENV,
+    });
+    return stdout.trim();
   } catch {
     return '';
   }
 }
 
-function isAppRunning(appName: string): boolean {
-  return runSilent(`pgrep -x "${appName}" 2>/dev/null`, 2000).length > 0;
+async function runShellAsync(script: string, timeout = 5000): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync('/bin/sh', ['-c', script], {
+      encoding: 'utf-8',
+      timeout,
+      maxBuffer: 1024 * 1024,
+      env: SHELL_ENV,
+    });
+    return stdout.trim();
+  } catch {
+    return '';
+  }
 }
 
-function detectITerm2(): SystemTerminalInfo[] {
-  if (!isAppRunning('iTerm2')) return [];
+async function isAppRunning(appName: string): Promise<boolean> {
+  const result = await runAsync('pgrep', ['-x', appName], 2000);
+  return result.length > 0;
+}
+
+async function detectITerm2(): Promise<SystemTerminalInfo[]> {
+  if (!(await isAppRunning('iTerm2'))) return [];
 
   const script = `
     var app = Application('iTerm2');
@@ -72,7 +93,7 @@ function detectITerm2(): SystemTerminalInfo[] {
     JSON.stringify(results);
   `;
 
-  const raw = runSilent(`osascript -l JavaScript -e '${script.replace(/'/g, "'\\''")}' 2>/dev/null`);
+  const raw = await runAsync('osascript', ['-l', 'JavaScript', '-e', script]);
   if (!raw) return [];
   try {
     const sessions: SystemTerminalInfo[] = JSON.parse(raw);
@@ -82,8 +103,8 @@ function detectITerm2(): SystemTerminalInfo[] {
   }
 }
 
-function detectTerminalApp(): SystemTerminalInfo[] {
-  if (!isAppRunning('Terminal')) return [];
+async function detectTerminalApp(): Promise<SystemTerminalInfo[]> {
+  if (!(await isAppRunning('Terminal'))) return [];
 
   const script = `
     var app = Application('Terminal');
@@ -118,7 +139,7 @@ function detectTerminalApp(): SystemTerminalInfo[] {
     JSON.stringify(results);
   `;
 
-  const raw = runSilent(`osascript -l JavaScript -e '${script.replace(/'/g, "'\\''")}' 2>/dev/null`);
+  const raw = await runAsync('osascript', ['-l', 'JavaScript', '-e', script]);
   if (!raw) return [];
   try {
     const sessions: SystemTerminalInfo[] = JSON.parse(raw);
@@ -128,28 +149,38 @@ function detectTerminalApp(): SystemTerminalInfo[] {
   }
 }
 
-function enrichWithPids(sessions: SystemTerminalInfo[]): SystemTerminalInfo[] {
+async function enrichWithPids(sessions: SystemTerminalInfo[]): Promise<SystemTerminalInfo[]> {
+  // Batch: get all PIDs with their TTYs and commands in a single ps call
+  const psOutput = await runShellAsync('ps -e -o tty=,pid=,comm= 2>/dev/null', 3000);
+  if (!psOutput) return sessions;
+
+  // Build TTY → entries map
+  const ttyMap = new Map<string, { pid: number; comm: string }[]>();
+  for (const line of psOutput.split('\n')) {
+    const match = line.trim().match(/^(\S+)\s+(\d+)\s+(.+)$/);
+    if (!match) continue;
+    const [, tty, pid, comm] = match;
+    const entries = ttyMap.get(tty) ?? [];
+    entries.push({ pid: parseInt(pid, 10), comm: comm.trim() });
+    ttyMap.set(tty, entries);
+  }
+
   for (const session of sessions) {
     if (!session.tty) continue;
     const ttyName = session.tty.replace('/dev/', '');
-    // Find the `claude` process PID on this TTY — this matches what the hook sends via os.getppid()
-    const claudePid = runSilent(
-      `ps -t ${ttyName} -o pid= -o comm= 2>/dev/null | grep claude | head -1 | awk '{print $1}'`,
-      2000,
-    );
-    if (claudePid) {
-      session.pid = parseInt(claudePid, 10);
+    const entries = ttyMap.get(ttyName);
+    if (!entries || entries.length === 0) continue;
+
+    // Find claude process on this TTY
+    const claudeEntry = entries.find(e => /\bclaude\b/.test(e.comm));
+    if (claudeEntry) {
+      session.pid = claudeEntry.pid;
       session.isClaudeProcess = true;
     } else {
-      // Fallback: last foreground process (non-login, non-shell)
-      const pid = runSilent(
-        `ps -t ${ttyName} -o pid= -o comm= 2>/dev/null | grep -v "^$" | tail -1 | awk '{print $1}'`,
-        2000,
-      );
-      if (pid) {
-        session.pid = parseInt(pid, 10);
-        session.isClaudeProcess = false;
-      }
+      // Fallback: last process
+      const last = entries[entries.length - 1];
+      session.pid = last.pid;
+      session.isClaudeProcess = false;
     }
   }
   return sessions;
@@ -158,8 +189,12 @@ function enrichWithPids(sessions: SystemTerminalInfo[]): SystemTerminalInfo[] {
 export async function detectSystemTerminals(): Promise<SystemTerminalInfo[]> {
   const results: SystemTerminalInfo[] = [];
 
-  results.push(...detectITerm2());
-  results.push(...detectTerminalApp());
+  // Run both detectors in parallel
+  const [iterm, terminal] = await Promise.all([
+    detectITerm2(),
+    detectTerminalApp(),
+  ]);
 
+  results.push(...iterm, ...terminal);
   return results;
 }

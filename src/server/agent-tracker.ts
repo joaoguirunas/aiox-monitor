@@ -1,5 +1,6 @@
 import { upsertAgent, updateAgentStatus } from '../lib/queries';
 import { broadcast } from './ws-broadcaster';
+import { db } from '../lib/db';
 import type { Agent, EventType } from '../lib/types';
 
 const DISPLAY_NAMES: Record<string, string> = {
@@ -18,6 +19,31 @@ const DISPLAY_NAMES: Record<string, string> = {
 
 const STOP_TYPES = new Set<EventType>(['Stop', 'SubagentStop']);
 
+/** Fetch terminal enrichment fields for the most recent terminal of an agent */
+function getTerminalEnrichment(projectId: number, agentName: string): { waiting_permission: 0 | 1; current_tool_detail: string | null; terminal_count: number } {
+  try {
+    const row = db.prepare(
+      `SELECT waiting_permission, current_tool_detail
+       FROM terminals
+       WHERE agent_name = ? AND project_id = ? AND status IN ('processing', 'active')
+       ORDER BY last_active DESC LIMIT 1`
+    ).get(agentName, projectId) as { waiting_permission?: number; current_tool_detail?: string } | undefined;
+
+    const countRow = db.prepare(
+      `SELECT COUNT(*) as cnt FROM terminals
+       WHERE agent_name = ? AND project_id = ? AND status IN ('processing', 'active')`
+    ).get(agentName, projectId) as { cnt: number } | undefined;
+
+    return {
+      waiting_permission: (row?.waiting_permission ?? 0) as 0 | 1,
+      current_tool_detail: row?.current_tool_detail ?? null,
+      terminal_count: countRow?.cnt ?? 0,
+    };
+  } catch {
+    return { waiting_permission: 0, current_tool_detail: null, terminal_count: 0 };
+  }
+}
+
 export function trackAgent(
   projectId: number,
   agentName: string,
@@ -29,8 +55,9 @@ export function trackAgent(
 
   if (STOP_TYPES.has(eventType)) {
     updateAgentStatus(projectId, agentName, 'idle', null);
-    const updated: Agent = { ...agent, status: 'idle', current_tool: undefined };
-    try { broadcast({ type: 'agent:update', agent: updated, projectId }); } catch { /* fire-and-forget */ }
+    const enrichment = getTerminalEnrichment(projectId, agentName);
+    const updated: Agent = { ...agent, status: 'idle', current_tool: undefined, waiting_permission: 0, current_tool_detail: undefined };
+    try { broadcast({ type: 'agent:update', agent: { ...updated, ...enrichment }, projectId }); } catch { /* fire-and-forget */ }
     return updated;
   }
 
@@ -40,8 +67,9 @@ export function trackAgent(
     updateAgentStatus(projectId, agentName, status, toolName ?? null);
   }
 
+  const enrichment = getTerminalEnrichment(projectId, agentName);
   const updated: Agent = { ...agent, status, current_tool: toolName };
-  try { broadcast({ type: 'agent:update', agent: updated, projectId }); } catch { /* fire-and-forget */ }
+  try { broadcast({ type: 'agent:update', agent: { ...updated, ...enrichment }, projectId }); } catch { /* fire-and-forget */ }
   return updated;
 }
 

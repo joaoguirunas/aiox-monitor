@@ -35,6 +35,8 @@ export async function GET(request: Request): Promise<Response> {
       terminalId,
       type: typeParam ? (typeParam as EventType) : undefined,
       since: searchParams.get('since') ?? undefined,
+      until: searchParams.get('until') ?? undefined,
+      search: searchParams.get('search') ?? undefined,
       limit,
       offset,
     };

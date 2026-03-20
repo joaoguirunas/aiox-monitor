@@ -1,36 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { Agent, AgentStatus } from '@/lib/types';
-
-const STATUS_DOT: Record<AgentStatus, string> = {
-  working: 'bg-emerald-400',
-  idle:    'bg-zinc-500',
-  break:   'bg-amber-400',
-  offline: 'bg-zinc-700',
-};
-
-const AGENT_COLORS: Record<string, string> = {
-  '@dev': '#6366f1',
-  '@qa': '#34d399',
-  '@architect': '#a78bfa',
-  '@pm': '#fb923c',
-  '@sm': '#22d3ee',
-  '@po': '#fbbf24',
-  '@analyst': '#818cf8',
-  '@devops': '#f87171',
-  '@data-engineer': '#f472b6',
-  '@ux-design-expert': '#e879f9',
-  '@aiox-master': '#fbbf24',
-};
+import type { Agent, AgentWithStats } from '@/lib/types';
+import { AGENT_COLORS, STATUS_DOT } from '@/lib/constants';
 
 interface AgentCardProps {
-  agent: Agent;
+  agent: Agent | AgentWithStats;
   flashTrigger?: number;
   variant?: 'chip' | 'card';
+  onClick?: (agent: Agent) => void;
 }
 
-export function AgentCard({ agent, flashTrigger = 0, variant = 'chip' }: AgentCardProps) {
+export function AgentCard({ agent, flashTrigger = 0, variant = 'chip', onClick }: AgentCardProps) {
+  const terminalCount = 'terminal_count' in agent ? (agent as AgentWithStats).terminal_count : 0;
   const [flash, setFlash] = useState(false);
 
   useEffect(() => {
@@ -47,7 +29,8 @@ export function AgentCard({ agent, flashTrigger = 0, variant = 'chip' }: AgentCa
   if (variant === 'card') {
     return (
       <div
-        className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-surface-2/50 border border-border/40 transition-colors duration-150 ${flash ? 'border-accent-blue/30' : ''}`}
+        className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-surface-2/50 border border-border/40 transition-colors duration-150 ${flash ? 'border-accent-blue/30' : ''} ${onClick ? 'cursor-pointer hover:border-border/60' : ''}`}
+        onClick={onClick ? () => onClick(agent) : undefined}
       >
         {/* Avatar */}
         <span
@@ -59,18 +42,36 @@ export function AgentCard({ agent, flashTrigger = 0, variant = 'chip' }: AgentCa
 
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-medium text-text-primary truncate">{displayName}</p>
-          {agent.current_tool && (
-            <p className="text-[11px] text-text-muted font-mono truncate mt-0.5">
-              {agent.current_tool}
+          {(agent.current_tool_detail || agent.current_tool) && (
+            <p className="text-[11px] text-text-muted font-mono truncate mt-0.5" title={agent.current_tool_detail ?? agent.current_tool}>
+              {(agent.current_tool_detail ?? agent.current_tool ?? '').length > 40
+                ? `${(agent.current_tool_detail ?? agent.current_tool ?? '').slice(0, 40)}…`
+                : (agent.current_tool_detail ?? agent.current_tool)}
             </p>
+          )}
+          {agent.waiting_permission === 1 && (
+            <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-400/15 text-amber-400 animate-pulse">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              Aguarda permissão
+            </span>
           )}
         </div>
 
-        {/* Pulse */}
-        <span className="relative flex-shrink-0">
-          <span className="block w-2 h-2 rounded-full bg-emerald-400" />
-          <span className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-400 animate-status-pulse" />
-        </span>
+        {/* Terminal count + Pulse */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {terminalCount > 1 && (
+            <span
+              className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-surface-3 text-[10px] font-medium text-text-secondary"
+              title={`${terminalCount} terminais activos`}
+            >
+              {terminalCount}
+            </span>
+          )}
+          <span className="relative">
+            <span className="block w-2 h-2 rounded-full bg-emerald-400" />
+            <span className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-400 animate-status-pulse" />
+          </span>
+        </div>
       </div>
     );
   }
@@ -78,7 +79,8 @@ export function AgentCard({ agent, flashTrigger = 0, variant = 'chip' }: AgentCa
   // Chip variant — compact horizontal pill
   return (
     <span
-      className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-surface-2/40 border border-border/30 transition-colors duration-150 hover:bg-surface-2/60 ${flash ? 'border-accent-blue/30' : ''}`}
+      className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-surface-2/40 border border-border/30 transition-colors duration-150 hover:bg-surface-2/60 ${flash ? 'border-accent-blue/30' : ''} ${onClick ? 'cursor-pointer' : ''}`}
+      onClick={onClick ? () => onClick(agent) : undefined}
     >
       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[agent.status]}`} />
       <span
@@ -87,6 +89,17 @@ export function AgentCard({ agent, flashTrigger = 0, variant = 'chip' }: AgentCa
       >
         {displayName}
       </span>
+      {terminalCount > 1 && (
+        <span
+          className="text-[10px] font-medium text-text-secondary bg-surface-3 rounded-full px-1 flex-shrink-0"
+          title={`${terminalCount} terminais activos`}
+        >
+          x{terminalCount}
+        </span>
+      )}
+      {agent.waiting_permission === 1 && (
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse flex-shrink-0" title="Aguarda permissão" />
+      )}
     </span>
   );
 }

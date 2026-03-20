@@ -13,6 +13,8 @@ export interface Agent {
   display_name?: string;
   status: AgentStatus;
   current_tool?: string;
+  current_tool_detail?: string;
+  waiting_permission?: 0 | 1;
   last_active: string;
 }
 
@@ -108,12 +110,33 @@ export interface GangaHeartbeat {
   lastCheck: string;
 }
 
+export interface SessionWithSummary extends Session {
+  prompt: string | null;
+  response: string | null;
+  tool_count: number;
+  tools: string[];
+}
+
+export interface SessionFilters {
+  projectId?: number;
+  agentId?: number;
+  terminalId?: number;
+  status?: 'active' | 'completed' | 'interrupted';
+  since?: string;
+  until?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export interface EventFilters {
   projectId?: number;
   agentId?: number;
   terminalId?: number;
   type?: EventType;
   since?: string;
+  until?: string;
+  search?: string;
   limit?: number;
   offset?: number;
 }

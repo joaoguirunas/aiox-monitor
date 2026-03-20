@@ -17,3 +17,21 @@ export function cleanupOldEvents(retentionDays: number = 30): { events: number; 
 
   return { events, sessions };
 }
+
+export function markStaleSessions(): number {
+  const result = db.prepare(`
+    UPDATE sessions SET status = 'interrupted'
+    WHERE status = 'active'
+    AND id NOT IN (
+      SELECT DISTINCT session_id FROM events
+      WHERE created_at > datetime('now', '-1 hour')
+      AND session_id IS NOT NULL
+    )
+  `).run();
+
+  const count = Number(result.changes);
+  if (count > 0) {
+    console.log(`[cleanup] Marked ${count} stale sessions as interrupted`);
+  }
+  return count;
+}

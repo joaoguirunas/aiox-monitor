@@ -8,8 +8,9 @@ import { useWebSocket } from '@/hooks/useWebSocket';
 import { useProjectContext } from '@/contexts/ProjectContext';
 import {
   setGameInstance, clearGameInstance, syncAgents, syncProjects, setTheme,
+  updateAgent,
 } from '@/game/bridge/react-phaser-bridge';
-import type { WsEventNew, CompanyConfig, ThemeName } from '@/lib/types';
+import type { WsAgentUpdate, WsEventNew, CompanyConfig, ThemeName } from '@/lib/types';
 
 export function PhaserGame() {
   const gameRef = useRef<Phaser.Game | null>(null);
@@ -19,6 +20,7 @@ export function PhaserGame() {
   const selectedProjectIdRef = useRef(selectedProjectId);
   selectedProjectIdRef.current = selectedProjectId;
 
+  /** Full sync: agents + projects + config (init, reconnect, manual refresh) */
   const fetchAndSync = useCallback(() => {
     const pid = selectedProjectIdRef.current;
     const agentsUrl = pid ? `/api/agents?expand=terminals&project_id=${pid}` : '/api/agents?expand=terminals';
@@ -31,6 +33,16 @@ export function PhaserGame() {
         syncAgents(agents as import('@/lib/types').Agent[]);
         if (config.theme) setTheme(config.theme);
       })
+      .catch(() => {});
+  }, []);
+
+  /** Lightweight sync: agents only (WS terminal/event updates) */
+  const fetchAgentsOnly = useCallback(() => {
+    const pid = selectedProjectIdRef.current;
+    const url = pid ? `/api/agents?expand=terminals&project_id=${pid}` : '/api/agents?expand=terminals';
+    fetch(url)
+      .then(res => res.json())
+      .then(agents => syncAgents(agents as import('@/lib/types').Agent[]))
       .catch(() => {});
   }, []);
 
@@ -81,34 +93,29 @@ export function PhaserGame() {
   useEffect(() => {
     if (!lastMessage) return;
 
-    if (
-      lastMessage.type === 'agent:update'
-      || lastMessage.type === 'event:new'
-      || lastMessage.type === 'terminal:update'
-    ) {
-      // Throttled re-fetch: max once every 2 seconds
+    // agent:update → push directly to Phaser (no HTTP round-trip, no throttle)
+    if (lastMessage.type === 'agent:update') {
+      const msg = lastMessage as WsAgentUpdate;
+      if (selectedProjectId && msg.projectId !== selectedProjectId) return;
+      updateAgent(msg.agent);
+      return;
+    }
+
+    // terminal:update / event:new → throttled agents-only re-fetch (1 HTTP instead of 2-3)
+    if (lastMessage.type === 'event:new' || lastMessage.type === 'terminal:update') {
       const now = Date.now();
       if (now - lastSyncRef.current < 2000) return;
       lastSyncRef.current = now;
       const projectId = 'projectId' in lastMessage ? (lastMessage as WsEventNew).projectId : undefined;
       if (selectedProjectId && projectId && projectId !== selectedProjectId) return;
-      const url = selectedProjectId
-        ? `/api/agents?expand=terminals&project_id=${selectedProjectId}`
-        : '/api/agents?expand=terminals';
-      Promise.all([fetch(url), fetch('/api/projects')])
-        .then(([agentsRes, projRes]) => Promise.all([agentsRes.json(), projRes.json()]))
-        .then(([agents, projects]) => {
-          syncProjects(projects);
-          syncAgents(agents);
-        })
-        .catch(() => {});
+      fetchAgentsOnly();
     }
 
     if (lastMessage.type === 'theme:change') {
       const { theme } = lastMessage as { type: 'theme:change'; theme: ThemeName };
       setTheme(theme);
     }
-  }, [lastMessage, selectedProjectId]);
+  }, [lastMessage, selectedProjectId, fetchAgentsOnly]);
 
   return (
     <div className="relative w-full" style={{ height: `calc(100vh - ${NAVBAR_HEIGHT}px)` }}>

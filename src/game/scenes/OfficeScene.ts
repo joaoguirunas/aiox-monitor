@@ -52,6 +52,8 @@ export class OfficeScene extends Phaser.Scene {
   private rugSprites: Phaser.GameObjects.Image[] = [];
   private wallGraphics!: Phaser.GameObjects.Graphics;
   private starfield: Phaser.GameObjects.Graphics | null = null;
+  private nebula: Phaser.GameObjects.Graphics | null = null;
+  private planets: Phaser.GameObjects.Container | null = null;
   private ambientLayer: Phaser.GameObjects.Graphics | null = null;
   private dustParticles: Phaser.GameObjects.Arc[] = [];
 
@@ -63,7 +65,9 @@ export class OfficeScene extends Phaser.Scene {
     this.currentTheme = getTheme('moderno');
     this.cameras.main.setBackgroundColor(this.currentTheme.backgroundColor);
 
+    this.createNebula();
     this.createStarfield();
+    this.createPlanets();
 
     this.floorGraphics = this.add.graphics();
     this.wallGraphics = this.add.graphics();
@@ -160,6 +164,94 @@ export class OfficeScene extends Phaser.Scene {
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
+  }
+
+  // ── Nebula ────────────────────────────────────
+  private createNebula(): void {
+    if (this.nebula) this.nebula.destroy();
+    const g = this.add.graphics().setDepth(-12);
+    g.setScrollFactor(0.05);
+
+    // Large diffuse nebula clouds
+    const clouds: { x: number; y: number; rx: number; ry: number; color: number; alpha: number }[] = [
+      { x: 300,  y: 200,  rx: 280, ry: 140, color: 0x4422aa, alpha: 0.04 },
+      { x: 350,  y: 220,  rx: 200, ry: 100, color: 0x6633cc, alpha: 0.03 },
+      { x: 1400, y: 600,  rx: 320, ry: 160, color: 0x2244aa, alpha: 0.035 },
+      { x: 1450, y: 580,  rx: 220, ry: 110, color: 0x3366dd, alpha: 0.025 },
+      { x: 800,  y: 900,  rx: 250, ry: 130, color: 0x882244, alpha: 0.03 },
+    ];
+
+    for (const c of clouds) {
+      g.fillStyle(c.color, c.alpha);
+      g.fillEllipse(c.x, c.y, c.rx * 2, c.ry * 2);
+      // Inner brighter core
+      g.fillStyle(c.color, c.alpha * 1.5);
+      g.fillEllipse(c.x, c.y, c.rx, c.ry);
+    }
+
+    this.nebula = g;
+  }
+
+  // ── Planets ──────────────────────────────────
+  private createPlanets(): void {
+    if (this.planets) this.planets.destroy();
+    const container = this.add.container(0, 0).setDepth(-11);
+    container.setScrollFactor(0.08);
+
+    const planetDefs: {
+      x: number; y: number; radius: number;
+      baseColor: number; shadowColor: number; glowColor: number;
+      glowAlpha: number; rings?: boolean; ringColor?: number;
+    }[] = [
+      // Large gas giant — top-right, purple/blue
+      { x: 1600, y: 120, radius: 55, baseColor: 0x3b2d6b, shadowColor: 0x1a1040, glowColor: 0x6366f1, glowAlpha: 0.12, rings: true, ringColor: 0x8888cc },
+      // Medium rocky planet — left, warm red/orange
+      { x: 150, y: 700, radius: 30, baseColor: 0x7a3322, shadowColor: 0x3a1510, glowColor: 0xcc5533, glowAlpha: 0.1 },
+      // Small icy moon — center-top
+      { x: 900, y: 60, radius: 14, baseColor: 0x4488aa, shadowColor: 0x224466, glowColor: 0x66ccee, glowAlpha: 0.15 },
+      // Distant tiny planet — far right
+      { x: 1850, y: 800, radius: 10, baseColor: 0x556644, shadowColor: 0x2a3322, glowColor: 0x88aa66, glowAlpha: 0.08 },
+      // Medium blue planet — bottom-left
+      { x: 400, y: 1000, radius: 22, baseColor: 0x2244aa, shadowColor: 0x112255, glowColor: 0x4488ff, glowAlpha: 0.1 },
+    ];
+
+    for (const p of planetDefs) {
+      const g = this.add.graphics();
+
+      // Atmospheric glow (outermost)
+      g.fillStyle(p.glowColor, p.glowAlpha * 0.4);
+      g.fillCircle(p.x, p.y, p.radius * 2.5);
+      g.fillStyle(p.glowColor, p.glowAlpha * 0.7);
+      g.fillCircle(p.x, p.y, p.radius * 1.6);
+      g.fillStyle(p.glowColor, p.glowAlpha);
+      g.fillCircle(p.x, p.y, p.radius * 1.2);
+
+      // Planet body — shadow side (offset circle for 3D illusion)
+      g.fillStyle(p.shadowColor, 0.9);
+      g.fillCircle(p.x, p.y, p.radius);
+
+      // Lit hemisphere
+      g.fillStyle(p.baseColor, 0.85);
+      g.fillCircle(p.x - p.radius * 0.15, p.y - p.radius * 0.1, p.radius * 0.92);
+
+      // Specular highlight
+      g.fillStyle(0xffffff, 0.06);
+      g.fillCircle(p.x - p.radius * 0.3, p.y - p.radius * 0.3, p.radius * 0.4);
+
+      // Rings (Saturn-like)
+      if (p.rings && p.ringColor) {
+        g.lineStyle(2, p.ringColor, 0.2);
+        g.strokeEllipse(p.x, p.y, p.radius * 3.5, p.radius * 0.8);
+        g.lineStyle(1.5, p.ringColor, 0.15);
+        g.strokeEllipse(p.x, p.y, p.radius * 4.2, p.radius * 1);
+        g.lineStyle(1, p.ringColor, 0.1);
+        g.strokeEllipse(p.x, p.y, p.radius * 5, p.radius * 1.2);
+      }
+
+      container.add(g);
+    }
+
+    this.planets = container;
   }
 
   // ── Dust Particles ─────────────────────────

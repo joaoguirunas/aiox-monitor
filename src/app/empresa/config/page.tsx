@@ -73,7 +73,7 @@ export default function CompanyConfigPage() {
 
   useEffect(() => {
     if (!lastMessage) return;
-    if (lastMessage.type === 'project:update' || lastMessage.type === 'event:new' || lastMessage.type === 'agent:update') {
+    if (lastMessage.type === 'project:update') {
       loadProjectsDebounced();
     }
   }, [lastMessage, loadProjectsDebounced]);

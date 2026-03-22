@@ -158,8 +158,10 @@ export function processEvent(payload: EventPayload): ProcessedEvent {
     broadcast({ type: 'event:new', event, projectId: project.id, agentId: agent.id });
   } catch { /* never block event processing */ }
 
-  // 8. On Stop/SubagentStop: deactivate terminal + close session
-  if (STOP_TYPES.has(eventType) && terminal) {
+  // 8. On Stop: deactivate terminal + close session
+  //    SubagentStop means a spawned subagent finished — the parent conversation
+  //    is still active, so we must NOT deactivate the terminal or close the session.
+  if (eventType === 'Stop' && terminal) {
     deactivateTerminal(project.id, terminal.pid);
     if (sessionId !== undefined) {
       closeSession(sessionId);

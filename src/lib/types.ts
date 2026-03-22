@@ -33,6 +33,7 @@ export interface Terminal {
   window_title?: string;
   current_tool_detail?: string;
   waiting_permission?: 0 | 1;
+  autopilot: 0 | 1;
   first_seen_at: string;
   last_active: string;
 }

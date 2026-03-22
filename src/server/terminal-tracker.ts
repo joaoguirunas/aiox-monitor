@@ -131,6 +131,8 @@ export async function syncSystemTerminals(): Promise<void> {
       detected.filter(d => d.pid).map(d => [d.pid!, d]),
     );
 
+    // Detection complete: match detected PIDs to DB terminals
+
     // Build a set of PIDs already in the DB
     const dbPidSet = new Set(dbTerminals.map(t => t.pid));
 

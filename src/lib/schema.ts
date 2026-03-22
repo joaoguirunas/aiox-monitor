@@ -127,6 +127,9 @@ export function initSchema(db: DatabaseSync): void {
     try { db.exec(sql); } catch { /* Column already exists */ }
   }
 
+  // Migration: autopilot per terminal
+  try { db.exec(`ALTER TABLE terminals ADD COLUMN autopilot INTEGER NOT NULL DEFAULT 0`); } catch { /* exists */ }
+
   // Migrate old 'active' status to 'processing' is not needed —
   // the CHECK constraint update is handled by SQLite allowing existing data
   // We just need to ensure the CHECK allows the new values.

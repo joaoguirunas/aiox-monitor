@@ -239,12 +239,7 @@ export function upsertTerminal(
         THEN NULL
         ELSE terminals.current_tool_detail
       END,
-      waiting_permission = CASE
-        WHEN excluded.session_id IS NOT NULL
-         AND excluded.session_id != COALESCE(terminals.session_id, '')
-        THEN 0
-        ELSE terminals.waiting_permission
-      END,
+      waiting_permission = 0,
       first_seen_at      = CASE
         WHEN excluded.session_id IS NOT NULL
          AND excluded.session_id != COALESCE(terminals.session_id, '')
@@ -274,7 +269,7 @@ export function upsertTerminal(
 export function deactivateTerminal(projectId: number, pid: number): void {
   db.prepare(`
     UPDATE terminals
-    SET status = 'inactive', last_active = datetime('now')
+    SET status = 'inactive', waiting_permission = 0, current_tool_detail = NULL, last_active = datetime('now')
     WHERE project_id = ? AND pid = ?
   `).run(projectId, pid);
 }
@@ -337,6 +332,12 @@ export function purgeOldInactiveTerminals(olderThanSeconds = 86400): number {
   `).run();
 
   return (r1 as { changes: number }).changes + (r2 as { changes: number }).changes;
+}
+
+export function setTerminalAutopilot(id: number, enabled: boolean): Terminal | null {
+  db.prepare(`UPDATE terminals SET autopilot = ? WHERE id = ?`).run(enabled ? 1 : 0, id);
+  const r = db.prepare(`SELECT * FROM terminals WHERE id = ?`).get(id) as Row | undefined;
+  return r ? row<Terminal>(r) : null;
 }
 
 export function getTerminalAgentByPid(pid: number): string | null {

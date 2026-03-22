@@ -22,6 +22,9 @@ export interface SystemTerminalInfo {
 
 const SHELL_ENV = { ...process.env, PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin' };
 
+// Session names that are generic/dynamic — prefer profileName over these
+const GENERIC_NAMES = /^(claude code|claude|zsh|bash|-zsh|-bash|login|terminal|sh|caffeinate)$/i;
+
 async function runAsync(cmd: string, args: string[], timeout = 5000): Promise<string> {
   try {
     const { stdout } = await execFileAsync(cmd, args, {
@@ -51,8 +54,16 @@ async function runShellAsync(script: string, timeout = 5000): Promise<string> {
 }
 
 async function isAppRunning(appName: string): Promise<boolean> {
-  const result = await runAsync('pgrep', ['-x', appName], 2000);
-  return result.length > 0;
+  // pgrep -x does exact match on process name — try first.
+  const exact = await runAsync('pgrep', ['-x', appName], 2000);
+  if (exact.length > 0) return true;
+  // Fallback: ps + grep — more reliable on macOS where pgrep -f
+  // can miss processes launched by LaunchServices (e.g. iTerm2).
+  const byPs = await runShellAsync(
+    `ps -eo comm= 2>/dev/null | grep -i '/${appName}$' | head -1`,
+    2000,
+  );
+  return byPs.length > 0;
 }
 
 async function detectITerm2(): Promise<SystemTerminalInfo[]> {
@@ -77,7 +88,7 @@ async function detectITerm2(): Promise<SystemTerminalInfo[]> {
           results.push({
             app: 'iTerm2',
             windowId: w,
-            windowName: sName || sProfile || wName,
+            windowName: sName || wName || sProfile,
             tabIndex: t,
             sessionId: 'iterm-' + w + '-' + t + '-' + s,
             tty: sTty,
@@ -97,6 +108,17 @@ async function detectITerm2(): Promise<SystemTerminalInfo[]> {
   if (!raw) return [];
   try {
     const sessions: SystemTerminalInfo[] = JSON.parse(raw);
+    // When iTerm2 session name is generic (e.g. "Claude Code", "zsh"),
+    // prefer the user-set profile name which is more meaningful.
+    for (const s of sessions) {
+      const cleaned = s.windowName
+        .replace(/\s*\([^)]*\)\s*$/i, '')
+        .replace(/^[\u2800-\u28FF\u2702-\u27B0✳●◉◈⬤☐☑✓✔✕✖✗✘⚡⏳🔄]+\s*/u, '')
+        .trim();
+      if (GENERIC_NAMES.test(cleaned) && s.profileName) {
+        s.windowName = s.profileName;
+      }
+    }
     return enrichWithPids(sessions);
   } catch {
     return [];
@@ -150,19 +172,24 @@ async function detectTerminalApp(): Promise<SystemTerminalInfo[]> {
 }
 
 async function enrichWithPids(sessions: SystemTerminalInfo[]): Promise<SystemTerminalInfo[]> {
-  // Batch: get all PIDs with their TTYs and commands in a single ps call
-  const psOutput = await runShellAsync('ps -e -o tty=,pid=,comm= 2>/dev/null', 3000);
+  // Batch: get all PIDs with their TTYs, PPIDs and commands in a single ps call
+  const psOutput = await runShellAsync('ps -e -o tty=,pid=,ppid=,comm= 2>/dev/null', 3000);
   if (!psOutput) return sessions;
 
-  // Build TTY → entries map
-  const ttyMap = new Map<string, { pid: number; comm: string }[]>();
+  // Build TTY → entries map AND PID → info map (for child-process lookups)
+  const ttyMap = new Map<string, { pid: number; ppid: number; comm: string }[]>();
+  const pidMap = new Map<number, { tty: string; ppid: number; comm: string }>();
   for (const line of psOutput.split('\n')) {
-    const match = line.trim().match(/^(\S+)\s+(\d+)\s+(.+)$/);
+    const match = line.trim().match(/^(\S+)\s+(\d+)\s+(\d+)\s+(.+)$/);
     if (!match) continue;
-    const [, tty, pid, comm] = match;
+    const [, tty, pidStr, ppidStr, comm] = match;
+    const pid = parseInt(pidStr, 10);
+    const ppid = parseInt(ppidStr, 10);
+    const entry = { pid, ppid, comm: comm.trim() };
     const entries = ttyMap.get(tty) ?? [];
-    entries.push({ pid: parseInt(pid, 10), comm: comm.trim() });
+    entries.push(entry);
     ttyMap.set(tty, entries);
+    pidMap.set(pid, { tty, ppid, comm: comm.trim() });
   }
 
   for (const session of sessions) {
@@ -171,17 +198,45 @@ async function enrichWithPids(sessions: SystemTerminalInfo[]): Promise<SystemTer
     const entries = ttyMap.get(ttyName);
     if (!entries || entries.length === 0) continue;
 
-    // Find claude process on this TTY
+    // 1. Direct match: claude process on this TTY
     const claudeEntry = entries.find(e => /\bclaude\b/.test(e.comm));
     if (claudeEntry) {
       session.pid = claudeEntry.pid;
       session.isClaudeProcess = true;
-    } else {
-      // Fallback: last process
-      const last = entries[entries.length - 1];
-      session.pid = last.pid;
-      session.isClaudeProcess = false;
+      continue;
     }
+
+    // 2. Child match: `script` (or similar) on session TTY allocates a new PTY
+    //    for its child. Check if any claude process has a parent on this TTY.
+    const pidsOnTty = new Set(entries.map(e => e.pid));
+    let found = false;
+    for (const [pid, info] of pidMap) {
+      if (/\bclaude\b/.test(info.comm) && pidsOnTty.has(info.ppid)) {
+        session.pid = pid;
+        session.isClaudeProcess = true;
+        found = true;
+        break;
+      }
+    }
+    if (found) continue;
+
+    // 3. Grandchild match: walk up 2 levels (handles wrapper → script → claude)
+    for (const [pid, info] of pidMap) {
+      if (!/\bclaude\b/.test(info.comm)) continue;
+      const parent = pidMap.get(info.ppid);
+      if (parent && pidsOnTty.has(parent.ppid)) {
+        session.pid = pid;
+        session.isClaudeProcess = true;
+        found = true;
+        break;
+      }
+    }
+    if (found) continue;
+
+    // 4. Fallback: last process on TTY
+    const last = entries[entries.length - 1];
+    session.pid = last.pid;
+    session.isClaudeProcess = false;
   }
   return sessions;
 }

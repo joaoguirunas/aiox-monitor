@@ -1,9 +1,11 @@
 'use client';
 
+import { useState, useCallback } from 'react';
 import { getAgentTextColor } from '@/components/empresa/config/agent-colors';
 import type { TerminalStatus } from '@/lib/types';
 
 interface TerminalCardProps {
+  id: number;
   pid: number;
   status: TerminalStatus;
   projectName?: string;
@@ -15,6 +17,7 @@ interface TerminalCardProps {
   currentInput?: string;
   currentToolDetail?: string;
   waitingPermission?: 0 | 1;
+  autopilot: 0 | 1;
   firstSeen: string;
   lastActive: string;
 }
@@ -57,15 +60,30 @@ const STATUS_LABEL: Record<TerminalStatus, string> = {
 
 function cleanWindowTitle(raw: string): string {
   return raw
-    .replace(/^[\u2800-\u28FF✳●◉◈⬤☐☑✓✔✕✖✗✘⚡⏳🔄\s]+/u, '')
+    .replace(/^[\u2800-\u28FF\u2702-\u27B0✳●◉◈⬤☐☑✓✔✕✖✗✘⚡⏳🔄\s]+/u, '')
     .trim() || raw.trim();
 }
 
 export function TrackedTerminalCard({
-  pid, status, projectName, windowTitle, agentName, agentDisplayName,
+  id, pid, status, projectName, windowTitle, agentName, agentDisplayName,
   currentTool, currentInput, currentToolDetail, waitingPermission,
-  firstSeen, lastActive,
+  autopilot, firstSeen, lastActive,
 }: TerminalCardProps) {
+  const [toggling, setToggling] = useState(false);
+  const isOn = autopilot === 1;
+
+  const toggleAutopilot = useCallback(async () => {
+    setToggling(true);
+    try {
+      await fetch(`/api/terminals/${id}/autopilot`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !isOn }),
+      });
+    } catch { /* best-effort */ }
+    setToggling(false);
+  }, [id, isOn]);
+
   const agentColor = getAgentTextColor(agentName);
   const toolDisplay = currentTool
     ? currentInput
@@ -80,8 +98,8 @@ export function TrackedTerminalCard({
       <div className="px-4 py-3">
         {/* Header: Title + status */}
         <div className="flex items-center justify-between mb-2.5">
-          <div className="flex items-center gap-2">
-            <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[status]} ${status === 'processing' ? 'animate-pulse' : ''}`} />
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[status]} ${status === 'processing' ? 'animate-pulse' : ''}`} />
             <span className="text-[13px] font-medium text-text-primary truncate">
               {displayTitle || `PID ${pid}`}
             </span>
@@ -92,17 +110,39 @@ export function TrackedTerminalCard({
           </div>
         </div>
 
-        {/* Agent */}
-        {agentName && agentName !== '@unknown' && (
-          <div className="mb-2">
-            <span className={`text-[12px] font-medium ${agentColor}`}>
-              {agentDisplayName ?? agentName}
-            </span>
-            {agentDisplayName && (
-              <span className="text-[11px] text-text-muted ml-1.5">{agentName}</span>
+        {/* Agent + Autopilot toggle */}
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            {agentName && agentName !== '@unknown' && (
+              <>
+                <span className={`text-[12px] font-medium ${agentColor}`}>
+                  {agentDisplayName ?? agentName}
+                </span>
+                {agentDisplayName && (
+                  <span className="text-[11px] text-text-muted ml-1.5">{agentName}</span>
+                )}
+              </>
             )}
           </div>
-        )}
+          {status !== 'inactive' && (
+            <button
+              onClick={toggleAutopilot}
+              disabled={toggling}
+              title={isOn ? 'Autopilot ON — clique para desligar' : 'Autopilot OFF — clique para ligar'}
+              className={`
+                flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider
+                transition-all duration-200 disabled:opacity-50
+                ${isOn
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30'
+                  : 'bg-zinc-700/40 text-zinc-500 border border-zinc-600/30 hover:bg-zinc-700/60 hover:text-zinc-400'
+                }
+              `}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${isOn ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+              {isOn ? 'auto' : 'off'}
+            </button>
+          )}
+        </div>
 
         {/* Tool Detail (JSONL-enriched) */}
         {currentToolDetail && (

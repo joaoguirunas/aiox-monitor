@@ -27,10 +27,15 @@ def get_project_info():
 
 def get_terminal_info():
     """Capture terminal/process identifiers."""
-    return {
+    info = {
         "terminal_pid": os.getppid(),  # PID of the Claude Code process (parent)
         "terminal_session_id": os.environ.get("CLAUDE_SESSION_ID"),
     }
+    # Maestri sets this env var for terminals within its workspaces
+    maestri_id = os.environ.get("MAESTRI_TERMINAL_ID")
+    if maestri_id:
+        info["maestri_terminal_id"] = maestri_id
+    return info
 
 
 def detect_agent(input_data):
@@ -212,6 +217,7 @@ def main():
         "timestamp": input_data.get("timestamp"),
         "terminal_pid": terminal["terminal_pid"],
         "terminal_session_id": terminal["terminal_session_id"],
+        "maestri_terminal_id": terminal.get("maestri_terminal_id"),
     }
 
     send_event(payload)

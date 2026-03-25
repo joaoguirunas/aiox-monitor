@@ -91,6 +91,19 @@ export interface CompanyConfig {
   updated_at: string;
 }
 
+export type AutopilotAction = 'permission_approve' | 'idle_skip' | 'error';
+
+export interface AutopilotLog {
+  id: number;
+  terminal_id: number;
+  project_id: number;
+  window_title: string | null;
+  agent_name: string | null;
+  action: AutopilotAction;
+  detail: string | null;
+  created_at: string;
+}
+
 export interface GangaLog {
   id: number;
   terminal_id: number | null;
@@ -116,6 +129,17 @@ export interface SessionWithSummary extends Session {
   response: string | null;
   tool_count: number;
   tools: string[];
+  // Enriched names — resolved server-side so the UI doesn't need cross-referencing
+  project_name?: string;
+  agent_name?: string;
+  agent_display_name?: string;
+  terminal_title?: string;
+  terminal_status?: string;
+  terminal_pid?: number;
+  terminal_agent_name?: string;
+  terminal_agent_display_name?: string;
+  terminal_current_tool_detail?: string;
+  terminal_waiting_permission?: 0 | 1;
 }
 
 export interface SessionFilters {
@@ -153,6 +177,7 @@ export interface EventPayload {
   timestamp?: string;
   terminal_pid?: number;
   terminal_session_id?: string;
+  maestri_terminal_id?: string;
 }
 
 export interface AgentWithStats extends Agent {

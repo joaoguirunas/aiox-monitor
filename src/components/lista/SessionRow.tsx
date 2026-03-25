@@ -94,10 +94,15 @@ interface SessionRowProps {
   onClick: () => void;
 }
 
-export function SessionRow({ session, agents, projects, terminals, onClick }: SessionRowProps) {
-  const agent = session.agent_id ? agents.find((a) => a.id === session.agent_id) : undefined;
-  const project = projects.find((p) => p.id === session.project_id);
-  const terminal = session.terminal_id ? terminals.find((t) => t.id === session.terminal_id) : undefined;
+export function SessionRow({ session, onClick }: SessionRowProps) {
+  // Use enriched server-side data directly — no client-side cross-referencing needed
+  // Agent: prefer session agent if known, fall back to terminal's agent
+  const effectiveAgentName = (session.agent_name && session.agent_name !== '@unknown')
+    ? session.agent_name
+    : session.terminal_agent_name ?? session.agent_name;
+  const effectiveAgentDisplay = (session.agent_name && session.agent_name !== '@unknown')
+    ? session.agent_display_name
+    : session.terminal_agent_display_name ?? session.agent_display_name;
 
   // Live duration for active sessions — refresh every 30s
   const [, setTick] = useState(0);
@@ -129,6 +134,12 @@ export function SessionRow({ session, agents, projects, terminals, onClick }: Se
     </span>
   );
 
+  const terminalDot = session.terminal_status === 'processing'
+    ? 'bg-accent-emerald animate-pulse'
+    : session.terminal_status === 'active'
+      ? 'bg-accent-amber'
+      : 'bg-text-muted/40';
+
   return (
     <tr
       className="border-b border-border/20 hover:bg-white/[0.02] cursor-pointer transition-colors duration-150 group"
@@ -138,31 +149,31 @@ export function SessionRow({ session, agents, projects, terminals, onClick }: Se
         <TimeAgo dateStr={session.started_at} />
       </td>
       <td className="px-4 py-2.5 text-[13px] text-text-secondary truncate">
-        {project?.name ?? <span className="text-text-muted">—</span>}
+        {session.project_name ?? <span className="text-text-muted">—</span>}
       </td>
       <td className="px-4 py-2.5">
-        {agent ? (
-          <AgentBadge name={agent.name} displayName={agent.display_name} />
+        {effectiveAgentName && effectiveAgentName !== '@unknown' ? (
+          <AgentBadge name={effectiveAgentName} displayName={effectiveAgentDisplay} />
         ) : (
           <span className="text-text-muted text-[13px]">—</span>
         )}
       </td>
       <td className="px-4 py-2.5 whitespace-nowrap">
-        {terminal ? (
+        {session.terminal_title ? (
           <div className="flex flex-col gap-1">
             <span className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary">
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${terminal.status === 'processing' ? 'bg-accent-emerald animate-pulse' : terminal.status === 'active' ? 'bg-accent-amber' : 'bg-text-muted/40'}`} />
-              <span className="truncate max-w-[120px]">{terminal.window_title || '—'}</span>
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${terminalDot}`} />
+              <span className="truncate max-w-[120px]">{session.terminal_title}</span>
             </span>
-            {terminal.current_tool_detail && (
+            {session.terminal_current_tool_detail && (
               <span className="inline-flex items-center gap-1 text-[10px] font-mono text-accent-blue truncate max-w-[180px]">
-                {terminal.waiting_permission === 1 && (
+                {session.terminal_waiting_permission === 1 && (
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
                 )}
-                {terminal.current_tool_detail}
+                {session.terminal_current_tool_detail}
               </span>
             )}
-            {!terminal.current_tool_detail && terminal.waiting_permission === 1 && (
+            {!session.terminal_current_tool_detail && session.terminal_waiting_permission === 1 && (
               <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                 Aguardando permissão
@@ -174,8 +185,8 @@ export function SessionRow({ session, agents, projects, terminals, onClick }: Se
         )}
       </td>
       <td className="px-4 py-2.5 whitespace-nowrap">
-        {terminal ? (
-          <span className="text-[10px] font-mono text-text-muted">{terminal.pid}</span>
+        {session.terminal_pid ? (
+          <span className="text-[10px] font-mono text-text-muted">{session.terminal_pid}</span>
         ) : (
           <span className="text-text-muted text-[10px]">—</span>
         )}

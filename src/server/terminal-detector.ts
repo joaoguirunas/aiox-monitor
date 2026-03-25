@@ -241,15 +241,62 @@ async function enrichWithPids(sessions: SystemTerminalInfo[]): Promise<SystemTer
   return sessions;
 }
 
+async function detectMaestri(): Promise<SystemTerminalInfo[]> {
+  if (!(await isAppRunning('Maestri'))) return [];
+
+  // Maestri doesn't expose sessions via AppleScript.
+  // Detect by finding its child shell processes and their TTYs.
+  // Terminal names come from the hook (MAESTRI_TERMINAL_ID env var → workspace JSON).
+  // This detector only provides PID ↔ TTY mapping for title enrichment of existing terminals.
+  const maestriPid = await runShellAsync(
+    "pgrep -x Maestri 2>/dev/null || ps -eo pid=,comm= | grep '/Maestri$' | awk '{print $1}' | head -1",
+    2000,
+  );
+  if (!maestriPid) return [];
+
+  const childrenRaw = await runShellAsync(
+    `ps -eo pid=,ppid=,tty=,comm= 2>/dev/null | awk '$2 == ${maestriPid.split('\n')[0].trim()}'`,
+    3000,
+  );
+  if (!childrenRaw) return [];
+
+  const sessions: SystemTerminalInfo[] = [];
+  const lines = childrenRaw.split('\n').filter(Boolean);
+
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].trim().match(/^(\d+)\s+\d+\s+(\S+)\s+(.+)$/);
+    if (!match) continue;
+    const [, , ttyRaw] = match;
+    if (!ttyRaw || ttyRaw === '??') continue;
+
+    sessions.push({
+      app: 'Maestri',
+      windowId: 0,
+      windowName: 'Maestri', // Real name resolved via maestri-resolver from hook events
+      tabIndex: i,
+      sessionId: `maestri-${ttyRaw}`,
+      tty: `/dev/${ttyRaw}`,
+      profileName: 'Maestri',
+      isProcessing: false,
+      columns: 80,
+      rows: 24,
+      currentCommand: '',
+    });
+  }
+
+  return enrichWithPids(sessions);
+}
+
 export async function detectSystemTerminals(): Promise<SystemTerminalInfo[]> {
   const results: SystemTerminalInfo[] = [];
 
-  // Run both detectors in parallel
-  const [iterm, terminal] = await Promise.all([
+  // Run all detectors in parallel
+  const [iterm, terminal, maestri] = await Promise.all([
     detectITerm2(),
     detectTerminalApp(),
+    detectMaestri(),
   ]);
 
-  results.push(...iterm, ...terminal);
+  results.push(...iterm, ...terminal, ...maestri);
   return results;
 }

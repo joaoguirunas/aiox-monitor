@@ -74,19 +74,29 @@ export function trackAgent(
 }
 
 /** Best-effort: scan payload text for agent patterns in any format.
- *  Matches: @name, AIOX:agents:name, agents:name, AIOX/agents/name, agents/name */
+ *  Matches: @name, AIOX:agents:name, agents:name, AIOX/agents/name, agents/name
+ *  Names are sorted longest-first so "@aiox-master" and "@data-engineer" are
+ *  checked before shorter substrings like "@dev" or "@analyst". */
 export function detectAgentFromPayload(payload: unknown): string {
   const text = typeof payload === 'string' ? payload : JSON.stringify(payload ?? '');
-  const agentNames = Object.keys(DISPLAY_NAMES);
+  // Sort longest-first to avoid substring false positives (e.g. @dev matching @devops)
+  const agentNames = Object.keys(DISPLAY_NAMES).sort((a, b) => b.length - a.length);
   for (const name of agentNames) {
-    if (text.includes(name)) return name;
     const id = name.slice(1); // "@analyst" -> "analyst"
+    // Check activation patterns first (most reliable)
     if (
       text.includes(`AIOX:agents:${id}`) ||
       text.includes(`agents:${id}`) ||
       text.includes(`AIOX/agents/${id}`) ||
       text.includes(`agents/${id}`)
     ) return name;
+    // Check @name with word boundary (avoid @dev matching inside @devops)
+    const nameIdx = text.indexOf(name);
+    if (nameIdx >= 0) {
+      const afterChar = text[nameIdx + name.length] ?? '';
+      // Only match if followed by non-alphanumeric or end-of-string
+      if (!/[a-zA-Z0-9_-]/.test(afterChar)) return name;
+    }
   }
   return '@unknown';
 }

@@ -78,17 +78,21 @@ export function trackTerminal(
     agentDisplayName?: string;
     currentTool?: string;
     currentInput?: string;
+    windowTitle?: string;
   },
 ): Terminal {
-  const cachedTitle = windowTitleCache.get(pid);
-  const enrichedOpts = { ...opts, windowTitle: cachedTitle };
+  // Priority: explicit windowTitle (Maestri name) > cached > async detection
+  const title = opts?.windowTitle || windowTitleCache.get(pid);
+  if (opts?.windowTitle) windowTitleCache.set(pid, opts.windowTitle);
+
+  const enrichedOpts = { ...opts, windowTitle: title };
   const terminal = upsertTerminal(projectId, pid, enrichedOpts);
 
-  // Trigger async detection if no cached title — update DB + broadcast when found
-  if (!cachedTitle) {
-    detectWindowTitle(pid).then(title => {
-      if (title) {
-        const updated = upsertTerminal(projectId, pid, { windowTitle: title });
+  // Trigger async detection if no title at all — update DB + broadcast when found
+  if (!title) {
+    detectWindowTitle(pid).then(detected => {
+      if (detected) {
+        const updated = upsertTerminal(projectId, pid, { windowTitle: detected });
         try { broadcast({ type: 'terminal:update', terminal: updated, projectId }); } catch { /* ignore */ }
       }
     }).catch(() => { /* ignore */ });
@@ -137,17 +141,25 @@ export async function syncSystemTerminals(): Promise<void> {
     const dbPidSet = new Set(dbTerminals.map(t => t.pid));
 
     // ── 1. Update existing terminals: match by PID, update title + reactivate ──
+    // IMPORTANT: sync only fills EMPTY titles. It never overwrites titles that
+    // were set by events (maestri-resolver, hook agent names, etc.) because the
+    // detector returns generic placeholders ("Maestri", profile names) that are
+    // less accurate than event-driven data.
     for (const dbTerm of dbTerminals) {
       const match = detectedByPid.get(dbTerm.pid);
       if (!match) continue;
 
-      const title = cleanTitle(match.windowName || match.profileName || '');
       let changed = false;
 
-      if (title && title !== dbTerm.window_title) {
-        updateTerminalWindowTitle(dbTerm.id, title);
-        windowTitleCache.set(dbTerm.pid, title);
-        changed = true;
+      // Only set title if the terminal has NO title yet
+      if (!dbTerm.window_title) {
+        const title = cleanTitle(match.windowName || match.profileName || '');
+        // Skip generic/placeholder titles from detector
+        if (title && !/^(maestri|claude code|claude|terminal|zsh|bash)$/i.test(title)) {
+          updateTerminalWindowTitle(dbTerm.id, title);
+          windowTitleCache.set(dbTerm.pid, title);
+          changed = true;
+        }
       }
 
       // Only reactivate if it's a confirmed claude process (not a fallback PID like esbuild)
@@ -178,8 +190,12 @@ export async function syncSystemTerminals(): Promise<void> {
     }
 
     // ── 2. Create NEW terminals for detected PIDs not in the DB ──
+    //    Skip Maestri: it exposes ALL child shells (across all workspaces),
+    //    so creating entries eagerly would flood the DB. Maestri terminals
+    //    are created only from events; detection enriches titles only (step 1).
     for (const [pid, info] of detectedByPid) {
       if (dbPidSet.has(pid)) continue;
+      if (info.app === 'Maestri') continue;
       // Only create entries for confirmed claude processes
       if (!info.isClaudeProcess) continue;
 
@@ -211,8 +227,10 @@ export async function syncSystemTerminals(): Promise<void> {
       }
       if (!projectId) continue;
 
+      // Do NOT pass sessionId from detector — it uses unstable indices that
+      // differ from the event-supplied session IDs, causing the upsert CASE
+      // logic to think it's a "new session" and wipe agent_name/display_name.
       const terminal = upsertTerminal(projectId, pid, {
-        sessionId: info.sessionId,
         windowTitle: title || undefined,
       });
       windowTitleCache.set(pid, title);

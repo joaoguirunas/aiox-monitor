@@ -14,6 +14,7 @@ import type {
   ProjectWithDetails,
   Stats,
   GangaLog,
+  AutopilotLog,
 } from './types';
 
 // node:sqlite returns Record<string, SQLOutputValue> — double-cast through unknown
@@ -208,42 +209,34 @@ export function upsertTerminal(
     ON CONFLICT(project_id, pid) DO UPDATE SET
       session_id         = COALESCE(excluded.session_id, terminals.session_id),
       status             = 'processing',
+      -- Agent fields: always COALESCE (never wipe with NULL).
+      -- A new session_id only resets agent if the NEW value is non-null
+      -- (i.e. the caller actually knows the agent). Sync calls without
+      -- agentName will pass NULL and we preserve the existing value.
       agent_name         = CASE
-        WHEN excluded.session_id IS NOT NULL
-         AND excluded.session_id != COALESCE(terminals.session_id, '')
-        THEN excluded.agent_name
-        ELSE COALESCE(excluded.agent_name, terminals.agent_name)
+        WHEN excluded.agent_name IS NOT NULL THEN excluded.agent_name
+        ELSE terminals.agent_name
       END,
       agent_display_name = CASE
-        WHEN excluded.session_id IS NOT NULL
-         AND excluded.session_id != COALESCE(terminals.session_id, '')
-        THEN excluded.agent_display_name
-        ELSE COALESCE(excluded.agent_display_name, terminals.agent_display_name)
+        WHEN excluded.agent_display_name IS NOT NULL THEN excluded.agent_display_name
+        ELSE terminals.agent_display_name
       END,
       current_tool       = CASE
-        WHEN excluded.session_id IS NOT NULL
-         AND excluded.session_id != COALESCE(terminals.session_id, '')
-        THEN excluded.current_tool
-        ELSE COALESCE(excluded.current_tool, terminals.current_tool)
+        WHEN excluded.current_tool IS NOT NULL THEN excluded.current_tool
+        ELSE terminals.current_tool
       END,
       current_input      = CASE
-        WHEN excluded.session_id IS NOT NULL
-         AND excluded.session_id != COALESCE(terminals.session_id, '')
-        THEN excluded.current_input
-        ELSE COALESCE(excluded.current_input, terminals.current_input)
+        WHEN excluded.current_input IS NOT NULL THEN excluded.current_input
+        ELSE terminals.current_input
       END,
-      window_title       = COALESCE(excluded.window_title, terminals.window_title),
-      current_tool_detail = CASE
-        WHEN excluded.session_id IS NOT NULL
-         AND excluded.session_id != COALESCE(terminals.session_id, '')
-        THEN NULL
-        ELSE terminals.current_tool_detail
+      window_title       = CASE
+        WHEN excluded.window_title IS NOT NULL THEN excluded.window_title
+        ELSE terminals.window_title
       END,
+      current_tool_detail = terminals.current_tool_detail,
       waiting_permission = 0,
       first_seen_at      = CASE
-        WHEN excluded.session_id IS NOT NULL
-         AND excluded.session_id != COALESCE(terminals.session_id, '')
-        THEN datetime('now')
+        WHEN terminals.first_seen_at IS NULL THEN datetime('now')
         ELSE terminals.first_seen_at
       END,
       last_active        = datetime('now')
@@ -427,6 +420,16 @@ export function getSessions(filters: SessionFilters = {}): {
     db
       .prepare(`
         SELECT s.*,
+          p.name as project_name,
+          a.name as agent_name,
+          a.display_name as agent_display_name,
+          t.window_title as terminal_title,
+          t.status as terminal_status,
+          t.pid as terminal_pid,
+          t.agent_name as terminal_agent_name,
+          t.agent_display_name as terminal_agent_display_name,
+          t.current_tool_detail as terminal_current_tool_detail,
+          t.waiting_permission as terminal_waiting_permission,
           (SELECT e.input_summary FROM events e
            WHERE e.session_id = s.id AND e.type = 'UserPromptSubmit'
            ORDER BY e.id ASC LIMIT 1) as prompt,
@@ -439,6 +442,9 @@ export function getSessions(filters: SessionFilters = {}): {
            WHERE e.session_id = s.id AND e.tool IS NOT NULL
            AND e.type IN ('PreToolUse', 'PostToolUse')) as tools
         FROM sessions s
+        LEFT JOIN projects p ON p.id = s.project_id
+        LEFT JOIN agents a ON a.id = s.agent_id
+        LEFT JOIN terminals t ON t.id = s.terminal_id
         ${where}
         ORDER BY s.started_at DESC
         LIMIT ? OFFSET ?
@@ -644,6 +650,59 @@ export function getGangaLogs(limit = 50): GangaLog[] {
   return rows<GangaLog>(
     db.prepare(`SELECT * FROM ganga_log ORDER BY created_at DESC LIMIT ?`).all(limit) as Row[],
   );
+}
+
+// ─── Autopilot ──────────────────────────────────────────────────────────────
+
+export function getAutopilotTerminals(): Terminal[] {
+  return rows<Terminal>(
+    db.prepare(`
+      SELECT * FROM terminals
+      WHERE autopilot = 1
+        AND status != 'inactive'
+        AND waiting_permission = 1
+      ORDER BY last_active DESC
+    `).all() as Row[],
+  );
+}
+
+export function insertAutopilotLog(data: Omit<AutopilotLog, 'id' | 'created_at'>): AutopilotLog {
+  const result = db.prepare(`
+    INSERT INTO autopilot_log (terminal_id, project_id, window_title, agent_name, action, detail)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    data.terminal_id,
+    data.project_id,
+    data.window_title ?? null,
+    data.agent_name ?? null,
+    data.action,
+    data.detail ?? null,
+  );
+  return row<AutopilotLog>(
+    db.prepare(`SELECT * FROM autopilot_log WHERE id = ?`).get(Number(result.lastInsertRowid)) as Row,
+  );
+}
+
+export function getAutopilotLogs(limit = 50): AutopilotLog[] {
+  return rows<AutopilotLog>(
+    db.prepare(`SELECT * FROM autopilot_log ORDER BY created_at DESC LIMIT ?`).all(limit) as Row[],
+  );
+}
+
+export function getAutopilotStats(): { approved: number; errors: number; skipped: number } {
+  const r = db.prepare(`
+    SELECT
+      SUM(CASE WHEN action = 'permission_approve' THEN 1 ELSE 0 END) as approved,
+      SUM(CASE WHEN action = 'error' THEN 1 ELSE 0 END) as errors,
+      SUM(CASE WHEN action = 'idle_skip' THEN 1 ELSE 0 END) as skipped
+    FROM autopilot_log
+    WHERE created_at >= datetime('now', '-24 hours')
+  `).get() as Row;
+  return {
+    approved: (r.approved as number) ?? 0,
+    errors: (r.errors as number) ?? 0,
+    skipped: (r.skipped as number) ?? 0,
+  };
 }
 
 export function getGangaStats(): { autoResponses: number; blocked: number; skipped: number } {

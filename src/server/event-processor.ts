@@ -2,6 +2,7 @@ import { insertEvent, createSession, closeSession, getEvents, getTerminalAgentBy
 import { detectProject } from './project-detector';
 import { trackTerminal, deactivateTerminal } from './terminal-tracker';
 import { trackAgent, detectAgentFromPayload } from './agent-tracker';
+import { resolveMaestriName } from './maestri-resolver';
 import { broadcast } from './ws-broadcaster';
 import type { EventPayload, EventType } from '../lib/types';
 
@@ -13,7 +14,6 @@ const VALID_TYPES = new Set<string>([
   'SubagentStop',
 ]);
 
-const STOP_TYPES = new Set<string>(['Stop', 'SubagentStop']);
 
 function toEventType(hookType: string): EventType {
   if (VALID_TYPES.has(hookType)) return hookType as EventType;
@@ -82,10 +82,10 @@ export function processEvent(payload: EventPayload): ProcessedEvent {
 
   if (detected && detected !== '@unknown') {
     agentName = detected;
-    // Cache this known agent for the terminal (sticky until a different agent is activated)
+    // Cache this known agent for the terminal (sticky until a different agent is detected)
     if (pid !== undefined) terminalAgentCache.set(pid, detected);
   } else if (pid !== undefined && terminalAgentCache.has(pid)) {
-    // Reuse last known agent for this terminal — persists across Stop events
+    // Reuse last known agent for this terminal — persists across events within and across sessions
     agentName = terminalAgentCache.get(pid)!;
   } else if (pid !== undefined) {
     // DB fallback: check terminal's stored agent_name (survives server restarts)
@@ -105,6 +105,10 @@ export function processEvent(payload: EventPayload): ProcessedEvent {
 
   // 4. Track terminal (if pid provided)
   const inputSummary = extractReadableInput(payload.input);
+  // Resolve Maestri terminal name from UUID (if running inside Maestri)
+  const maestriName = payload.maestri_terminal_id
+    ? resolveMaestriName(payload.maestri_terminal_id)
+    : undefined;
   const terminal =
     payload.terminal_pid !== undefined
       ? trackTerminal(project.id, payload.terminal_pid, {
@@ -113,6 +117,7 @@ export function processEvent(payload: EventPayload): ProcessedEvent {
           agentDisplayName: agent.display_name,
           currentTool: payload.tool_name,
           currentInput: inputSummary,
+          windowTitle: maestriName,
         })
       : undefined;
 

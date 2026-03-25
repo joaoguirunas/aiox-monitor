@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { Event, EventFilters, WsEventNew } from '@/lib/types';
-import { useWebSocket } from './useWebSocket';
+import { useWebSocketContext } from '@/contexts/WebSocketContext';
 
 function buildQueryString(filters: EventFilters): string {
   const params = new URLSearchParams();
@@ -24,7 +24,7 @@ export function useEvents(filters: EventFilters = {}) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [total, setTotal] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
-  const { lastMessage, reconnectCount } = useWebSocket();
+  const { reconnectCount, subscribe } = useWebSocketContext();
 
   const filtersKey = JSON.stringify(filters);
   const hasMore = events.length < total;
@@ -58,7 +58,6 @@ export function useEvents(filters: EventFilters = {}) {
       })
       .catch(() => {
         if (cancelled) return;
-        // On error, keep existing data — don't wipe the list
         setLoading(false);
       });
     return () => { cancelled = true; };
@@ -82,22 +81,30 @@ export function useEvents(filters: EventFilters = {}) {
       });
   }, [filtersKey, events.length, loadingMore, hasMore, enabled]);
 
-  // Real-time updates via WebSocket — with deduplication
+  // Real-time updates via WebSocket subscribe — no message loss
   useEffect(() => {
     if (!enabled) return;
-    if (!lastMessage || lastMessage.type !== 'event:new') return;
-    const msg = lastMessage as WsEventNew;
-    const parsedFilters = JSON.parse(filtersKey) as EventFilters;
-    if (parsedFilters.projectId && msg.projectId !== parsedFilters.projectId) return;
-    if (parsedFilters.agentId && msg.agentId !== parsedFilters.agentId) return;
-    if (parsedFilters.terminalId && msg.event.terminal_id !== parsedFilters.terminalId) return;
-    setEvents(prev => {
-      // Deduplicate: skip if event already exists
-      if (prev.some(e => e.id === msg.event.id)) return prev;
-      return [msg.event, ...prev];
+
+    const unsub = subscribe((msg) => {
+      if (msg.type !== 'event:new') return;
+      const wsMsg = msg as WsEventNew;
+      const parsedFilters = JSON.parse(filtersKey) as EventFilters;
+
+      // Respect active filters
+      if (parsedFilters.projectId && wsMsg.projectId !== parsedFilters.projectId) return;
+      if (parsedFilters.agentId && wsMsg.agentId !== parsedFilters.agentId) return;
+      if (parsedFilters.terminalId && wsMsg.event.terminal_id !== parsedFilters.terminalId) return;
+
+      setEvents((prev) => {
+        // Deduplicate: skip if event already exists
+        if (prev.some((e) => e.id === wsMsg.event.id)) return prev;
+        return [wsMsg.event, ...prev];
+      });
+      setTotal((prev) => prev + 1);
     });
-    setTotal(prev => prev + 1);
-  }, [lastMessage, filtersKey, enabled]);
+
+    return unsub;
+  }, [filtersKey, enabled, subscribe]);
 
   return { events, loading, loadingMore, total, hasMore, loadMore, refresh };
 }

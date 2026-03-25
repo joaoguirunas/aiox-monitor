@@ -50,7 +50,16 @@ export default function ListaPage() {
     loadMore,
     refresh: sessionsRefresh,
   } = useSessions(
-    isSessionView ? { projectId: effectiveFilters.projectId, search: effectiveFilters.search, since: effectiveFilters.since, until: effectiveFilters.until } : {},
+    isSessionView
+      ? {
+          projectId: effectiveFilters.projectId,
+          agentId: effectiveFilters.agentId,
+          terminalId: effectiveFilters.terminalId,
+          search: effectiveFilters.search,
+          since: effectiveFilters.since,
+          until: effectiveFilters.until,
+        }
+      : {},
   );
 
   const loading = isSessionView ? sessionsLoading : eventsLoading;

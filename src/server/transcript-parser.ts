@@ -58,7 +58,12 @@ export interface TurnEndEvent {
   type: 'turn_end';
 }
 
-export type TranscriptEvent = ToolStartEvent | ToolDoneEvent | TurnEndEvent;
+export interface AgentDetectedEvent {
+  type: 'agent_detected';
+  agentName: string;
+}
+
+export type TranscriptEvent = ToolStartEvent | ToolDoneEvent | TurnEndEvent | AgentDetectedEvent;
 
 // ─── Incremental Parser ─────────────────────────────────────────────────────
 
@@ -178,17 +183,36 @@ function extractEvents(record: Record<string, unknown>): TranscriptEvent[] | nul
     return events.length > 0 ? events : null;
   }
 
-  // user → tool_result blocks
+  // user → tool_result blocks + agent activation detection
   if (type === 'user') {
     const message = record.message as Record<string, unknown> | undefined;
-    const content = (message?.content ?? []) as Array<Record<string, unknown>>;
+    const rawContent = message?.content;
     const events: TranscriptEvent[] = [];
+
+    // Detect AIOX agent activation from command-message format
+    // e.g. "<command-message>AIOX:agents:aiox-master</command-message>"
+    // or slash commands like "/AIOX:agents:dev"
+    if (typeof rawContent === 'string') {
+      const agentMatch = rawContent.match(/(?:AIOX:)?agents:([a-zA-Z0-9_-]+)/);
+      if (agentMatch && agentMatch[1] !== 'unknown') {
+        events.push({ type: 'agent_detected', agentName: `@${agentMatch[1]}` });
+      }
+    }
+
+    const content = (Array.isArray(rawContent) ? rawContent : []) as Array<Record<string, unknown>>;
 
     for (const block of content) {
       if (block.type === 'tool_result') {
         const toolId = block.tool_use_id as string;
         if (toolId) {
           events.push({ type: 'tool_done', toolId });
+        }
+      }
+      // Also check text blocks for agent activation (skill loading produces text content)
+      if (block.type === 'text' && typeof block.text === 'string') {
+        const agentMatch = (block.text as string).match(/(?:AIOX:)?agents:([a-zA-Z0-9_-]+)/);
+        if (agentMatch && agentMatch[1] !== 'unknown') {
+          events.push({ type: 'agent_detected', agentName: `@${agentMatch[1]}` });
         }
       }
     }

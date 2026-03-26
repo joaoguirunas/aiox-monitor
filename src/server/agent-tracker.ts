@@ -3,7 +3,8 @@ import { broadcast } from './ws-broadcaster';
 import { db } from '../lib/db';
 import type { Agent, EventType } from '../lib/types';
 
-const DISPLAY_NAMES: Record<string, string> = {
+// Known display names for standard AIOX agents — custom/squad agents get auto-generated names
+const KNOWN_DISPLAY_NAMES: Record<string, string> = {
   '@dev': 'Dex',
   '@qa': 'Quinn',
   '@architect': 'Aria',
@@ -16,6 +17,19 @@ const DISPLAY_NAMES: Record<string, string> = {
   '@ux-design-expert': 'Uma',
   '@aiox-master': 'AIOX',
 };
+
+/** Generate a display name for an agent — known agents get persona names, others get title-cased */
+function resolveDisplayName(agentName: string): string | undefined {
+  const known = KNOWN_DISPLAY_NAMES[agentName];
+  if (known) return known;
+  // Custom agents: "@my-squad-agent" → "My Squad Agent"
+  const id = agentName.startsWith('@') ? agentName.slice(1) : agentName;
+  if (!id) return undefined;
+  return id
+    .split(/[-_]/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
 
 const STOP_TYPES = new Set<EventType>(['Stop', 'SubagentStop']);
 
@@ -50,7 +64,7 @@ export function trackAgent(
   eventType: EventType,
   toolName?: string,
 ): Agent {
-  const displayName = DISPLAY_NAMES[agentName];
+  const displayName = resolveDisplayName(agentName);
   const agent = upsertAgent(projectId, agentName, displayName);
 
   if (STOP_TYPES.has(eventType)) {
@@ -73,30 +87,52 @@ export function trackAgent(
   return updated;
 }
 
-/** Best-effort: scan payload text for agent patterns in any format.
- *  Matches: @name, AIOX:agents:name, agents:name, AIOX/agents/name, agents/name
- *  Names are sorted longest-first so "@aiox-master" and "@data-engineer" are
- *  checked before shorter substrings like "@dev" or "@analyst". */
+/** Detect agent from payload text using pattern matching.
+ *  Supports ANY agent name — not limited to the known list.
+ *
+ *  Detection priority:
+ *  1. AIOX:agents:{name} or agents:{name} — Skill tool activation (most reliable)
+ *  2. AIOX/agents/{name} or agents/{name} — file path references
+ *  3. /AIOX:agents:{name} — slash command activation
+ *  4. @{name} — direct @ mention with word boundary
+ */
 export function detectAgentFromPayload(payload: unknown): string {
   const text = typeof payload === 'string' ? payload : JSON.stringify(payload ?? '');
-  // Sort longest-first to avoid substring false positives (e.g. @dev matching @devops)
-  const agentNames = Object.keys(DISPLAY_NAMES).sort((a, b) => b.length - a.length);
-  for (const name of agentNames) {
-    const id = name.slice(1); // "@analyst" -> "analyst"
-    // Check activation patterns first (most reliable)
-    if (
-      text.includes(`AIOX:agents:${id}`) ||
-      text.includes(`agents:${id}`) ||
-      text.includes(`AIOX/agents/${id}`) ||
-      text.includes(`agents/${id}`)
-    ) return name;
-    // Check @name with word boundary (avoid @dev matching inside @devops)
-    const nameIdx = text.indexOf(name);
-    if (nameIdx >= 0) {
-      const afterChar = text[nameIdx + name.length] ?? '';
-      // Only match if followed by non-alphanumeric or end-of-string
-      if (!/[a-zA-Z0-9_-]/.test(afterChar)) return name;
-    }
+
+  // 1. AIOX:agents:{name} or agents:{name} — captures the agent ID after the colon
+  //    Matches: "AIOX:agents:my-custom-agent", "agents:squad-creator"
+  const colonMatch = text.match(/(?:AIOX:)?agents:([a-zA-Z0-9_-]+)/);
+  if (colonMatch) {
+    const name = `@${colonMatch[1]}`;
+    if (name !== '@unknown') return name;
   }
+
+  // 2. AIOX/agents/{name} or agents/{name} — file path references
+  const pathMatch = text.match(/(?:AIOX\/)?agents\/([a-zA-Z0-9_-]+)/);
+  if (pathMatch) {
+    const name = `@${pathMatch[1]}`;
+    if (name !== '@unknown') return name;
+  }
+
+  // 3. /AIOX:agents:{name} — slash command format
+  const slashMatch = text.match(/\/AIOX:agents:([a-zA-Z0-9_-]+)/);
+  if (slashMatch) {
+    const name = `@${slashMatch[1]}`;
+    if (name !== '@unknown') return name;
+  }
+
+  // 4. @{name} — direct mention with word boundary
+  //    Must be preceded by whitespace/start and followed by non-alphanumeric/end
+  //    Avoid matching email addresses (check no preceding alphanumeric/dot)
+  const atMatches = [...text.matchAll(/(?:^|[\s"'({[,;:])(@[a-zA-Z][a-zA-Z0-9_-]*)/g)];
+  if (atMatches.length > 0) {
+    // Pick the longest match to avoid @dev matching before @devops
+    const sorted = atMatches
+      .map((m) => m[1])
+      .filter((n) => n !== '@unknown')
+      .sort((a, b) => b.length - a.length);
+    if (sorted.length > 0) return sorted[0];
+  }
+
   return '@unknown';
 }

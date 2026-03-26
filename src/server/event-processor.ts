@@ -45,6 +45,8 @@ function extractReadableInput(input: unknown): string | undefined {
 
 // Cache: remember last known agent per terminal PID
 const terminalAgentCache = new Map<number, string>();
+// Track the Claude Code session ID per PID — used to detect session changes
+const terminalSessionCache = new Map<number, string>();
 
 export interface ProcessedEvent {
   id: number;
@@ -68,9 +70,11 @@ export function processEvent(payload: EventPayload): ProcessedEvent {
   //    We do NOT scan tool output server-side — file contents cause false positives.
   let detected = payload.agent_name?.trim() || undefined;
 
-  // Server-side fallback: detect from Skill/Agent tool input or UserPromptSubmit
+  // Server-side fallback: detect from Skill/Agent tool input ONLY.
+  // Do NOT scan UserPromptSubmit — casual @mentions in user text cause false positives.
+  // Agent activation is detected reliably from JSONL transcripts (via jsonl-watcher).
   if (!detected || detected === '@unknown') {
-    if (payload.tool_name === 'Skill' || payload.tool_name === 'Agent' || eventType === 'UserPromptSubmit') {
+    if (payload.tool_name === 'Skill' || payload.tool_name === 'Agent') {
       const inputStr = typeof payload.input === 'string' ? payload.input : JSON.stringify(payload.input ?? '');
       const found = detectAgentFromPayload(inputStr);
       if (found !== '@unknown') detected = found;
@@ -80,12 +84,27 @@ export function processEvent(payload: EventPayload): ProcessedEvent {
   const pid = payload.terminal_pid;
   let agentName: string;
 
+  // Detect if the Claude Code session changed (different terminal_session_id on same PID)
+  const isNewClaudeSession = pid !== undefined
+    && payload.terminal_session_id !== undefined
+    && terminalSessionCache.get(pid) !== payload.terminal_session_id;
+  if (pid !== undefined && payload.terminal_session_id) {
+    terminalSessionCache.set(pid, payload.terminal_session_id);
+  }
+
   if (detected && detected !== '@unknown') {
     agentName = detected;
-    // Cache this known agent for the terminal (sticky until a different agent is detected)
+    // Cache this known agent for the terminal (sticky within a Claude Code session)
     if (pid !== undefined) terminalAgentCache.set(pid, detected);
+  } else if (isNewClaudeSession && pid !== undefined) {
+    // New Claude Code session on this PID — clear the sticky cache so a stale agent
+    // from a previous session doesn't carry over (fixes "UMA everywhere" bug).
+    // But DON'T clear on every UserPromptSubmit — the agent persists across prompts
+    // within the same Claude Code session.
+    terminalAgentCache.delete(pid);
+    agentName = '@unknown';
   } else if (pid !== undefined && terminalAgentCache.has(pid)) {
-    // Reuse last known agent for this terminal — persists across events within and across sessions
+    // Reuse last known agent for this terminal — persists across events within a session
     agentName = terminalAgentCache.get(pid)!;
   } else if (pid !== undefined) {
     // DB fallback: check terminal's stored agent_name (survives server restarts)
@@ -113,8 +132,10 @@ export function processEvent(payload: EventPayload): ProcessedEvent {
     payload.terminal_pid !== undefined
       ? trackTerminal(project.id, payload.terminal_pid, {
           sessionId: payload.terminal_session_id,
-          agentName: agentName !== '@unknown' ? agentName : undefined,
-          agentDisplayName: agent.display_name,
+          agentName: agentName !== '@unknown' ? agentName
+            : (isNewClaudeSession ? '' : undefined),
+          agentDisplayName: agentName !== '@unknown' ? agent.display_name
+            : (isNewClaudeSession ? '' : undefined),
           currentTool: payload.tool_name,
           currentInput: inputSummary,
           windowTitle: maestriName,

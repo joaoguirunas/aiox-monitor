@@ -5,6 +5,7 @@ Install with: npm run install-hook (from the aiox-monitor project directory)
 """
 
 import json
+import re
 import sys
 import os
 import urllib.request
@@ -12,10 +13,10 @@ import urllib.error
 
 MONITOR_URL = os.environ.get("AIOX_MONITOR_URL", "http://localhost:8888/api/events")
 
-KNOWN_AGENTS = [
-    "@dev", "@qa", "@architect", "@pm", "@po", "@sm",
-    "@analyst", "@devops", "@data-engineer", "@ux-design-expert", "@aiox-master",
-]
+# Regex patterns for dynamic agent detection (any agent, not just known ones)
+_AGENT_COLON_RE = re.compile(r'(?:AIOX:)?agents:([a-zA-Z0-9_-]+)')
+_AGENT_PATH_RE = re.compile(r'(?:AIOX/)?agents/([a-zA-Z0-9_-]+)')
+_AGENT_AT_RE = re.compile(r'(?:^|[\s"\'({[,;:])(@[a-zA-Z][a-zA-Z0-9_-]*)')
 
 
 def get_project_info():
@@ -39,12 +40,28 @@ def get_terminal_info():
 
 
 def detect_agent(input_data):
-    """Best-effort scan of payload for @agent-name patterns."""
+    """Detect any AIOX agent from text using pattern matching.
+    Supports: AIOX:agents:{name}, agents/{name}, @{name}"""
     try:
         text = json.dumps(input_data) if not isinstance(input_data, str) else input_data
-        for agent in KNOWN_AGENTS:
-            if agent in text:
-                return agent
+
+        # 1. AIOX:agents:{name} or agents:{name}
+        m = _AGENT_COLON_RE.search(text)
+        if m and m.group(1) != "unknown":
+            return "@" + m.group(1)
+
+        # 2. agents/{name}
+        m = _AGENT_PATH_RE.search(text)
+        if m and m.group(1) != "unknown":
+            return "@" + m.group(1)
+
+        # 3. @{name} — pick longest match to avoid @dev matching before @devops
+        at_matches = _AGENT_AT_RE.findall(text)
+        if at_matches:
+            valid = [n for n in at_matches if n != "@unknown"]
+            if valid:
+                return max(valid, key=len)
+
     except Exception:
         pass
     return None
@@ -68,17 +85,33 @@ def _parse_tool_field(input_data, field):
     return {}
 
 
+def detect_agent_activation_only(text):
+    """Detect agent ONLY from activation patterns (AIOX:agents:X, agents/X).
+    Does NOT match casual @mentions in text — those cause false positives."""
+    if not text:
+        return None
+    if isinstance(text, dict):
+        text = json.dumps(text)
+    m = _AGENT_COLON_RE.search(str(text))
+    if m and m.group(1) != "unknown":
+        return "@" + m.group(1)
+    m = _AGENT_PATH_RE.search(str(text))
+    if m and m.group(1) != "unknown":
+        return "@" + m.group(1)
+    return None
+
+
 def detect_agent_reliable(hook_type, input_data):
-    """Detect agent from reliable sources only (user prompt, skill/agent tool activation).
-    Avoids false positives from file contents in tool outputs."""
+    """Detect agent from reliable sources only (skill/agent activation patterns).
+    Avoids false positives from @mentions in user text."""
     if not isinstance(input_data, dict):
-        return detect_agent(input_data)
+        return detect_agent_activation_only(input_data)
 
     if hook_type == "UserPromptSubmit":
-        # User prompt is a reliable source — they type @dev, @analyst etc.
+        # Only detect from AIOX:agents: patterns, NOT casual @mentions
         prompt = input_data.get("prompt") or input_data.get("content") or input_data.get("message")
         if prompt:
-            return detect_agent(prompt)
+            return detect_agent_activation_only(prompt)
 
     if hook_type in ("PreToolUse", "PostToolUse"):
         tool = input_data.get("tool_name") or ""

@@ -129,6 +129,7 @@ export interface SessionWithSummary extends Session {
   response: string | null;
   tool_count: number;
   tools: string[];
+  skill?: string;
   // Enriched names — resolved server-side so the UI doesn't need cross-referencing
   project_name?: string;
   agent_name?: string;

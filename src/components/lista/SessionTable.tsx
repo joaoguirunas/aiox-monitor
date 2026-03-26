@@ -13,7 +13,7 @@ interface SessionTableProps {
   onLoadMore?: () => void;
 }
 
-const COLUMNS = ['Timestamp', 'Projeto', 'Agente', 'Terminal', 'COD', 'Prompt / Resposta', 'Tools', 'Duração', 'Status'];
+const COLUMNS = ['Timestamp', 'Projeto', 'Agente / Skill', 'Terminal', 'COD', 'Prompt / Resposta', 'Tools', 'Duração', 'Status'];
 
 export function SessionTable({ sessions, loading, loadingMore, hasMore, agents, projects, terminals, onRowClick, onLoadMore }: SessionTableProps) {
   return (

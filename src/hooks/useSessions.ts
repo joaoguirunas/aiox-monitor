@@ -30,18 +30,11 @@ export function useSessions(filters: SessionFilters = {}) {
   const limit = filters.limit ?? 20;
   const filtersKey = JSON.stringify(filters);
   const hasMore = sessions.length < total;
-  const enabled = Object.keys(filters).length > 0;
 
   const refresh = () => setRefreshKey((k) => k + 1);
 
   // Initial fetch — re-runs when filters change, manual refresh, or WebSocket reconnects
   useEffect(() => {
-    if (!enabled) {
-      setSessions([]);
-      setTotal(0);
-      setLoading(false);
-      return;
-    }
     let cancelled = false;
     setLoading(true);
     const qs = buildQueryString(JSON.parse(filtersKey) as SessionFilters);
@@ -61,7 +54,7 @@ export function useSessions(filters: SessionFilters = {}) {
         setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [filtersKey, refreshKey, reconnectCount, enabled]);
+  }, [filtersKey, refreshKey, reconnectCount]);
 
   // Load more — appends older sessions
   const loadMore = useCallback(() => {
@@ -83,8 +76,6 @@ export function useSessions(filters: SessionFilters = {}) {
 
   // Real-time updates via WebSocket subscribe — no message loss
   useEffect(() => {
-    if (!enabled) return;
-
     const unsub = subscribe((msg) => {
       if (msg.type !== 'event:new') return;
       const wsMsg = msg as WsEventNew;
@@ -140,7 +131,7 @@ export function useSessions(filters: SessionFilters = {}) {
         refreshTimerRef.current = null;
       }
     };
-  }, [filtersKey, enabled, subscribe]);
+  }, [filtersKey, subscribe]);
 
   return { sessions, loading, loadingMore, total, hasMore, loadMore, refresh };
 }

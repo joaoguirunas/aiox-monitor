@@ -104,6 +104,10 @@ export function SessionRow({ session, onClick }: SessionRowProps) {
     ? session.agent_display_name
     : session.terminal_agent_display_name ?? session.agent_display_name;
 
+  // Detect skill: from server enrichment, or from prompt slash command
+  const skill = session.skill
+    ?? (session.prompt?.match(/^\/([a-zA-Z0-9_-]+)/)?.[1] || undefined);
+
   // Live duration for active sessions — refresh every 30s
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -154,6 +158,10 @@ export function SessionRow({ session, onClick }: SessionRowProps) {
       <td className="px-4 py-2.5">
         {effectiveAgentName && effectiveAgentName !== '@unknown' ? (
           <AgentBadge name={effectiveAgentName} displayName={effectiveAgentDisplay} />
+        ) : skill ? (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-accent-blue/10 text-accent-blue border-accent-blue/20">
+            /{skill}
+          </span>
         ) : (
           <span className="text-text-muted text-[13px]">—</span>
         )}

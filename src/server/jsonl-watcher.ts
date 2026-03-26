@@ -40,6 +40,8 @@ interface WatchedFile {
   sessionId: string;
   /** Project directory name from path (e.g. "-Users-joaoramos-Desktop-app") */
   projectDirName: string;
+  /** AIOX agent detected from early JSONL scan (deferred until terminal matched) */
+  detectedAgent: string | null;
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -166,6 +168,41 @@ function getTerminalForBroadcast(terminalId: number): Record<string, unknown> | 
   } catch { return null; }
 }
 
+// ─── Agent Resolution ────────────────────────────────────────────────────────
+
+const KNOWN_DISPLAY_NAMES: Record<string, string> = {
+  'dev': 'Dex', 'qa': 'Quinn', 'architect': 'Aria', 'pm': 'Morgan',
+  'sm': 'River', 'po': 'Pax', 'analyst': 'Atlas', 'devops': 'Gage',
+  'data-engineer': 'Dara', 'ux-design-expert': 'Uma', 'aiox-master': 'AIOX',
+};
+
+function resolveAgentDisplayName(agentName: string): string {
+  const id = agentName.startsWith('@') ? agentName.slice(1) : agentName;
+  return KNOWN_DISPLAY_NAMES[id] ?? id.split(/[-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+/** Apply a detected AIOX agent to a terminal and its active sessions */
+function applyDetectedAgent(terminalId: number, agentName: string): void {
+  try {
+    const displayName = resolveAgentDisplayName(agentName);
+    db.prepare(`UPDATE terminals SET agent_name = ?, agent_display_name = ? WHERE id = ?`)
+      .run(agentName, displayName, terminalId);
+    const projectId = (db.prepare(`SELECT project_id FROM terminals WHERE id = ?`).get(terminalId) as { project_id: number } | undefined)?.project_id;
+    if (projectId) {
+      db.prepare(
+        `INSERT INTO agents (project_id, name, display_name, status, last_active)
+         VALUES (?, ?, ?, 'working', datetime('now'))
+         ON CONFLICT(project_id, name) DO UPDATE SET display_name = excluded.display_name, status = 'working', last_active = datetime('now')`,
+      ).run(projectId, agentName, displayName);
+      const agentRow = db.prepare(`SELECT id FROM agents WHERE project_id = ? AND name = ?`).get(projectId, agentName) as { id: number } | undefined;
+      if (agentRow) {
+        db.prepare(`UPDATE sessions SET agent_id = ? WHERE terminal_id = ? AND status = 'active'`).run(agentRow.id, terminalId);
+      }
+    }
+    broadcastTerminalUpdate(terminalId);
+  } catch { /* ignore */ }
+}
+
 // ─── Core Logic ─────────────────────────────────────────────────────────────
 
 function sessionIdFromPath(filePath: string): string {
@@ -202,10 +239,17 @@ function handleEvents(wf: WatchedFile, events: TranscriptEvent[]): void {
       ?? findTerminalByProjectDir(wf.projectDirName);
     if (match) {
       wf.terminalId = match.id;
+      // Apply deferred agent detection from startup scan
+      if (wf.detectedAgent) {
+        applyDetectedAgent(wf.terminalId, wf.detectedAgent);
+      }
     } else {
       // Async fallback: lsof (will match on next event cycle)
       findTerminalByLsof(wf.path).then(m => {
-        if (m && wf.terminalId === null) wf.terminalId = m.id;
+        if (m && wf.terminalId === null) {
+          wf.terminalId = m.id;
+          if (wf.detectedAgent) applyDetectedAgent(wf.terminalId, wf.detectedAgent);
+        }
       }).catch(() => {});
     }
   }
@@ -227,6 +271,16 @@ function handleEvents(wf: WatchedFile, events: TranscriptEvent[]): void {
     if (wf.permissionTimer) {
       clearTimeout(wf.permissionTimer);
       wf.permissionTimer = null;
+    }
+
+    if (event.type === 'agent_detected') {
+      // AIOX agent activation detected in JSONL transcript — update terminal
+      wf.detectedAgent = event.agentName;
+      if (wf.terminalId !== null) {
+        applyDetectedAgent(wf.terminalId, event.agentName);
+        changed = true;
+      }
+      continue;
     }
 
     if (event.type === 'tool_start') {
@@ -302,6 +356,25 @@ function startPermissionTimer(wf: WatchedFile): void {
 
 // ─── File Watching ──────────────────────────────────────────────────────────
 
+/** Quick scan of a JSONL file for agent activation patterns.
+ *  Reads only the first 50KB — agent activation happens early in the transcript. */
+async function scanForAgent(filePath: string): Promise<string | null> {
+  try {
+    const fh = await (await import('node:fs/promises')).open(filePath, 'r');
+    try {
+      const buf = Buffer.alloc(50_000);
+      const { bytesRead } = await fh.read(buf, 0, 50_000, 0);
+      const text = buf.toString('utf-8', 0, bytesRead);
+      // Look for <command-message>AIOX:agents:X</command-message> or agents:X
+      const match = text.match(/(?:AIOX:)?agents:([a-zA-Z0-9_-]+)/);
+      if (match && match[1] !== 'unknown') return `@${match[1]}`;
+    } finally {
+      await fh.close();
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 async function watchFile(filePath: string): Promise<void> {
   if (watchedFiles.has(filePath)) return;
 
@@ -318,12 +391,20 @@ async function watchFile(filePath: string): Promise<void> {
     terminalId: null,
     sessionId,
     projectDirName: projectDirFromPath(filePath),
+    detectedAgent: null,
   };
 
   // Try to match terminal immediately (session_id first, then project dir fallback)
   const match = findTerminalBySessionId(sessionId)
     ?? findTerminalByProjectDir(projectDirFromPath(filePath));
   if (match) wf.terminalId = match.id;
+
+  // Quick agent scan — detect AIOX agent from early transcript lines.
+  // Store result on wf for deferred application once terminal is matched.
+  wf.detectedAgent = await scanForAgent(filePath);
+  if (wf.terminalId !== null && wf.detectedAgent) {
+    applyDetectedAgent(wf.terminalId, wf.detectedAgent);
+  }
 
   // Set up fs.watch (may fail on some systems)
   try {

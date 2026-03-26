@@ -209,15 +209,15 @@ export function upsertTerminal(
     ON CONFLICT(project_id, pid) DO UPDATE SET
       session_id         = COALESCE(excluded.session_id, terminals.session_id),
       status             = 'processing',
-      -- Agent fields: always COALESCE (never wipe with NULL).
-      -- A new session_id only resets agent if the NEW value is non-null
-      -- (i.e. the caller actually knows the agent). Sync calls without
-      -- agentName will pass NULL and we preserve the existing value.
+      -- Agent fields: NULL = preserve existing, '' = clear, other = set new value.
+      -- Empty string signals "no agent detected on new prompt" → reset to NULL.
       agent_name         = CASE
+        WHEN excluded.agent_name = '' THEN NULL
         WHEN excluded.agent_name IS NOT NULL THEN excluded.agent_name
         ELSE terminals.agent_name
       END,
       agent_display_name = CASE
+        WHEN excluded.agent_display_name = '' THEN NULL
         WHEN excluded.agent_display_name IS NOT NULL THEN excluded.agent_display_name
         ELSE terminals.agent_display_name
       END,
@@ -416,7 +416,7 @@ export function getSessions(filters: SessionFilters = {}): {
     .get(...params) as Row;
   const total = (countRow.total as number) ?? 0;
 
-  const sessionRows = rows<SessionWithSummary & { tools: string | null }>(
+  const sessionRows = rows<SessionWithSummary & { tools: string | null; skill_raw: string | null }>(
     db
       .prepare(`
         SELECT s.*,
@@ -433,6 +433,10 @@ export function getSessions(filters: SessionFilters = {}): {
           (SELECT e.input_summary FROM events e
            WHERE e.session_id = s.id AND e.type = 'UserPromptSubmit'
            ORDER BY e.id ASC LIMIT 1) as prompt,
+          (SELECT e.input_summary FROM events e
+           WHERE e.session_id = s.id AND e.tool = 'Skill'
+           AND e.type = 'PreToolUse'
+           ORDER BY e.id ASC LIMIT 1) as skill_raw,
           (SELECT e.input_summary FROM events e
            WHERE e.session_id = s.id AND e.type IN ('Stop', 'SubagentStop')
            ORDER BY e.id DESC LIMIT 1) as response,
@@ -452,11 +456,26 @@ export function getSessions(filters: SessionFilters = {}): {
       .all(...params, limit, offset) as Row[],
   );
 
-  // Convert tools from comma-separated string to array
-  const sessions: SessionWithSummary[] = sessionRows.map((s) => ({
-    ...s,
-    tools: s.tools ? s.tools.split(',') : [],
-  }));
+  // Convert tools from comma-separated string to array + extract skill name
+  const sessions: SessionWithSummary[] = sessionRows.map((s) => {
+    let skill: string | undefined;
+    if (s.skill_raw) {
+      try {
+        const parsed = JSON.parse(s.skill_raw as string);
+        const raw = parsed?.skill ?? s.skill_raw;
+        // "AIOX:agents:dev" → "dev", "commit" → "commit"
+        skill = typeof raw === 'string' ? raw.replace(/^.*:/, '') : undefined;
+      } catch {
+        skill = (s.skill_raw as string).replace(/^.*:/, '');
+      }
+    }
+    const { skill_raw: _raw, ...rest } = s;
+    return {
+      ...rest,
+      skill,
+      tools: s.tools ? s.tools.split(',') : [],
+    };
+  });
 
   return { sessions, total, hasMore: offset + sessions.length < total };
 }

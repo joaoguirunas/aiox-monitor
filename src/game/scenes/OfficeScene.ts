@@ -32,7 +32,6 @@ import { ClusterManager } from '../managers/ClusterManager';
 import { AgentManager } from '../managers/AgentManager';
 import { AGENT_SPRITE_CONFIGS } from '../data/agent-sprite-config';
 import { createAgentAnimations } from '../animations/agent-animations';
-import { getAgentSkin } from '../data/skin-config';
 import type { Agent, Project, ThemeName } from '@/lib/types';
 
 export class OfficeScene extends Phaser.Scene {
@@ -115,11 +114,6 @@ export class OfficeScene extends Phaser.Scene {
       this.setTheme(themeName);
     });
 
-    // DEBUG: skin diagnostic overlay
-    const skinTest = getAgentSkin('@dev');
-    const texExists = this.textures.exists('skin-zyx-south');
-    const allSkinKeys = this.textures.getTextureKeys().filter((k: string) => k.startsWith('skin-')).length;
-    this.add.text(10, 10, 'Skin @dev: ' + (skinTest?.id || 'null') + ' | tex:' + texExists + ' | loaded:' + allSkinKeys, { fontSize: '11px', color: '#00ff00', backgroundColor: '#000000' }).setDepth(9999).setScrollFactor(0);
   }
 
   setTheme(themeName: ThemeName): void {

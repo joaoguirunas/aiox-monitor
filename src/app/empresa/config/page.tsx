@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { setTheme } from '@/game/bridge/react-phaser-bridge';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import {
-  ALIEN_SKINS, ANIMAL_SKINS,
+  ALIEN_SKINS, ANIMAL_SKINS, HUMAN_SKINS,
   loadSkinConfig, saveSkinConfig,
   type SkinAssignment, type SkinDefinition,
 } from '@/game/data/skin-config';
@@ -265,58 +265,76 @@ export default function CompanyConfigPage() {
           {/* Skins dos Agentes */}
           <SettingBlock label="Skins dos Agentes">
             <p className="text-[11px] text-text-muted/70 mb-3 leading-relaxed">
-              Escolha uma aparência para cada agente. Agentes são listados por projeto. Use os presets para distribuir automaticamente.
+              Escolha uma aparência para cada agente. Use os presets por equipe para distribuir automaticamente, ou escolha individualmente.
             </p>
 
-            {/* Preset buttons */}
-            <div className="flex gap-2 mb-4">
-              {[
-                { label: 'Aliens', icon: '👽', skins: ALIEN_SKINS },
-                { label: 'Animais', icon: '🐾', skins: ANIMAL_SKINS },
-              ].map(({ label, icon, skins }) => (
-                <button
-                  key={label}
-                  onClick={() => {
-                    const next: SkinAssignment = {};
-                    allAgents.forEach((agent, i) => {
-                      const key = agent.name.startsWith('@') ? agent.name : `@${agent.name}`;
-                      next[key] = skins[i % skins.length].id;
-                    });
-                    setSkinConfig(next);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-md border border-border/50 bg-surface-1/40 text-text-secondary hover:border-accent-blue/40 hover:text-text-primary hover:bg-accent-blue/[0.06] transition-colors"
-                >
-                  <span>{icon}</span> {label}
-                </button>
-              ))}
-              <button
-                onClick={() => setSkinConfig({})}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-md border border-border/50 bg-surface-1/40 text-text-secondary hover:border-border hover:text-text-primary transition-colors"
-              >
-                <span>↺</span> Reset
-              </button>
-            </div>
-
-            {/* Agents grouped by project */}
+            {/* Agents grouped by project, each with own preset buttons */}
             {allAgents.length === 0 ? (
               <p className="text-[11px] text-text-muted/60 py-3">Nenhum agente registrado ainda.</p>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {projects.map((project) => {
                   const projectAgents = allAgents.filter(a => a.project_id === project.id);
                   if (projectAgents.length === 0) return null;
+
+                  const applyPresetToTeam = (skins: SkinDefinition[]) => {
+                    setSkinConfig(prev => {
+                      const next = { ...prev };
+                      projectAgents.forEach((agent, i) => {
+                        const key = agent.name.startsWith('@') ? agent.name : `@${agent.name}`;
+                        next[key] = skins[i % skins.length].id;
+                      });
+                      return next;
+                    });
+                  };
+
+                  const resetTeam = () => {
+                    setSkinConfig(prev => {
+                      const next = { ...prev };
+                      projectAgents.forEach((agent) => {
+                        const key = agent.name.startsWith('@') ? agent.name : `@${agent.name}`;
+                        delete next[key];
+                      });
+                      return next;
+                    });
+                  };
+
                   return (
-                    <div key={project.id}>
-                      <div className="flex items-center gap-2 mb-2">
+                    <div key={project.id} className="rounded-lg border border-border/30 bg-surface-1/20 p-3">
+                      <div className="flex items-center gap-2 mb-2.5">
                         <span className="text-[10px] font-semibold text-accent-blue/80 uppercase tracking-widest">{project.name}</span>
                         <div className="h-px flex-1 bg-border/30" />
                         <span className="text-[10px] tabular-nums text-text-muted/50">{projectAgents.length}</span>
                       </div>
+
+                      {/* Per-team preset buttons */}
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {[
+                          { label: 'Humanos', icon: '🧑', skins: HUMAN_SKINS },
+                          { label: 'Aliens', icon: '👽', skins: ALIEN_SKINS },
+                          { label: 'Animais', icon: '🐾', skins: ANIMAL_SKINS },
+                        ].map(({ label, icon, skins }) => (
+                          <button
+                            key={label}
+                            onClick={() => applyPresetToTeam(skins)}
+                            className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded border border-border/40 bg-surface-1/40 text-text-secondary hover:border-accent-blue/40 hover:text-text-primary hover:bg-accent-blue/[0.06] transition-colors"
+                          >
+                            <span>{icon}</span> {label}
+                          </button>
+                        ))}
+                        <button
+                          onClick={resetTeam}
+                          className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded border border-border/40 bg-surface-1/40 text-text-secondary hover:border-border hover:text-text-primary transition-colors"
+                        >
+                          <span>↺</span> Reset
+                        </button>
+                      </div>
+
                       <div className="space-y-1.5">
                         {projectAgents.map((agent) => {
                           const agentKey = agent.name.startsWith('@') ? agent.name : `@${agent.name}`;
                           const currentSkin = skinConfig[agentKey] || 'default';
-                          const skinDef = [...ALIEN_SKINS, ...ANIMAL_SKINS].find(s => s.id === currentSkin);
+                          const skinDef = [...HUMAN_SKINS, ...ALIEN_SKINS, ...ANIMAL_SKINS].find(s => s.id === currentSkin);
                           const spriteEntry = PIXELLAB_SPRITES[agentKey];
                           const displayLabel = agent.display_name || agent.name.replace(/^@/, '');
                           return (
@@ -354,6 +372,11 @@ export default function CompanyConfigPage() {
                                 className="flex-1 bg-surface-1/50 border border-border/50 rounded-md px-2 py-1.5 text-[11px] text-text-primary focus:border-accent-blue/40 focus:outline-none transition-colors appearance-none cursor-pointer"
                               >
                                 <option value="default">{spriteEntry ? 'Default (AIOX)' : 'Sem skin'}</option>
+                                <optgroup label="Humanos">
+                                  {HUMAN_SKINS.map(s => (
+                                    <option key={s.id} value={s.id}>{s.label}</option>
+                                  ))}
+                                </optgroup>
                                 <optgroup label="Aliens">
                                   {ALIEN_SKINS.map(s => (
                                     <option key={s.id} value={s.id}>{s.label}</option>

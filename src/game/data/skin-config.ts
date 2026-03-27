@@ -1,10 +1,10 @@
 /**
  * Sistema de skins para personagens.
- * 3 categorias: 'agents' (default), 'aliens', 'animals'
+ * 4 categorias: 'agents' (default), 'aliens', 'animals', 'humans'
  * Cada skin tem 4 direções (south, east, north, west).
  */
 
-export type SkinCategory = 'agents' | 'aliens' | 'animals';
+export type SkinCategory = 'agents' | 'aliens' | 'animals' | 'humans';
 
 export interface SkinDefinition {
   id: string;
@@ -43,7 +43,21 @@ export const ANIMAL_SKINS: SkinDefinition[] = [
   { id: 'rabbit',  label: 'Coelho Branco',      category: 'animals', basePath: '/sprites/agents/skins/animals/rabbit' },
 ];
 
-export const ALL_SKINS = [...ALIEN_SKINS, ...ANIMAL_SKINS];
+export const HUMAN_SKINS: SkinDefinition[] = [
+  { id: 'human-dex', label: 'Dex (Developer)', category: 'humans', basePath: '/sprites/agents/skins/humans/dex' },
+  { id: 'human-quinn', label: 'Quinn (QA)', category: 'humans', basePath: '/sprites/agents/skins/humans/quinn' },
+  { id: 'human-aria', label: 'Aria (Architect)', category: 'humans', basePath: '/sprites/agents/skins/humans/aria' },
+  { id: 'human-morgan', label: 'Morgan (PM)', category: 'humans', basePath: '/sprites/agents/skins/humans/morgan' },
+  { id: 'human-river', label: 'River (SM)', category: 'humans', basePath: '/sprites/agents/skins/humans/river' },
+  { id: 'human-pax', label: 'Pax (PO)', category: 'humans', basePath: '/sprites/agents/skins/humans/pax' },
+  { id: 'human-alex', label: 'Alex (Analyst)', category: 'humans', basePath: '/sprites/agents/skins/humans/alex' },
+  { id: 'human-gage', label: 'Gage (DevOps)', category: 'humans', basePath: '/sprites/agents/skins/humans/gage' },
+  { id: 'human-dara', label: 'Dara (Data)', category: 'humans', basePath: '/sprites/agents/skins/humans/dara' },
+  { id: 'human-uma', label: 'Uma (UX)', category: 'humans', basePath: '/sprites/agents/skins/humans/uma' },
+  { id: 'human-orion', label: 'Orion (Master)', category: 'humans', basePath: '/sprites/agents/skins/humans/orion' },
+];
+
+export const ALL_SKINS = [...HUMAN_SKINS, ...ALIEN_SKINS, ...ANIMAL_SKINS];
 
 /** Nome de agente → skin ID. 'default' = usa sprite AIOX original. */
 export type SkinAssignment = Record<string, string | 'default'>;

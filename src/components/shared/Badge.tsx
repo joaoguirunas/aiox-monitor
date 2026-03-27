@@ -1,3 +1,4 @@
+import { PIXELLAB_SPRITES } from '@/game/data/pixellab-sprites';
 import type { EventType } from '@/lib/types';
 
 const EVENT_TYPE_STYLES: Record<EventType, string> = {
@@ -57,16 +58,25 @@ export function AgentBadge({ name, displayName }: AgentBadgeProps) {
   const label = displayName ?? name ?? 'unknown';
   const color = getAgentColor(name);
   const initial = label.charAt(0).toUpperCase();
+  const spritePath = name ? PIXELLAB_SPRITES[name]?.directions.south : undefined;
 
   return (
     <span className="inline-flex items-center gap-1.5 text-2xs font-semibold">
-      {/* Avatar dot with initial */}
-      <span
-        className="flex items-center justify-center w-4.5 h-4.5 rounded-full text-[9px] font-bold text-white/90"
-        style={{ backgroundColor: color, width: '18px', height: '18px', fontSize: '9px' }}
-      >
-        {initial}
-      </span>
+      {spritePath ? (
+        <span
+          className="flex items-center justify-center w-5 h-5 rounded-full overflow-hidden border-2 shrink-0"
+          style={{ borderColor: color }}
+        >
+          <img src={spritePath} alt={label} className="w-full h-full object-cover" style={{ imageRendering: 'pixelated' }} />
+        </span>
+      ) : (
+        <span
+          className="flex items-center justify-center rounded-full text-[9px] font-bold text-white/90 shrink-0"
+          style={{ backgroundColor: color, width: '18px', height: '18px', fontSize: '9px' }}
+        >
+          {initial}
+        </span>
+      )}
       <span style={{ color }}>{label}</span>
     </span>
   );

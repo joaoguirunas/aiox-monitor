@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import type { Event, EventFilters, SessionWithSummary } from '@/lib/types';
+import { PIXELLAB_SPRITES } from '@/game/data/pixellab-sprites';
 import { useEvents } from '@/hooks/useEvents';
 import { useSessions } from '@/hooks/useSessions';
 import { useProjects } from '@/hooks/useProjects';
@@ -19,6 +20,44 @@ interface ListaPanelProps {
 }
 
 // ─── Session Card (replaces table row) ─────────────────────────────────────
+
+// Agent avatar colors (mirrors Badge.tsx AGENT_COLORS)
+const AGENT_COLORS: Record<string, string> = {
+  '@dev': '#6366f1', '@qa': '#34d399', '@architect': '#a78bfa', '@pm': '#fb923c',
+  '@sm': '#22d3ee', '@po': '#fbbf24', '@analyst': '#818cf8', '@devops': '#f87171',
+  '@data-engineer': '#f472b6', '@ux-design-expert': '#e879f9', '@aiox-master': '#fbbf24',
+};
+
+function AgentAvatar({ name, displayName, isProcessing, isActive }: {
+  name: string; displayName?: string | null; isProcessing: boolean; isActive: boolean;
+}) {
+  const color = AGENT_COLORS[name] ?? '#4a5272';
+  const spritePath = PIXELLAB_SPRITES[name]?.directions.south;
+  const label = displayName ?? name;
+  const initial = label.charAt(0).toUpperCase();
+
+  const ringClass = isProcessing
+    ? 'ring-2 ring-emerald-400/50 animate-pulse'
+    : isActive
+      ? 'ring-2 ring-amber-400/40'
+      : '';
+
+  return spritePath ? (
+    <span
+      className={`flex items-center justify-center w-8 h-8 rounded-full overflow-hidden border-2 shrink-0 ${ringClass}`}
+      style={{ borderColor: color }}
+    >
+      <img src={spritePath} alt={label} className="w-full h-full object-cover" style={{ imageRendering: 'pixelated' }} />
+    </span>
+  ) : (
+    <span
+      className={`flex items-center justify-center w-8 h-8 rounded-full text-[11px] font-bold text-white/90 shrink-0 ${ringClass}`}
+      style={{ backgroundColor: color }}
+    >
+      {initial}
+    </span>
+  );
+}
 
 function SessionCard({ session, onClick }: { session: SessionWithSummary; onClick: () => void }) {
   const agentName = (session.agent_name && session.agent_name !== '@unknown')
@@ -43,6 +82,8 @@ function SessionCard({ session, onClick }: { session: SessionWithSummary; onClic
       ? 'bg-amber-400'
       : 'bg-zinc-500/40';
 
+  const hasAgent = agentName && agentName !== '@unknown';
+
   return (
     <button
       onClick={onClick}
@@ -55,32 +96,39 @@ function SessionCard({ session, onClick }: { session: SessionWithSummary; onClic
         }
       `}
     >
-      {/* Top row: agent + terminal + time */}
-      <div className="flex items-center justify-between gap-3 mb-2.5">
-        <div className="flex items-center gap-2 min-w-0">
-          {agentName && agentName !== '@unknown' ? (
-            <AgentBadge name={agentName} displayName={agentDisplay} />
-          ) : skill ? (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-accent-blue/10 text-accent-blue border-accent-blue/20">
-              /{skill}
-            </span>
-          ) : null}
-          {session.terminal_title && (
-            <span className="inline-flex items-center gap-1.5 text-[11px] text-text-muted truncate">
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`} />
-              <span className="truncate">{session.terminal_title}</span>
-            </span>
+      {/* Top row: avatar + agent + terminal + time */}
+      <div className="flex items-start gap-3 mb-2.5">
+        {hasAgent && (
+          <AgentAvatar name={agentName!} displayName={agentDisplay} isProcessing={isProcessing} isActive={isActive} />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              {hasAgent ? (
+                <AgentBadge name={agentName} displayName={agentDisplay} />
+              ) : skill ? (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-accent-blue/10 text-accent-blue border-accent-blue/20">
+                  /{skill}
+                </span>
+              ) : null}
+              {session.terminal_title && (
+                <span className="inline-flex items-center gap-1.5 text-[11px] text-text-muted truncate">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`} />
+                  <span className="truncate">{session.terminal_title}</span>
+                </span>
+              )}
+            </div>
+            <TimeAgo dateStr={session.started_at} />
+          </div>
+
+          {/* Prompt */}
+          {promptText && (
+            <p className="text-[12px] leading-relaxed text-text-secondary/90 mt-1.5 line-clamp-2">
+              {promptText}
+            </p>
           )}
         </div>
-        <TimeAgo dateStr={session.started_at} />
       </div>
-
-      {/* Prompt */}
-      {promptText && (
-        <p className="text-[12px] leading-relaxed text-text-secondary/90 mb-2.5 line-clamp-2">
-          {promptText}
-        </p>
-      )}
 
       {/* Bottom row: tools + status */}
       <div className="flex items-center justify-between gap-2">

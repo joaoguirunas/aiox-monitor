@@ -46,6 +46,8 @@ export class AgentManager {
   private lastState: Map<string, AgentState> = new Map();
   /** Tracks agents currently mid-walk (wander) to avoid interrupting */
   private wandering: Set<string> = new Set();
+  /** Tracks agents mid-transition (walkTo from updateAgent) to prevent syncAll from interrupting */
+  private inTransition: Set<string> = new Set();
   private wanderTimer: Phaser.Time.TimerEvent | null = null;
 
   constructor(
@@ -70,6 +72,9 @@ export class AgentManager {
       const state = this.lastState.get(key);
       if (!state) continue;
       if ((state.status === 'idle' || state.status === 'break') && !this.wandering.has(key)) {
+        // Don't wander agents that are sleeping in bed
+        const currentPos = this.recAssignment.get(key);
+        if (currentPos?.type === 'bed') continue;
         candidates.push(key);
       }
     }
@@ -100,8 +105,12 @@ export class AgentManager {
       this.wandering.add(key);
       sprite.walkTo(newPos.tileX, newPos.tileY).then(() => {
         this.wandering.delete(key);
-        if (!this.sprites.has(key)) return;
-        sprite.standIdle();
+        if (!this.sprites.has(key) || sprite.scene == null) return;
+        if (newPos.type === 'bed') {
+          sprite.lieDown();
+        } else {
+          sprite.standIdle();
+        }
         this.recAssignment.set(key, newPos);
         this.activateFurniture(newPos, sprite.agentName);
         if (state.status === 'break' && newPos.type === 'coffee-machine') {
@@ -160,16 +169,22 @@ export class AgentManager {
 
       try {
         if (existing) {
-          // Only reposition if status or project changed
-          const prev = this.lastState.get(key);
-          if (!prev || prev.status !== agent.status || prev.projectId !== agent.project_id) {
-            this.wandering.delete(key);
-            existing.setStatus(agent.status);
-            this.positionInstant(key, agent);
-            this.lastState.set(key, { status: agent.status, projectId: agent.project_id });
+          // Skip reposition if agent is mid-transition from a WS update (avoid flickering)
+          if (this.inTransition.has(key)) {
+            // Still update tool state (labels, permission bubble) even during transition
+            this.applyToolState(existing, agent);
+          } else {
+            // Only reposition if status or project changed
+            const prev = this.lastState.get(key);
+            if (!prev || prev.status !== agent.status || prev.projectId !== agent.project_id) {
+              this.wandering.delete(key);
+              existing.setStatus(agent.status);
+              this.positionInstant(key, agent);
+              this.lastState.set(key, { status: agent.status, projectId: agent.project_id });
+            }
+            // Always update tool detail and permission state
+            this.applyToolState(existing, agent);
           }
-          // Always update tool detail and permission state
-          this.applyToolState(existing, agent);
         } else if (agent.status !== 'offline') {
           this.createAgent(agent, false);
           this.lastState.set(key, { status: agent.status, projectId: agent.project_id });
@@ -301,7 +316,11 @@ export class AgentManager {
       this.releaseRecreation(key);
       const pos = this.getRecreationPosition(key, agent.status);
       sprite.setTilePosition(pos.tileX, pos.tileY);
-      sprite.standIdle();
+      if (pos.type === 'bed') {
+        sprite.lieDown();
+      } else {
+        sprite.standIdle();
+      }
       this.recAssignment.set(key, pos);
       this.activateFurniture(pos, sprite.agentName);
     }
@@ -314,7 +333,9 @@ export class AgentManager {
 
     if (agent.status === 'offline') {
       this.releaseRecreation(key);
+      this.inTransition.add(key);
       sprite.walkTo(ENTRANCE_POSITION.tileX, ENTRANCE_POSITION.tileY).then(() => {
+        this.inTransition.delete(key);
         this.removeAgent(key);
       });
       return;
@@ -327,7 +348,9 @@ export class AgentManager {
         const cluster = this.clusterManager.getCluster(slot.projectId);
         if (cluster && slot.deskIndex < cluster.deskPositions.length) {
           const deskPos = cluster.deskPositions[slot.deskIndex];
+          this.inTransition.add(key);
           sprite.walkTo(deskPos.tileX, deskPos.tileY).then(() => {
+            this.inTransition.delete(key);
             if (!this.sprites.has(key)) return;
             sprite.sitDown();
             this.scene.time.delayedCall(400, () => {
@@ -338,14 +361,31 @@ export class AgentManager {
             }
           });
         }
+      } else {
+        // Cluster full — fallback to recreation area instead of leaving agent stranded
+        const pos = this.getRecreationPosition(key, 'idle');
+        this.inTransition.add(key);
+        sprite.walkTo(pos.tileX, pos.tileY).then(() => {
+          this.inTransition.delete(key);
+          if (!this.sprites.has(key)) return;
+          sprite.standIdle();
+          this.recAssignment.set(key, pos);
+          this.activateFurniture(pos, sprite.agentName);
+        });
       }
     } else if (agent.status === 'idle' || agent.status === 'break') {
       this.releaseDesk(key);
       this.releaseRecreation(key);
       const pos = this.getRecreationPosition(key, agent.status);
+      this.inTransition.add(key);
       sprite.walkTo(pos.tileX, pos.tileY).then(() => {
+        this.inTransition.delete(key);
         if (!this.sprites.has(key)) return;
-        sprite.standIdle();
+        if (pos.type === 'bed') {
+          sprite.lieDown();
+        } else {
+          sprite.standIdle();
+        }
         this.recAssignment.set(key, pos);
         this.activateFurniture(pos, sprite.agentName);
         if (agent.status === 'break' && pos.type === 'coffee-machine') {
@@ -427,6 +467,39 @@ export class AgentManager {
       if (idx >= 0 && idx < this.scene.beds.length) {
         this.scene.beds[idx].setOccupied(true);
       }
+    } else if (pos.type === 'sofa') {
+      const sofaPositions = [
+        { tileX: 10, tileY: 10 }, { tileX: 10, tileY: 12 },
+        { tileX: 12, tileY: 10 }, { tileX: 12, tileY: 12 },
+      ];
+      const idx = findFurnitureIndex(sofaPositions, pos.tileX, pos.tileY);
+      if (idx >= 0 && idx < this.scene.sofas.length) {
+        this.scene.sofas[idx].setOccupied(true);
+      }
+    } else if (pos.type === 'arcade') {
+      const idx = findFurnitureIndex(
+        [FURNITURE_POSITIONS.arcade1, FURNITURE_POSITIONS.arcade2],
+        pos.tileX, pos.tileY,
+      );
+      if (idx >= 0 && idx < this.scene.arcades.length) {
+        this.scene.arcades[idx].setInUse(true);
+      }
+    } else if (pos.type === 'hammock') {
+      const idx = findFurnitureIndex(
+        [FURNITURE_POSITIONS.hammock1, FURNITURE_POSITIONS.hammock2, FURNITURE_POSITIONS.hammock3],
+        pos.tileX, pos.tileY,
+      );
+      if (idx >= 0 && idx < this.scene.hammocks.length) {
+        this.scene.hammocks[idx].setOccupied(true);
+      }
+    } else if (pos.type === 'pool-table') {
+      const idx = findFurnitureIndex(
+        [FURNITURE_POSITIONS.poolTable],
+        pos.tileX, pos.tileY,
+      );
+      if (idx >= 0 && idx < this.scene.poolTables.length) {
+        this.scene.poolTables[idx].setInUse(true);
+      }
     }
   }
 
@@ -460,6 +533,39 @@ export class AgentManager {
       );
       if (idx >= 0 && idx < this.scene.beds.length) {
         this.scene.beds[idx].setOccupied(false);
+      }
+    } else if (pos.type === 'sofa') {
+      const sofaPositions = [
+        { tileX: 10, tileY: 10 }, { tileX: 10, tileY: 12 },
+        { tileX: 12, tileY: 10 }, { tileX: 12, tileY: 12 },
+      ];
+      const idx = findFurnitureIndex(sofaPositions, pos.tileX, pos.tileY);
+      if (idx >= 0 && idx < this.scene.sofas.length) {
+        this.scene.sofas[idx].setOccupied(false);
+      }
+    } else if (pos.type === 'arcade') {
+      const idx = findFurnitureIndex(
+        [FURNITURE_POSITIONS.arcade1, FURNITURE_POSITIONS.arcade2],
+        pos.tileX, pos.tileY,
+      );
+      if (idx >= 0 && idx < this.scene.arcades.length) {
+        this.scene.arcades[idx].setInUse(false);
+      }
+    } else if (pos.type === 'hammock') {
+      const idx = findFurnitureIndex(
+        [FURNITURE_POSITIONS.hammock1, FURNITURE_POSITIONS.hammock2, FURNITURE_POSITIONS.hammock3],
+        pos.tileX, pos.tileY,
+      );
+      if (idx >= 0 && idx < this.scene.hammocks.length) {
+        this.scene.hammocks[idx].setOccupied(false);
+      }
+    } else if (pos.type === 'pool-table') {
+      const idx = findFurnitureIndex(
+        [FURNITURE_POSITIONS.poolTable],
+        pos.tileX, pos.tileY,
+      );
+      if (idx >= 0 && idx < this.scene.poolTables.length) {
+        this.scene.poolTables[idx].setInUse(false);
       }
     }
   }
@@ -526,6 +632,9 @@ export class AgentManager {
   private removeAgent(key: string): void {
     const sprite = this.sprites.get(key);
     if (sprite) {
+      // Clear labels before despawn to avoid visual remnants
+      sprite.setToolDetail(null);
+      sprite.setWaitingPermission(false);
       // Play matrix despawn effect, then destroy
       sprite.playDespawnEffect(() => {
         sprite.destroy();
@@ -536,5 +645,6 @@ export class AgentManager {
     this.releaseRecreation(key);
     this.lastState.delete(key);
     this.wandering.delete(key);
+    this.inTransition.delete(key);
   }
 }

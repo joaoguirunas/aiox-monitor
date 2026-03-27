@@ -6,11 +6,16 @@ import type { OfficeTheme } from '../data/themes';
  * Modern workstation — theme-aware desk with a single iMac monitor.
  * Uses furnitureBaseColor/AccentColor/EdgeColor like all other furniture.
  */
+/** Target display width for the desk-imac sprite */
+const DESK_SPRITE_WIDTH = 52;
+
 export class Desk extends Phaser.GameObjects.Container {
   private occupied = false;
   private graphics: Phaser.GameObjects.Graphics;
   private screenGlow: Phaser.GameObjects.Graphics;
+  private deskSprite: Phaser.GameObjects.Image | null = null;
   private agentColor = 0x00ccff;
+  private usesSprite = false;
 
   // Theme colors (defaults = moderno theme)
   private baseColor = 0x1a2040;
@@ -29,6 +34,17 @@ export class Desk extends Phaser.GameObjects.Container {
 
     this.screenGlow = scene.add.graphics();
     this.add(this.screenGlow);
+
+    // Use desk-imac sprite if available, procedural fallback otherwise
+    if (scene.textures.exists('desk-imac')) {
+      this.usesSprite = true;
+      this.deskSprite = scene.add.image(0, -8, 'desk-imac');
+      const ratio = this.deskSprite.width / this.deskSprite.height;
+      this.deskSprite.setDisplaySize(DESK_SPRITE_WIDTH, DESK_SPRITE_WIDTH / ratio);
+      this.deskSprite.setOrigin(0.5, 0.5);
+      this.deskSprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      this.add(this.deskSprite);
+    }
 
     try {
       this.drawIdle();
@@ -197,29 +213,43 @@ export class Desk extends Phaser.GameObjects.Container {
   private drawIdle(): void {
     const g = this.graphics;
     g.clear();
-    this.drawDeskBody(g, false);
-    this.drawIMac(g, false);
-    this.drawKeyboard(g, false);
-    this.drawMouse(g);
-
-    // Subtle standby glow so desks stay visible when agents leave
     this.screenGlow.clear();
-    this.screenGlow.fillStyle(this.screenGlowColor, 0.015);
-    this.screenGlow.fillEllipse(0, -8, 24, 8);
+
+    if (this.usesSprite) {
+      // Sprite mode: only draw the screen glow overlay, sprite handles visuals
+      if (this.deskSprite) this.deskSprite.setAlpha(0.7);
+      this.screenGlow.fillStyle(this.screenGlowColor, 0.015);
+      this.screenGlow.fillEllipse(0, -8, 24, 8);
+    } else {
+      // Procedural fallback
+      this.drawDeskBody(g, false);
+      this.drawIMac(g, false);
+      this.drawKeyboard(g, false);
+      this.drawMouse(g);
+      this.screenGlow.fillStyle(this.screenGlowColor, 0.015);
+      this.screenGlow.fillEllipse(0, -8, 24, 8);
+    }
   }
 
   private drawActive(color: number): void {
     const g = this.graphics;
     g.clear();
-    this.drawDeskBody(g, true);
-    this.drawIMac(g, true);
-    this.drawKeyboard(g, true);
-    this.drawMouse(g);
-
-    // Screen glow on desk surface
     this.screenGlow.clear();
-    this.screenGlow.fillStyle(color, 0.05);
-    this.screenGlow.fillEllipse(0, -8, 30, 10);
+
+    if (this.usesSprite) {
+      // Sprite mode: brighten sprite and add glow
+      if (this.deskSprite) this.deskSprite.setAlpha(1);
+      this.screenGlow.fillStyle(color, 0.08);
+      this.screenGlow.fillEllipse(0, -8, 30, 10);
+    } else {
+      // Procedural fallback
+      this.drawDeskBody(g, true);
+      this.drawIMac(g, true);
+      this.drawKeyboard(g, true);
+      this.drawMouse(g);
+      this.screenGlow.fillStyle(color, 0.05);
+      this.screenGlow.fillEllipse(0, -8, 30, 10);
+    }
   }
 
   // ── Public API ────────────────────────────────────────────
@@ -257,6 +287,7 @@ export class Desk extends Phaser.GameObjects.Container {
   destroy(fromScene?: boolean): void {
     this.graphics.destroy();
     this.screenGlow.destroy();
+    if (this.deskSprite) this.deskSprite.destroy();
     super.destroy(fromScene);
   }
 }

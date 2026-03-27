@@ -27,6 +27,7 @@ export const ALIEN_SKINS: SkinDefinition[] = [
   { id: 'ruk',    label: 'Ruk (Golem Rocha)',    category: 'aliens', basePath: '/sprites/agents/skins/aliens/ruk' },
   { id: 'flux',   label: 'Flux (Plasma)',        category: 'aliens', basePath: '/sprites/agents/skins/aliens/flux' },
   { id: 'zara',   label: 'Zara (Insectoide)',    category: 'aliens', basePath: '/sprites/agents/skins/aliens/zara' },
+  { id: 'aiox-alien', label: 'AIOX Alien Test (128px)', category: 'aliens', basePath: '/sprites/agents/skins/aliens/aiox-alien' },
 ];
 
 export const ANIMAL_SKINS: SkinDefinition[] = [

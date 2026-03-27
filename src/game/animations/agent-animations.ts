@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 
-export type AgentAnimState = 'walk' | 'sit' | 'type' | 'idle';
+export type AgentAnimState = 'walk' | 'sit' | 'type' | 'idle' | 'sleep';
 
 /**
  * Cria animações frame-based para um agente a partir do seu spritesheet.

@@ -16,7 +16,7 @@ import { Sofa } from '../objects/Sofa';
 import { CoffeeTable } from '../objects/CoffeeTable';
 import { CoffeeMachine } from '../objects/CoffeeMachine';
 import { Bookshelf } from '../objects/Bookshelf';
-import { Plant } from '../objects/Plant';
+import { Plant, type PlantVariant } from '../objects/Plant';
 import { WaterCooler } from '../objects/WaterCooler';
 import { Door } from '../objects/Door';
 import { PingPongTable } from '../objects/PingPongTable';
@@ -41,9 +41,11 @@ export class OfficeScene extends Phaser.Scene {
   public massageChairs: MassageChair[] = [];
   public beds: Bed[] = [];
   public beanBags: BeanBag[] = [];
-  private sofas: Sofa[] = [];
+  public sofas: Sofa[] = [];
+  public arcades: ArcadeMachine[] = [];
+  public hammocks: Hammock[] = [];
+  public poolTables: PoolTable[] = [];
   private coffeeTables: CoffeeTable[] = [];
-  private poolTables: PoolTable[] = [];
   private nightStands: NightStand[] = [];
   private agentManager!: AgentManager;
   private currentTheme!: OfficeTheme;
@@ -609,8 +611,10 @@ export class OfficeScene extends Phaser.Scene {
     ];
 
     // ═══ ÁREA GAMER (topo-direita) ═══
-    new ArcadeMachine(this, FURNITURE_POSITIONS.arcade1.tileX, FURNITURE_POSITIONS.arcade1.tileY);
-    new ArcadeMachine(this, FURNITURE_POSITIONS.arcade2.tileX, FURNITURE_POSITIONS.arcade2.tileY);
+    this.arcades = [
+      new ArcadeMachine(this, FURNITURE_POSITIONS.arcade1.tileX, FURNITURE_POSITIONS.arcade1.tileY),
+      new ArcadeMachine(this, FURNITURE_POSITIONS.arcade2.tileX, FURNITURE_POSITIONS.arcade2.tileY),
+    ];
     this.gamingSetups = [
       new GamingSetup(this, FURNITURE_POSITIONS.gaming.tileX, FURNITURE_POSITIONS.gaming.tileY),
     ];
@@ -620,9 +624,11 @@ export class OfficeScene extends Phaser.Scene {
     ];
 
     // ═══ ÁREA DE REDES (baixo-esquerda) ═══
-    new Hammock(this, FURNITURE_POSITIONS.hammock1.tileX, FURNITURE_POSITIONS.hammock1.tileY);
-    new Hammock(this, FURNITURE_POSITIONS.hammock2.tileX, FURNITURE_POSITIONS.hammock2.tileY);
-    new Hammock(this, FURNITURE_POSITIONS.hammock3.tileX, FURNITURE_POSITIONS.hammock3.tileY);
+    this.hammocks = [
+      new Hammock(this, FURNITURE_POSITIONS.hammock1.tileX, FURNITURE_POSITIONS.hammock1.tileY),
+      new Hammock(this, FURNITURE_POSITIONS.hammock2.tileX, FURNITURE_POSITIONS.hammock2.tileY),
+      new Hammock(this, FURNITURE_POSITIONS.hammock3.tileX, FURNITURE_POSITIONS.hammock3.tileY),
+    ];
     this.massageChairs = [
       new MassageChair(this, FURNITURE_POSITIONS.massage1.tileX, FURNITURE_POSITIONS.massage1.tileY),
       new MassageChair(this, FURNITURE_POSITIONS.massage2.tileX, FURNITURE_POSITIONS.massage2.tileY),
@@ -650,35 +656,35 @@ export class OfficeScene extends Phaser.Scene {
       new NightStand(this, FURNITURE_POSITIONS.nightStand2.tileX, FURNITURE_POSITIONS.nightStand2.tileY),
       new NightStand(this, FURNITURE_POSITIONS.nightStand3.tileX, FURNITURE_POSITIONS.nightStand3.tileY),
     ];
-    new Plant(this, FURNITURE_POSITIONS.bedroomPlant1.tileX, FURNITURE_POSITIONS.bedroomPlant1.tileY);
-    new Plant(this, FURNITURE_POSITIONS.bedroomPlant2.tileX, FURNITURE_POSITIONS.bedroomPlant2.tileY);
+    new Plant(this, FURNITURE_POSITIONS.bedroomPlant1.tileX, FURNITURE_POSITIONS.bedroomPlant1.tileY, 'bonsai');
+    new Plant(this, FURNITURE_POSITIONS.bedroomPlant2.tileX, FURNITURE_POSITIONS.bedroomPlant2.tileY, 'succulent');
     new Door(this, FURNITURE_POSITIONS.bedroomDoor.tileX, FURNITURE_POSITIONS.bedroomDoor.tileY);
 
     // ═══ PLANTS (decorative, zone borders & corners) ═══
-    // Recreation zone borders
-    new Plant(this, FURNITURE_POSITIONS.plant1.tileX, FURNITURE_POSITIONS.plant1.tileY);
-    new Plant(this, FURNITURE_POSITIONS.plant2.tileX, FURNITURE_POSITIONS.plant2.tileY);
-    new Plant(this, FURNITURE_POSITIONS.plant3.tileX, FURNITURE_POSITIONS.plant3.tileY);
-    new Plant(this, FURNITURE_POSITIONS.plant4.tileX, FURNITURE_POSITIONS.plant4.tileY);
-    new Plant(this, FURNITURE_POSITIONS.plant5.tileX, FURNITURE_POSITIONS.plant5.tileY);
-    new Plant(this, FURNITURE_POSITIONS.plant6.tileX, FURNITURE_POSITIONS.plant6.tileY);
+    // Recreation zone borders — tropical & hanging mix
+    new Plant(this, FURNITURE_POSITIONS.plant1.tileX, FURNITURE_POSITIONS.plant1.tileY, 'tropical');
+    new Plant(this, FURNITURE_POSITIONS.plant2.tileX, FURNITURE_POSITIONS.plant2.tileY, 'hanging');
+    new Plant(this, FURNITURE_POSITIONS.plant3.tileX, FURNITURE_POSITIONS.plant3.tileY, 'tropical');
+    new Plant(this, FURNITURE_POSITIONS.plant4.tileX, FURNITURE_POSITIONS.plant4.tileY, 'bonsai');
+    new Plant(this, FURNITURE_POSITIONS.plant5.tileX, FURNITURE_POSITIONS.plant5.tileY, 'succulent');
+    new Plant(this, FURNITURE_POSITIONS.plant6.tileX, FURNITURE_POSITIONS.plant6.tileY, 'hanging');
     // Zone dividers (between areas)
-    new Plant(this, 8, 5);    // Between jogos & gamer
-    new Plant(this, 8, 12);   // Between redes & lounge
-    new Plant(this, 1, 9);    // Redes left border
-    new Plant(this, 1, 14);   // Redes left border
-    new Plant(this, 15, 8);   // Right border mid
-    new Plant(this, 15, 14);  // Right border low
-    // Work zone
-    new Plant(this, 17, 2);
-    new Plant(this, 17, 10);
-    new Plant(this, 17, 16);
-    new Plant(this, 34, 2);
-    new Plant(this, 34, 10);
-    new Plant(this, 34, 20);
-    // Entrance
-    new Plant(this, 20, 20);
-    new Plant(this, 8, 19);
+    new Plant(this, 8, 5, 'tropical');     // Between jogos & gamer
+    new Plant(this, 8, 12, 'hanging');     // Between redes & lounge
+    new Plant(this, 1, 9, 'succulent');    // Redes left border
+    new Plant(this, 1, 14, 'bonsai');      // Redes left border
+    new Plant(this, 15, 8, 'tropical');    // Right border mid
+    new Plant(this, 15, 14, 'hanging');    // Right border low
+    // Work zone — bonsai & succulent (compact, desk-friendly)
+    new Plant(this, 17, 2, 'bonsai');
+    new Plant(this, 17, 10, 'succulent');
+    new Plant(this, 17, 16, 'bonsai');
+    new Plant(this, 34, 2, 'succulent');
+    new Plant(this, 34, 10, 'bonsai');
+    new Plant(this, 34, 20, 'succulent');
+    // Entrance — tropical statement plants
+    new Plant(this, 20, 20, 'tropical');
+    new Plant(this, 8, 19, 'tropical');
 
     // Entrance door
     new Door(this, ENTRANCE_POSITION.tileX, ENTRANCE_POSITION.tileY);

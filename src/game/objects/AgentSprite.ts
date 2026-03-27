@@ -527,6 +527,49 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     }
   }
 
+  lieDown(): void {
+    this.stopCurrentAnimation();
+    this.animState = 'sleep';
+    if (this.isPixelLab) {
+      this.startSleepAnimation();
+    } else {
+      this.sprite.setFlipX(false);
+      // Rotate sprite to simulate lying down for procedural mode
+      this.sprite.setAngle(-90);
+      this.sprite.setAlpha(0.85);
+      this.playAnimIfExists('idle');
+    }
+  }
+
+  private startSleepAnimation(): void {
+    if (!this.isPixelLab) return;
+    this.stopPixelLabTweens();
+    this.setPixelLabDirection('east');
+
+    // Rotate sprite to lie on bed
+    this.sprite.setAngle(-90);
+    this.sprite.y = -8;
+    this.sprite.setAlpha(0.85);
+
+    // Very slow breathing while sleeping
+    const baseScale = PIXELLAB_DISPLAY_SCALE;
+    this.breathTween = this.scene.tweens.add({
+      targets: this.sprite,
+      scaleY: baseScale * 1.02,
+      duration: 3500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  /** Reset rotation when waking up from sleep */
+  wakeUp(): void {
+    this.sprite.setAngle(0);
+    this.sprite.setAlpha(1);
+    this.sprite.y = -14;
+  }
+
   getAnimState(): AgentAnimState {
     return this.animState;
   }
@@ -546,6 +589,10 @@ export class AgentSprite extends Phaser.GameObjects.Container {
   }
 
   private stopCurrentAnimation(): void {
+    // Reset sleep state if waking up
+    if (this.animState === 'sleep') {
+      this.wakeUp();
+    }
     if (this.currentTween) {
       this.currentTween.stop();
       this.currentTween = null;

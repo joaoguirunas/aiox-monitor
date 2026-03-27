@@ -166,7 +166,7 @@ function isStopEvent(type: string): boolean {
 }
 
 function inputLabel(type: string): string {
-  if (type === 'UserPromptSubmit') return 'Prompt do Utilizador';
+  if (type === 'UserPromptSubmit') return 'Prompt do Usuário';
   if (type === 'PreToolUse') return 'Comando da Tool';
   if (type === 'PostToolUse') return 'Input da Tool';
   if (isStopEvent(type)) return 'Resposta do Claude';

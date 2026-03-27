@@ -5,6 +5,9 @@ import type { OfficeTheme } from '../data/themes';
 export class Bed extends Phaser.GameObjects.Container {
   private graphics: Phaser.GameObjects.Graphics;
   private occupied = false;
+  private sleepGlow: Phaser.GameObjects.Arc | null = null;
+  private sleepZzz: Phaser.GameObjects.Text | null = null;
+  private zzzTween: Phaser.Tweens.Tween | null = null;
 
   constructor(scene: Phaser.Scene, tileX: number, tileY: number) {
     const { x, y } = tileToPixel(tileX, tileY);
@@ -89,6 +92,46 @@ export class Bed extends Phaser.GameObjects.Container {
 
   setOccupied(on: boolean): void {
     this.occupied = on;
+
+    if (on) {
+      // Add soft blue glow under the bed
+      if (!this.sleepGlow) {
+        this.sleepGlow = this.scene.add.circle(0, 4, 28, 0x4466aa, 0.08);
+        this.add(this.sleepGlow);
+        this.sendToBack(this.sleepGlow);
+      }
+      // Add floating Zzz
+      if (!this.sleepZzz) {
+        this.sleepZzz = this.scene.add.text(18, -24, 'z', {
+          fontSize: '10px',
+          color: '#8899cc',
+          fontFamily: 'monospace',
+        }).setOrigin(0.5).setAlpha(0);
+        this.add(this.sleepZzz);
+        this.zzzTween = this.scene.tweens.add({
+          targets: this.sleepZzz,
+          y: -36,
+          alpha: { from: 0, to: 0.6 },
+          duration: 2000,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
+    } else {
+      if (this.sleepGlow) {
+        this.sleepGlow.destroy();
+        this.sleepGlow = null;
+      }
+      if (this.zzzTween) {
+        this.zzzTween.stop();
+        this.zzzTween = null;
+      }
+      if (this.sleepZzz) {
+        this.sleepZzz.destroy();
+        this.sleepZzz = null;
+      }
+    }
   }
 
   isOccupied(): boolean {

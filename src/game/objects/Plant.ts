@@ -1,49 +1,57 @@
 import * as Phaser from 'phaser';
 import { tileToPixel } from '../utils/iso-utils';
 
+export type PlantVariant = 'tropical' | 'succulent' | 'hanging' | 'bonsai';
+
+const PLANT_TEXTURE_KEY: Record<PlantVariant, string> = {
+  tropical: 'plant-tropical',
+  succulent: 'plant-succulent',
+  hanging: 'plant-hanging',
+  bonsai: 'plant-bonsai',
+};
+
+/** Target display height in pixels — sprites are scaled to fit */
+const PLANT_DISPLAY_HEIGHT = 28;
+
 export class Plant extends Phaser.GameObjects.Container {
-  constructor(scene: Phaser.Scene, tileX: number, tileY: number) {
+  constructor(scene: Phaser.Scene, tileX: number, tileY: number, variant?: PlantVariant) {
     const { x, y } = tileToPixel(tileX, tileY);
     super(scene, x, y);
 
-    const g = scene.add.graphics();
-    // Pot (metallic planter)
-    g.fillStyle(0x1a2040, 1);
-    g.fillRect(-6, -4, 12, 8);
-    g.fillRect(-7, -5, 14, 2);
-    // Pot edge highlight
-    g.lineStyle(1, 0x2a3565, 0.3);
-    g.lineBetween(-7, -5, 7, -5);
-    // Bio-luminescent leaves
-    g.fillStyle(0x22d3ee, 0.4);
-    g.fillCircle(-4, -12, 6);
-    g.fillCircle(4, -14, 6);
-    g.fillCircle(0, -16, 6);
-    // Brighter inner glow
-    g.fillStyle(0x34d399, 0.3);
-    g.fillCircle(-3, -11, 3);
-    g.fillCircle(3, -13, 3);
-    g.fillCircle(0, -15, 3);
-    // Stem
-    g.fillStyle(0x1a4a3a, 1);
-    g.fillRect(-1, -9, 2, 6);
-    this.add(g);
+    const chosen = variant ?? pickRandomVariant(tileX, tileY);
+    const textureKey = PLANT_TEXTURE_KEY[chosen];
 
-    // Gentle glow tween on leaves
-    const glow = scene.add.graphics();
-    glow.fillStyle(0x22d3ee, 0.06);
-    glow.fillCircle(0, -13, 10);
-    this.add(glow);
-    scene.tweens.add({
-      targets: glow,
-      alpha: { from: 0.3, to: 0.8 },
-      duration: 3000,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
+    if (scene.textures.exists(textureKey)) {
+      const sprite = scene.add.image(0, -PLANT_DISPLAY_HEIGHT / 2, textureKey);
+      sprite.setDisplaySize(
+        PLANT_DISPLAY_HEIGHT * (sprite.width / sprite.height),
+        PLANT_DISPLAY_HEIGHT,
+      );
+      sprite.setOrigin(0.5, 0.5);
+      sprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      this.add(sprite);
+    } else {
+      // Fallback procedural plant if sprite not loaded
+      const g = scene.add.graphics();
+      g.fillStyle(0x1a2040, 1);
+      g.fillRect(-6, -4, 12, 8);
+      g.fillStyle(0x22d3ee, 0.4);
+      g.fillCircle(-4, -12, 6);
+      g.fillCircle(4, -14, 6);
+      g.fillCircle(0, -16, 6);
+      g.fillStyle(0x1a4a3a, 1);
+      g.fillRect(-1, -9, 2, 6);
+      this.add(g);
+    }
 
     this.setDepth(y);
     scene.add.existing(this);
   }
+}
+
+/** Deterministic pseudo-random variant based on tile position (consistent across reloads) */
+function pickRandomVariant(tileX: number, tileY: number): PlantVariant {
+  const variants: PlantVariant[] = ['tropical', 'succulent', 'hanging', 'bonsai'];
+  const hash = ((tileX * 31) + tileY * 17) & 0xffff;
+  return variants[hash % variants.length];
 }

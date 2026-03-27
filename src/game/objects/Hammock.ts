@@ -2,6 +2,9 @@ import * as Phaser from 'phaser';
 import { tileToPixel } from '../utils/iso-utils';
 
 export class Hammock extends Phaser.GameObjects.Container {
+  private occupied = false;
+  private swayTween: Phaser.Tweens.Tween | null = null;
+
   constructor(scene: Phaser.Scene, tileX: number, tileY: number) {
     const { x, y } = tileToPixel(tileX, tileY);
     super(scene, x, y);
@@ -60,5 +63,31 @@ export class Hammock extends Phaser.GameObjects.Container {
     this.add(g);
     this.setDepth(y);
     scene.add.existing(this);
+  }
+
+  setOccupied(on: boolean): void {
+    this.occupied = on;
+    if (on) {
+      if (!this.swayTween) {
+        this.swayTween = this.scene.tweens.add({
+          targets: this,
+          angle: { from: -1.5, to: 1.5 },
+          duration: 2500,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
+    } else {
+      if (this.swayTween) {
+        this.swayTween.stop();
+        this.swayTween = null;
+        this.setAngle(0);
+      }
+    }
+  }
+
+  isOccupied(): boolean {
+    return this.occupied;
   }
 }

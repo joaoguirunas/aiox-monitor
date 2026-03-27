@@ -56,13 +56,16 @@ export function PhaserGame() {
     setGameInstance(game);
 
     game.events.on('ready', () => {
+      // Poll for OfficeScene readiness — scene may not exist yet during BootScene preload
       const waitForScene = setInterval(() => {
         const scene = game.scene.getScene('OfficeScene');
         if (scene && scene.scene.isActive()) {
           clearInterval(waitForScene);
           fetchAndSync();
         }
-      }, 100);
+      }, 150);
+      // Safety: stop polling after 10s to avoid leaks
+      setTimeout(() => clearInterval(waitForScene), 10000);
     });
 
     return () => {
@@ -112,7 +115,7 @@ export function PhaserGame() {
     // terminal:update / event:new → throttled agents-only re-fetch (1 HTTP instead of 2-3)
     if (lastMessage.type === 'event:new' || lastMessage.type === 'terminal:update') {
       const now = Date.now();
-      if (now - lastSyncRef.current < 2000) return;
+      if (now - lastSyncRef.current < 4000) return;
       lastSyncRef.current = now;
       const projectId = 'projectId' in lastMessage ? (lastMessage as WsEventNew).projectId : undefined;
       if (selectedProjectId && projectId && projectId !== selectedProjectId) return;

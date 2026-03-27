@@ -69,7 +69,7 @@ export function generateClusterDesks(origin: TilePosition, clusterIndex: number)
 
 export interface RecreationPosition extends TilePosition {
   type: 'sofa' | 'coffee-machine' | 'bookshelf' | 'water-cooler' | 'ping-pong' | 'hammock' | 'arcade' | 'standing' | 'pool-table' | 'massage' | 'gaming' | 'bean-bag' | 'bed';
-  interactionFor: ('idle' | 'break' | 'sleep')[];
+  interactionFor: ('idle' | 'break')[];
 }
 
 export const RECREATION_POSITIONS: RecreationPosition[] = [
@@ -127,9 +127,9 @@ export const RECREATION_POSITIONS: RecreationPosition[] = [
   { tileX: 13, tileY: 15, type: 'standing',    interactionFor: ['idle', 'break'] },
 
   // ═══ BEDROOM (zona de dormir, separada) ═══
-  { tileX: 3,  tileY: 19, type: 'bed',         interactionFor: ['sleep'] },
-  { tileX: 3,  tileY: 21, type: 'bed',         interactionFor: ['sleep'] },
-  { tileX: 3,  tileY: 23, type: 'bed',         interactionFor: ['sleep'] },
+  { tileX: 3,  tileY: 19, type: 'bed',         interactionFor: ['break'] },
+  { tileX: 3,  tileY: 21, type: 'bed',         interactionFor: ['break'] },
+  { tileX: 3,  tileY: 23, type: 'bed',         interactionFor: ['break'] },
 ];
 
 // ─── Posições dos móveis decorativos ──────────────────────────────────────────

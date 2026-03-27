@@ -32,14 +32,14 @@ function humanizeTool(tool: string | undefined | null, input: string | undefined
           git: 'Executou git', curl: 'Fez request HTTP', docker: 'Executou docker',
           pip: 'Executou pip', python3: 'Executou python', python: 'Executou python',
           cd: 'Navegou diretório', ls: 'Listou diretório', mkdir: 'Criou diretório',
-          cat: 'Leu ficheiro', rm: 'Removeu ficheiro', mv: 'Moveu ficheiro',
-          cp: 'Copiou ficheiro', tsc: 'Verificou tipos',
+          cat: 'Leu arquivo', rm: 'Removeu arquivo', mv: 'Moveu arquivo',
+          cp: 'Copiou arquivo', tsc: 'Verificou tipos',
         };
         return knownCmds[cmd] ?? `Executou: ${short(input, 70)}`; }
     case 'Grep':
       return `Pesquisou "${short(input, 50)}"`;
     case 'Glob':
-      return `Procurou ficheiros: ${short(input, 50)}`;
+      return `Procurou arquivos: ${short(input, 50)}`;
     case 'Agent':
       return `Lançou sub-agente`;
     case 'Skill':

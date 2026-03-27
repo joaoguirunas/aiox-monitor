@@ -41,6 +41,13 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
+    // Carregar sprites de objetos (plantas e desk-imac)
+    this.load.image('plant-tropical', '/sprites/objects/plant-tropical.png');
+    this.load.image('plant-succulent', '/sprites/objects/plant-succulent.png');
+    this.load.image('plant-hanging', '/sprites/objects/plant-hanging.png');
+    this.load.image('plant-bonsai', '/sprites/objects/plant-bonsai.png');
+    this.load.image('desk-imac', '/sprites/objects/desk-imac.png');
+
     // Carregar floor tiles e rugs para todos os temas
     for (const theme of THEME_NAMES) {
       for (const zone of ZONE_NAMES) {

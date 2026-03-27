@@ -385,7 +385,7 @@ export function SessionDetail({ session, agents, projects, terminals, onClose }:
                             {g.tool}{g.count > 1 ? ` ×${g.count}` : ''}
                           </span>
                           <span className="text-[11px] text-[#8892b0] truncate">
-                            {g.count > 1 ? `${g.count} ficheiros` : g.input}
+                            {g.count > 1 ? `${g.count} arquivos` : g.input}
                           </span>
                         </div>
                       </div>

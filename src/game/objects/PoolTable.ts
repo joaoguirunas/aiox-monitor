@@ -4,6 +4,8 @@ import type { OfficeTheme } from '../data/themes';
 
 export class PoolTable extends Phaser.GameObjects.Container {
   private graphics: Phaser.GameObjects.Graphics;
+  private inUse = false;
+  private lampGlow: Phaser.GameObjects.Arc | null = null;
 
   constructor(scene: Phaser.Scene, tileX: number, tileY: number) {
     const { x, y } = tileToPixel(tileX, tileY);
@@ -87,5 +89,25 @@ export class PoolTable extends Phaser.GameObjects.Container {
 
   applyTheme(theme: OfficeTheme): void {
     this.drawTable(theme.furnitureBaseColor, theme.furnitureAccentColor, theme.furnitureEdgeColor);
+  }
+
+  setInUse(on: boolean): void {
+    this.inUse = on;
+    if (on) {
+      if (!this.lampGlow) {
+        this.lampGlow = this.scene.add.circle(0, -2, 30, 0x22aa44, 0.06);
+        this.add(this.lampGlow);
+        this.sendToBack(this.lampGlow);
+      }
+    } else {
+      if (this.lampGlow) {
+        this.lampGlow.destroy();
+        this.lampGlow = null;
+      }
+    }
+  }
+
+  isInUse(): boolean {
+    return this.inUse;
   }
 }

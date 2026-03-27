@@ -3,6 +3,8 @@ import { tileToPixel } from '../utils/iso-utils';
 
 export class ArcadeMachine extends Phaser.GameObjects.Container {
   private screenGlow: Phaser.GameObjects.Graphics;
+  private inUse = false;
+  private playerGlow: Phaser.GameObjects.Arc | null = null;
 
   constructor(scene: Phaser.Scene, tileX: number, tileY: number) {
     const { x, y } = tileToPixel(tileX, tileY);
@@ -88,5 +90,27 @@ export class ArcadeMachine extends Phaser.GameObjects.Container {
 
     this.setDepth(y);
     scene.add.existing(this);
+  }
+
+  setInUse(on: boolean): void {
+    this.inUse = on;
+    if (on) {
+      if (!this.playerGlow) {
+        this.playerGlow = this.scene.add.circle(0, 4, 16, 0xff00ff, 0.08);
+        this.add(this.playerGlow);
+        this.sendToBack(this.playerGlow);
+      }
+      this.screenGlow.setAlpha(1);
+    } else {
+      if (this.playerGlow) {
+        this.playerGlow.destroy();
+        this.playerGlow = null;
+      }
+      this.screenGlow.setAlpha(0.6);
+    }
+  }
+
+  isInUse(): boolean {
+    return this.inUse;
   }
 }

@@ -27,17 +27,17 @@ function agentPaths(name: string): PixelLabDirections {
 }
 
 export const PIXELLAB_SPRITES: Record<string, PixelLabSpriteEntry> = {
-  '@dev':              { agentKey: 'agent-dev',       directions: agentPaths('dex'),    frameSize: 96 },
-  '@qa':               { agentKey: 'agent-qa',        directions: agentPaths('quinn'),  frameSize: 96 },
-  '@architect':        { agentKey: 'agent-architect',  directions: agentPaths('aria'),   frameSize: 96 },
-  '@pm':               { agentKey: 'agent-pm',        directions: agentPaths('morgan'), frameSize: 96 },
-  '@sm':               { agentKey: 'agent-sm',        directions: agentPaths('river'),  frameSize: 96 },
-  '@po':               { agentKey: 'agent-po',        directions: agentPaths('pax'),    frameSize: 96 },
-  '@analyst':          { agentKey: 'agent-analyst',    directions: agentPaths('alex'),   frameSize: 96 },
-  '@devops':           { agentKey: 'agent-devops',     directions: agentPaths('gage'),   frameSize: 96 },
-  '@data-engineer':    { agentKey: 'agent-data',       directions: agentPaths('dara'),   frameSize: 96 },
-  '@ux-design-expert': { agentKey: 'agent-ux',         directions: agentPaths('uma'),    frameSize: 96 },
-  '@aiox-master':      { agentKey: 'agent-aiox',       directions: agentPaths('aiox'),   frameSize: 96 },
+  '@dev':              { agentKey: 'agent-dev',       directions: agentPaths('dex'),    frameSize: 128 },
+  '@qa':               { agentKey: 'agent-qa',        directions: agentPaths('quinn'),  frameSize: 128 },
+  '@architect':        { agentKey: 'agent-architect',  directions: agentPaths('aria'),   frameSize: 128 },
+  '@pm':               { agentKey: 'agent-pm',        directions: agentPaths('morgan'), frameSize: 128 },
+  '@sm':               { agentKey: 'agent-sm',        directions: agentPaths('river'),  frameSize: 128 },
+  '@po':               { agentKey: 'agent-po',        directions: agentPaths('pax'),    frameSize: 128 },
+  '@analyst':          { agentKey: 'agent-analyst',    directions: agentPaths('alex'),   frameSize: 128 },
+  '@devops':           { agentKey: 'agent-devops',     directions: agentPaths('gage'),   frameSize: 128 },
+  '@data-engineer':    { agentKey: 'agent-data',       directions: agentPaths('dara'),   frameSize: 128 },
+  '@ux-design-expert': { agentKey: 'agent-ux',         directions: agentPaths('uma'),    frameSize: 128 },
+  '@aiox-master':      { agentKey: 'agent-aiox',       directions: agentPaths('aiox'),   frameSize: 128 },
 };
 
 /** Verifica se um agente tem sprites PixelLab disponíveis */
@@ -69,7 +69,7 @@ export function angleToDirection(angleDeg: number): string {
 }
 
 /** Tamanho do frame PixelLab (fonte) */
-export const PIXELLAB_FRAME_SIZE = 96;
+export const PIXELLAB_FRAME_SIZE = 128;
 
 /** Escala para renderizar sprites PixelLab no tamanho do jogo */
 export const PIXELLAB_DISPLAY_SCALE = 72 / PIXELLAB_FRAME_SIZE; // 0.75

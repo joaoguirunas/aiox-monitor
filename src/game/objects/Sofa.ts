@@ -4,6 +4,8 @@ import type { OfficeTheme } from '../data/themes';
 
 export class Sofa extends Phaser.GameObjects.Container {
   private graphics: Phaser.GameObjects.Graphics;
+  private occupied = false;
+  private cushionGlow: Phaser.GameObjects.Arc | null = null;
 
   constructor(scene: Phaser.Scene, tileX: number, tileY: number) {
     const { x, y } = tileToPixel(tileX, tileY);
@@ -72,5 +74,25 @@ export class Sofa extends Phaser.GameObjects.Container {
 
   applyTheme(theme: OfficeTheme): void {
     this.drawSofa(theme.furnitureAccentColor, theme.furnitureBaseColor, theme.furnitureEdgeColor);
+  }
+
+  setOccupied(on: boolean): void {
+    this.occupied = on;
+    if (on) {
+      if (!this.cushionGlow) {
+        this.cushionGlow = this.scene.add.circle(0, -2, 18, 0x4466aa, 0.06);
+        this.add(this.cushionGlow);
+        this.sendToBack(this.cushionGlow);
+      }
+    } else {
+      if (this.cushionGlow) {
+        this.cushionGlow.destroy();
+        this.cushionGlow = null;
+      }
+    }
+  }
+
+  isOccupied(): boolean {
+    return this.occupied;
   }
 }

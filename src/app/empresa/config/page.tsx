@@ -9,19 +9,7 @@ import {
   type SkinAssignment, type SkinDefinition,
 } from '@/game/data/skin-config';
 import { PIXELLAB_SPRITES } from '@/game/data/pixellab-sprites';
-import type { CompanyConfig, ThemeName, Project } from '@/lib/types';
-
-const AGENT_LIST = Object.entries(PIXELLAB_SPRITES).map(([name, entry]) => ({
-  name,
-  key: entry.agentKey,
-  label: name.replace('@', ''),
-}));
-
-const SKIN_OPTIONS: { value: string; label: string; group: string }[] = [
-  { value: 'default', label: 'Default (AIOX)', group: '' },
-  ...ALIEN_SKINS.map(s => ({ value: s.id, label: s.label, group: 'Aliens' })),
-  ...ANIMAL_SKINS.map(s => ({ value: s.id, label: s.label, group: 'Animais' })),
-];
+import type { CompanyConfig, ThemeName, Project, Agent } from '@/lib/types';
 
 const THEMES: { value: ThemeName; label: string; description: string }[] = [
   { value: 'moderno', label: 'Moderno', description: 'Clean, minimal, cores neutras' },
@@ -43,8 +31,16 @@ export default function CompanyConfigPage() {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ projectId: number; action: 'delete' | 'clear'; name: string } | null>(null);
   const [skinConfig, setSkinConfig] = useState<SkinAssignment>({});
+  const [allAgents, setAllAgents] = useState<Agent[]>([]);
   const { lastMessage, reconnectCount } = useWebSocket();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadAgents = useCallback(() => {
+    fetch('/api/agents')
+      .then((r) => r.json())
+      .then((agents: Agent[]) => setAllAgents(agents))
+      .catch(() => {});
+  }, []);
 
   const loadProjects = useCallback(() => {
     fetch('/api/projects?stats=1')
@@ -69,7 +65,8 @@ export default function CompanyConfigPage() {
       .catch(() => setToast({ type: 'error', message: 'Erro ao carregar configuração' }));
     setSkinConfig(loadSkinConfig());
     loadProjects();
-  }, [loadProjects]);
+    loadAgents();
+  }, [loadProjects, loadAgents]);
 
   useEffect(() => {
     if (!lastMessage) return;
@@ -108,7 +105,7 @@ export default function CompanyConfigPage() {
       saveSkinConfig(skinConfig);
       showToast('success', 'Configuração salva! Recarregue o jogo para ver as skins.');
     } catch {
-      showToast('error', 'Erro ao guardar');
+      showToast('error', 'Erro ao salvar');
     } finally {
       setSaving(false);
     }
@@ -188,7 +185,7 @@ export default function CompanyConfigPage() {
             disabled={saving}
             className="px-3 py-1.5 text-[11px] font-medium text-white bg-accent-blue hover:bg-accent-blue/80 rounded-md transition-colors disabled:opacity-40"
           >
-            {saving ? 'Guardando...' : 'Guardar'}
+            {saving ? 'Salvando...' : 'Salvar'}
           </button>
         </div>
       </div>
@@ -268,7 +265,7 @@ export default function CompanyConfigPage() {
           {/* Skins dos Agentes */}
           <SettingBlock label="Skins dos Agentes">
             <p className="text-[11px] text-text-muted/70 mb-3 leading-relaxed">
-              Escolha uma aparência para cada agente. Use os presets para distribuir automaticamente.
+              Escolha uma aparência para cada agente. Agentes são listados por projeto. Use os presets para distribuir automaticamente.
             </p>
 
             {/* Preset buttons */}
@@ -281,8 +278,9 @@ export default function CompanyConfigPage() {
                   key={label}
                   onClick={() => {
                     const next: SkinAssignment = {};
-                    AGENT_LIST.forEach((agent, i) => {
-                      next[agent.name] = skins[i % skins.length].id;
+                    allAgents.forEach((agent, i) => {
+                      const key = agent.name.startsWith('@') ? agent.name : `@${agent.name}`;
+                      next[key] = skins[i % skins.length].id;
                     });
                     setSkinConfig(next);
                   }}
@@ -299,52 +297,83 @@ export default function CompanyConfigPage() {
               </button>
             </div>
 
-            {/* Per-agent skin list */}
-            <div className="space-y-2">
-              {AGENT_LIST.map((agent) => {
-                const currentSkin = skinConfig[agent.name] || 'default';
-                const skinDef = [...ALIEN_SKINS, ...ANIMAL_SKINS].find(s => s.id === currentSkin);
-                return (
-                  <div key={agent.name} className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 min-w-[120px]">
-                      {skinDef ? (
-                        <img
-                          src={`${skinDef.basePath}-south.png`}
-                          alt={skinDef.label}
-                          className="w-8 h-8 object-contain image-rendering-pixelated"
-                          style={{ imageRendering: 'pixelated' }}
-                        />
-                      ) : (
-                        <img
-                          src={PIXELLAB_SPRITES[agent.name]?.directions.south || ''}
-                          alt={agent.label}
-                          className="w-8 h-8 object-contain"
-                          style={{ imageRendering: 'pixelated' }}
-                        />
-                      )}
-                      <span className="text-[12px] font-medium text-text-primary capitalize">{agent.label}</span>
+            {/* Agents grouped by project */}
+            {allAgents.length === 0 ? (
+              <p className="text-[11px] text-text-muted/60 py-3">Nenhum agente registrado ainda.</p>
+            ) : (
+              <div className="space-y-4">
+                {projects.map((project) => {
+                  const projectAgents = allAgents.filter(a => a.project_id === project.id);
+                  if (projectAgents.length === 0) return null;
+                  return (
+                    <div key={project.id}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-[10px] font-semibold text-accent-blue/80 uppercase tracking-widest">{project.name}</span>
+                        <div className="h-px flex-1 bg-border/30" />
+                        <span className="text-[10px] tabular-nums text-text-muted/50">{projectAgents.length}</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {projectAgents.map((agent) => {
+                          const agentKey = agent.name.startsWith('@') ? agent.name : `@${agent.name}`;
+                          const currentSkin = skinConfig[agentKey] || 'default';
+                          const skinDef = [...ALIEN_SKINS, ...ANIMAL_SKINS].find(s => s.id === currentSkin);
+                          const spriteEntry = PIXELLAB_SPRITES[agentKey];
+                          const displayLabel = agent.display_name || agent.name.replace(/^@/, '');
+                          return (
+                            <div key={agent.id} className="flex items-center gap-3">
+                              <div className="flex items-center gap-2 min-w-[140px]">
+                                {skinDef ? (
+                                  <img
+                                    src={`${skinDef.basePath}-south.png`}
+                                    alt={skinDef.label}
+                                    className="w-7 h-7 object-contain"
+                                    style={{ imageRendering: 'pixelated' }}
+                                  />
+                                ) : spriteEntry ? (
+                                  <img
+                                    src={spriteEntry.directions.south}
+                                    alt={displayLabel}
+                                    className="w-7 h-7 object-contain"
+                                    style={{ imageRendering: 'pixelated' }}
+                                  />
+                                ) : (
+                                  <div className="w-7 h-7 rounded-full bg-surface-3/60 flex items-center justify-center text-[10px] font-bold text-text-muted/60 uppercase">
+                                    {displayLabel[0]}
+                                  </div>
+                                )}
+                                <div className="min-w-0">
+                                  <span className="text-[12px] font-medium text-text-primary truncate block">{displayLabel}</span>
+                                  {agent.role && (
+                                    <span className="text-[9px] text-text-muted/50 truncate block">{agent.role}</span>
+                                  )}
+                                </div>
+                              </div>
+                              <select
+                                value={currentSkin}
+                                onChange={(e) => handleSkinChange(agentKey, e.target.value)}
+                                className="flex-1 bg-surface-1/50 border border-border/50 rounded-md px-2 py-1.5 text-[11px] text-text-primary focus:border-accent-blue/40 focus:outline-none transition-colors appearance-none cursor-pointer"
+                              >
+                                <option value="default">{spriteEntry ? 'Default (AIOX)' : 'Sem skin'}</option>
+                                <optgroup label="Aliens">
+                                  {ALIEN_SKINS.map(s => (
+                                    <option key={s.id} value={s.id}>{s.label}</option>
+                                  ))}
+                                </optgroup>
+                                <optgroup label="Animais">
+                                  {ANIMAL_SKINS.map(s => (
+                                    <option key={s.id} value={s.id}>{s.label}</option>
+                                  ))}
+                                </optgroup>
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <select
-                      value={currentSkin}
-                      onChange={(e) => handleSkinChange(agent.name, e.target.value)}
-                      className="flex-1 bg-surface-1/50 border border-border/50 rounded-md px-2 py-1.5 text-[11px] text-text-primary focus:border-accent-blue/40 focus:outline-none transition-colors appearance-none cursor-pointer"
-                    >
-                      <option value="default">Default (AIOX)</option>
-                      <optgroup label="Aliens">
-                        {ALIEN_SKINS.map(s => (
-                          <option key={s.id} value={s.id}>{s.label}</option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Animais">
-                        {ANIMAL_SKINS.map(s => (
-                          <option key={s.id} value={s.id}>{s.label}</option>
-                        ))}
-                      </optgroup>
-                    </select>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </SettingBlock>
         </div>
 

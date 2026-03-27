@@ -102,13 +102,11 @@ export default function CompanyConfigPage() {
           ambient_music: config.ambient_music,
           idle_timeout_lounge: config.idle_timeout_lounge,
           idle_timeout_break: config.idle_timeout_break,
-          ganga_enabled: config.ganga_enabled,
-          ganga_scope: config.ganga_scope,
         }),
       });
       if (!res.ok) throw new Error();
       saveSkinConfig(skinConfig);
-      showToast('success', 'Configuração guardada! Recarregue o jogo para ver as skins.');
+      showToast('success', 'Configuração salva! Recarregue o jogo para ver as skins.');
     } catch {
       showToast('error', 'Erro ao guardar');
     } finally {
@@ -267,44 +265,41 @@ export default function CompanyConfigPage() {
             </button>
           </SettingBlock>
 
-          {/* Ganga Ativo */}
-          <SettingBlock label="Ganga Ativo">
-            <p className="text-[11px] text-text-muted/70 mb-3 leading-relaxed">
-              Modo operacional autônomo. Quando ativo, o sistema verifica terminais a cada 5 minutos
-              e auto-responde prompts seguros (yes/proceed/continue) dentro do escopo aprovado.
-              Prompts destrutivos são sempre bloqueados.
-            </p>
-            <div className="space-y-3">
-              <button
-                onClick={() => setConfig({ ...config, ganga_enabled: config.ganga_enabled ? 0 : 1 })}
-                className="flex items-center gap-2.5"
-              >
-                <div className={`w-9 h-5 rounded-full transition-colors ${config.ganga_enabled ? 'bg-emerald-500' : 'bg-surface-3'}`}>
-                  <div className={`w-4 h-4 mt-0.5 rounded-full bg-white transition-transform ${config.ganga_enabled ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
-                </div>
-                <span className={`text-[11px] font-medium ${config.ganga_enabled ? 'text-emerald-400' : 'text-text-muted'}`}>
-                  {config.ganga_enabled ? 'Ativo' : 'Desativado'}
-                </span>
-              </button>
-              {config.ganga_enabled ? (
-                <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
-                  <div className="flex items-center gap-2 text-[11px] text-emerald-400 font-medium">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Heartbeat a cada 5 min — auto-yes para prompts seguros
-                  </div>
-                  <div className="text-[10px] text-text-muted mt-1">
-                    Scope: {config.ganga_scope === 'safe-only' ? 'Apenas prompts seguros (y/n)' : 'Seguros + ambíguos'}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </SettingBlock>
-
           {/* Skins dos Agentes */}
           <SettingBlock label="Skins dos Agentes">
             <p className="text-[11px] text-text-muted/70 mb-3 leading-relaxed">
-              Escolha uma aparência alternativa para cada agente. Requer recarregar o jogo após guardar.
+              Escolha uma aparência para cada agente. Use os presets para distribuir automaticamente.
             </p>
+
+            {/* Preset buttons */}
+            <div className="flex gap-2 mb-4">
+              {[
+                { label: 'Aliens', icon: '👽', skins: ALIEN_SKINS },
+                { label: 'Animais', icon: '🐾', skins: ANIMAL_SKINS },
+              ].map(({ label, icon, skins }) => (
+                <button
+                  key={label}
+                  onClick={() => {
+                    const next: SkinAssignment = {};
+                    AGENT_LIST.forEach((agent, i) => {
+                      next[agent.name] = skins[i % skins.length].id;
+                    });
+                    setSkinConfig(next);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-md border border-border/50 bg-surface-1/40 text-text-secondary hover:border-accent-blue/40 hover:text-text-primary hover:bg-accent-blue/[0.06] transition-colors"
+                >
+                  <span>{icon}</span> {label}
+                </button>
+              ))}
+              <button
+                onClick={() => setSkinConfig({})}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-md border border-border/50 bg-surface-1/40 text-text-secondary hover:border-border hover:text-text-primary transition-colors"
+              >
+                <span>↺</span> Reset
+              </button>
+            </div>
+
+            {/* Per-agent skin list */}
             <div className="space-y-2">
               {AGENT_LIST.map((agent) => {
                 const currentSkin = skinConfig[agent.name] || 'default';
@@ -356,13 +351,13 @@ export default function CompanyConfigPage() {
         {/* Right: Projects */}
         <div>
           <div className="flex items-center gap-3 mb-3">
-            <span className="text-[11px] font-medium text-text-secondary">Projetos Registados</span>
+            <span className="text-[11px] font-medium text-text-secondary">Projetos Registrados</span>
             <div className="h-px flex-1 bg-border/60" />
             <span className="text-[11px] tabular-nums text-text-muted">{projects.length}</span>
           </div>
 
           {projects.length === 0 ? (
-            <p className="text-[11px] text-text-muted py-4">Nenhum projeto registado</p>
+            <p className="text-[11px] text-text-muted py-4">Nenhum projeto registrado</p>
           ) : (
             <div className="space-y-2">
               {projects.map((p) => (

@@ -8,7 +8,7 @@ import {
   PIXELLAB_SPRITES, pixelLabTextureKey,
 } from '../data/pixellab-sprites';
 import {
-  ALL_SKINS, loadSkinConfig, skinDirectionPaths,
+  ALL_SKINS, skinDirectionPaths,
 } from '../data/skin-config';
 import {
   THEME_NAMES, ZONE_NAMES, RUG_TYPES,
@@ -29,14 +29,13 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    // Carregar skins alternativas (aliens/animals) que estejam configuradas
-    const skinConfig = loadSkinConfig();
-    const activeSkinIds = new Set(Object.values(skinConfig).filter(v => v !== 'default'));
+    // Carregar TODAS as skins disponíveis para troca instantânea
     for (const skin of ALL_SKINS) {
-      if (activeSkinIds.has(skin.id)) {
-        const paths = skinDirectionPaths(skin);
-        for (const [dir, path] of Object.entries(paths)) {
-          this.load.image(`skin-${skin.id}-${dir}`, path);
+      const paths = skinDirectionPaths(skin);
+      for (const [dir, path] of Object.entries(paths)) {
+        const key = `skin-${skin.id}-${dir}`;
+        if (!this.textures.exists(key)) {
+          this.load.image(key, path);
         }
       }
     }

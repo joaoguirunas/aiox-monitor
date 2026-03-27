@@ -103,7 +103,8 @@ export default function CompanyConfigPage() {
       });
       if (!res.ok) throw new Error();
       saveSkinConfig(skinConfig);
-      showToast('success', 'Configuração salva! Recarregue o jogo para ver as skins.');
+      showToast('success', 'Configuração salva! Redirecionando...');
+      setTimeout(() => { window.location.href = '/empresa'; }, 800);
     } catch {
       showToast('error', 'Erro ao salvar');
     } finally {

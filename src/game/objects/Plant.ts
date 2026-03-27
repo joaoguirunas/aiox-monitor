@@ -14,18 +14,19 @@ const PLANT_TEXTURE_KEY: Record<PlantVariant, string> = {
 const PLANT_DISPLAY_HEIGHT = 28;
 
 export class Plant extends Phaser.GameObjects.Container {
-  constructor(scene: Phaser.Scene, tileX: number, tileY: number, variant?: PlantVariant) {
+  constructor(scene: Phaser.Scene, tileX: number, tileY: number, variant?: PlantVariant, scale: number = 1) {
     const { x, y } = tileToPixel(tileX, tileY);
     super(scene, x, y);
 
     const chosen = variant ?? pickRandomVariant(tileX, tileY);
     const textureKey = PLANT_TEXTURE_KEY[chosen];
+    const h = PLANT_DISPLAY_HEIGHT * scale;
 
     if (scene.textures.exists(textureKey)) {
-      const sprite = scene.add.image(0, -PLANT_DISPLAY_HEIGHT / 2, textureKey);
+      const sprite = scene.add.image(0, -h / 2, textureKey);
       sprite.setDisplaySize(
-        PLANT_DISPLAY_HEIGHT * (sprite.width / sprite.height),
-        PLANT_DISPLAY_HEIGHT,
+        h * (sprite.width / sprite.height),
+        h,
       );
       sprite.setOrigin(0.5, 0.5);
       sprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);

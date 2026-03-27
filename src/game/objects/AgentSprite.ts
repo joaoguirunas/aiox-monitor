@@ -7,7 +7,7 @@ import {
   pixelLabTextureKey, angleToDirection,
   PIXELLAB_DISPLAY_SCALE, PIXELLAB_SPRITES,
 } from '../data/pixellab-sprites';
-import { getAgentSkin } from '../data/skin-config';
+import { getAgentSkin, loadSkinConfig } from '../data/skin-config';
 import type { AgentAnimState } from '../animations/agent-animations';
 import type { AgentStatus } from '@/lib/types';
 
@@ -65,6 +65,8 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     const skinDef = getAgentSkin(agentName);
     const skinSouthKey = skinDef ? `skin-${skinDef.id}-south` : '';
     const hasSkin = !!skinDef;
+    // DIAG: temporary — remove after confirming skins work
+    console.warn('[SKIN-DIAG]', agentName, 'skinDef:', skinDef?.id ?? 'none', 'hasSkin:', hasSkin, 'texExists:', skinSouthKey ? scene.textures.exists(skinSouthKey) : 'n/a');
 
     const plEntry = Object.values(PIXELLAB_SPRITES).find(e => e.agentKey === config.key);
     const plSouthKey = pixelLabTextureKey(config.key, 'south');
@@ -221,17 +223,16 @@ export class AgentSprite extends Phaser.GameObjects.Container {
   private setPixelLabDirection(direction: string): void {
     if (!this.isPixelLab) return;
     const texKey = this.resolveDirectionKey(direction);
-    if (this.scene.textures.exists(texKey)) {
+    // For west, try east+flipX as fallback (some skins only have 3 directions)
+    if (direction === 'west' && !this.scene.textures.exists(texKey)) {
+      const eastKey = this.resolveDirectionKey('east');
+      this.sprite.setTexture(eastKey);
+      this.sprite.setFlipX(true);
+      this.currentDirection = direction;
+    } else {
       this.sprite.setTexture(texKey);
       this.sprite.setFlipX(false);
       this.currentDirection = direction;
-    } else if (direction === 'west') {
-      const eastKey = this.resolveDirectionKey('east');
-      if (this.scene.textures.exists(eastKey)) {
-        this.sprite.setTexture(eastKey);
-        this.sprite.setFlipX(true);
-        this.currentDirection = direction;
-      }
     }
   }
 
@@ -614,21 +615,21 @@ export class AgentSprite extends Phaser.GameObjects.Container {
   refreshSkin(): void {
     const skinDef = getAgentSkin(this.agentName);
     const newPlAgentKey = skinDef ? `skin:${skinDef.id}` : '';
+    // DIAG: temporary — remove after confirming skins work
+    console.warn('[SKIN-REFRESH]', this.agentName, 'current:', this.plAgentKey, 'new:', newPlAgentKey, 'config:', JSON.stringify(loadSkinConfig()));
 
     // Check if skin actually changed
     if (skinDef && newPlAgentKey !== this.plAgentKey) {
       const southKey = `skin-${skinDef.id}-south`;
-      if (this.scene.textures.exists(southKey)) {
-        // Switch to new skin
-        this.plAgentKey = newPlAgentKey;
-        this.isPixelLab = true;
-        this.sprite.setTexture(southKey);
-        this.sprite.setScale(PIXELLAB_DISPLAY_SCALE);
-        this.sprite.setOrigin(0.5, 0.5);
-        this.currentDirection = 'south';
-        // Re-apply current animation state
-        this.reapplyAnimState();
-      }
+      // Switch to new skin (no textures.exists guard — trust BootScene preload)
+      this.plAgentKey = newPlAgentKey;
+      this.isPixelLab = true;
+      this.sprite.setTexture(southKey);
+      this.sprite.setScale(PIXELLAB_DISPLAY_SCALE);
+      this.sprite.setOrigin(0.5, 0.5);
+      this.currentDirection = 'south';
+      // Re-apply current animation state
+      this.reapplyAnimState();
     } else if (!skinDef && this.plAgentKey.startsWith('skin:')) {
       // Skin was removed — revert to PixelLab default or procedural
       const config = getAgentSpriteConfig(this.agentName);

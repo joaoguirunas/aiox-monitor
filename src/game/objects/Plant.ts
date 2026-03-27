@@ -30,6 +30,7 @@ export class Plant extends Phaser.GameObjects.Container {
       );
       sprite.setOrigin(0.5, 0.5);
       sprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      sprite.setTint(0xaaaaaa);
       this.add(sprite);
     } else {
       // Fallback procedural plant if sprite not loaded

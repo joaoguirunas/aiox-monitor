@@ -54,47 +54,53 @@ export class Desk extends Phaser.GameObjects.Container {
     scene.add.existing(this);
   }
 
-  // ── Desk body (isometric 3D) ──────────────────────────────
+  // ── Desk body (high-tech standing desk style) ──────────────
   private drawDeskBody(g: Phaser.GameObjects.Graphics, active: boolean): void {
-    // Shadow
-    g.fillStyle(0x000000, 0.12);
-    g.fillEllipse(0, 8, 52, 12);
+    // Ground shadow (soft, elongated)
+    g.fillStyle(0x000000, 0.10);
+    g.fillEllipse(0, 10, 36, 8);
 
-    // Desk legs (4 thin supports)
-    g.fillStyle(this.baseColor, 0.9);
-    g.fillRect(-22, 2, 3, 7);
-    g.fillRect(19, 2, 3, 7);
-    g.fillRect(-22, -3, 3, 7);
-    g.fillRect(19, -3, 3, 7);
+    // Base plate (slim elliptical foot)
+    g.fillStyle(this.baseColor, 0.95);
+    g.fillEllipse(0, 8, 20, 5);
+    g.lineStyle(0.5, this.edgeColor, 0.3);
+    g.strokeEllipse(0, 8, 20, 5);
 
-    // Desk front face (3D depth)
+    // Central pedestal (single slim column)
     g.fillStyle(this.baseColor, 1);
-    g.fillRect(-24, 2, 48, 4);
-    g.fillStyle(0x000000, 0.2);
-    g.fillRect(-24, 2, 48, 4);
-
-    // Desk side panel (3D depth — right)
-    g.fillStyle(this.baseColor, 1);
-    g.fillRect(24, -4, 3, 8);
-    g.fillStyle(0x000000, 0.3);
-    g.fillRect(24, -4, 3, 8);
-
-    // Desk top surface
-    g.fillStyle(this.accentColor, 1);
-    g.fillRect(-24, -4, 48, 8);
-
-    // Surface highlight (subtle wood/material grain)
+    g.fillRect(-2, 0, 4, 10);
+    // Pedestal highlight (metallic look)
     g.fillStyle(this.edgeColor, 0.15);
-    g.fillRect(-22, -3, 44, 6);
+    g.fillRect(-1, 1, 2, 8);
 
-    // Edge highlight
-    g.lineStyle(1, this.edgeColor, active ? 0.4 : 0.2);
-    g.strokeRect(-24, -4, 48, 8);
+    // Desk top surface (ultra-slim, floating look)
+    g.fillStyle(this.accentColor, 1);
+    g.fillRect(-26, -2, 52, 4);
 
-    // Active accent line
+    // Surface front edge (thin 3D depth)
+    g.fillStyle(this.baseColor, 1);
+    g.fillRect(-26, 2, 52, 1);
+
+    // Surface right edge (thin 3D depth)
+    g.fillStyle(this.baseColor, 0.9);
+    g.fillRect(26, -2, 1, 4);
+    g.fillStyle(0x000000, 0.2);
+    g.fillRect(26, -2, 1, 4);
+
+    // Top surface subtle gradient/highlight
+    g.fillStyle(0xffffff, 0.03);
+    g.fillRect(-24, -1, 48, 1);
+
+    // Edge glow line (premium finish)
+    g.lineStyle(0.5, this.edgeColor, active ? 0.5 : 0.25);
+    g.strokeRect(-26, -2, 52, 4);
+
+    // Active state: ambient LED strip under desk
     if (active) {
-      g.lineStyle(1, this.agentColor, 0.15);
-      g.lineBetween(-22, 5, 22, 5);
+      g.fillStyle(this.agentColor, 0.08);
+      g.fillRect(-24, 2, 48, 1);
+      g.lineStyle(0.5, this.agentColor, 0.2);
+      g.lineBetween(-20, 3, 20, 3);
     }
   }
 

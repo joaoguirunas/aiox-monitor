@@ -608,6 +608,66 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     return this.agentName;
   }
 
+  // ─── Skin hot-swap ──────────────────────────────────────────────
+
+  /** Re-reads skin config from localStorage and swaps texture if changed */
+  refreshSkin(): void {
+    const skinDef = getAgentSkin(this.agentName);
+    const newPlAgentKey = skinDef ? `skin:${skinDef.id}` : '';
+
+    // Check if skin actually changed
+    if (skinDef && newPlAgentKey !== this.plAgentKey) {
+      const southKey = `skin-${skinDef.id}-south`;
+      if (this.scene.textures.exists(southKey)) {
+        // Switch to new skin
+        this.plAgentKey = newPlAgentKey;
+        this.isPixelLab = true;
+        this.sprite.setTexture(southKey);
+        this.sprite.setScale(PIXELLAB_DISPLAY_SCALE);
+        this.sprite.setOrigin(0.5, 0.5);
+        this.currentDirection = 'south';
+        // Re-apply current animation state
+        this.reapplyAnimState();
+      }
+    } else if (!skinDef && this.plAgentKey.startsWith('skin:')) {
+      // Skin was removed — revert to PixelLab default or procedural
+      const config = getAgentSpriteConfig(this.agentName);
+      const plEntry = Object.values(PIXELLAB_SPRITES).find(e => e.agentKey === config.key);
+      const plSouthKey = pixelLabTextureKey(config.key, 'south');
+
+      if (plEntry && this.scene.textures.exists(plSouthKey)) {
+        this.plAgentKey = config.key;
+        this.isPixelLab = true;
+        this.sprite.setTexture(plSouthKey);
+        this.sprite.setScale(PIXELLAB_DISPLAY_SCALE);
+      } else {
+        this.plAgentKey = '';
+        this.isPixelLab = false;
+        // Revert to procedural spritesheet
+        const procKey = this.scene.textures.exists(config.key) ? config.key
+          : this.scene.textures.exists('agent-default') ? 'agent-default' : '';
+        if (procKey) {
+          this.sprite.setTexture(procKey, 0);
+          this.sprite.setScale(1);
+          this.spriteKey = procKey;
+        }
+      }
+      this.currentDirection = 'south';
+      this.reapplyAnimState();
+    }
+  }
+
+  /** Re-apply the current animation state after a skin swap */
+  private reapplyAnimState(): void {
+    switch (this.animState) {
+      case 'idle': this.startIdleBreathing(); break;
+      case 'sit': this.startSitAnimation(); break;
+      case 'type': this.startTypeAnimation(); break;
+      case 'sleep': this.startSleepAnimation(); break;
+      // walk is transient — don't interrupt mid-walk
+    }
+  }
+
   // ─── Tool Detail Label ──────────────────────────────────────────
 
   setToolDetail(detail: string | null): void {

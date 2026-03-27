@@ -12,7 +12,7 @@ export interface ProjectCluster {
   originTile: TilePosition;
   deskPositions: DeskPosition[];
   desks: Desk[];
-  label: Phaser.GameObjects.Text;
+  label: Phaser.GameObjects.Container;
 }
 
 export class ClusterManager {
@@ -27,7 +27,8 @@ export class ClusterManager {
     if (existing) {
       if (existing.projectName !== projectName) {
         existing.projectName = projectName;
-        existing.label.setText(projectName);
+        const textObj = existing.label.getByName('text') as Phaser.GameObjects.Text | null;
+        if (textObj) textObj.setText(projectName);
       }
       return existing;
     }
@@ -49,26 +50,9 @@ export class ClusterManager {
     // Create workstation desks (fully programmatic)
     const desks = deskPositions.map(pos => new Desk(this.scene, pos.tileX, pos.tileY));
 
-    // Create project label above cluster
+    // Create project name plate above cluster
     const labelPos = tileToPixel(origin.tileX + 2, origin.tileY - 1);
-    const label = this.scene.add.text(labelPos.x, labelPos.y - 20, projectName, {
-      fontSize: '11px',
-      color: '#6b7fff',
-      fontFamily: 'monospace',
-      stroke: '#000000',
-      strokeThickness: 3,
-      align: 'center',
-    }).setOrigin(0.5).setAlpha(0.7).setDepth(9000);
-
-    // Label float animation
-    this.scene.tweens.add({
-      targets: label,
-      y: label.y - 2,
-      duration: 3000,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
+    const label = this.createNamePlate(labelPos.x, labelPos.y - 22, projectName);
 
     const cluster: ProjectCluster = {
       projectId,
@@ -107,6 +91,49 @@ export class ClusterManager {
     }
 
     this.clusters.delete(projectId);
+  }
+
+  /** Creates a styled name plate with background for a project cluster */
+  private createNamePlate(x: number, y: number, name: string): Phaser.GameObjects.Container {
+    const container = this.scene.add.container(x, y).setDepth(9000);
+
+    const text = this.scene.add.text(0, 0, name, {
+      fontSize: '10px',
+      color: '#c8d0ff',
+      fontFamily: 'monospace',
+      align: 'center',
+    }).setOrigin(0.5).setName('text');
+
+    const padX = 10;
+    const padY = 4;
+    const w = text.width + padX * 2;
+    const h = text.height + padY * 2;
+
+    const bg = this.scene.add.graphics();
+    // Background plate
+    bg.fillStyle(0x1a1e3a, 0.85);
+    bg.fillRoundedRect(-w / 2, -h / 2, w, h, 4);
+    // Border
+    bg.lineStyle(1, 0x4466aa, 0.4);
+    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 4);
+    // Accent line at bottom
+    bg.fillStyle(0x6b7fff, 0.5);
+    bg.fillRect(-w / 2 + 4, h / 2 - 2, w - 8, 1);
+
+    container.add(bg);
+    container.add(text);
+
+    // Subtle float animation
+    this.scene.tweens.add({
+      targets: container,
+      y: y - 2,
+      duration: 3000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    return container;
   }
 
   /** Retorna todos os clusters ativos */

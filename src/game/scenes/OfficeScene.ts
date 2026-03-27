@@ -656,35 +656,35 @@ export class OfficeScene extends Phaser.Scene {
       new NightStand(this, FURNITURE_POSITIONS.nightStand2.tileX, FURNITURE_POSITIONS.nightStand2.tileY),
       new NightStand(this, FURNITURE_POSITIONS.nightStand3.tileX, FURNITURE_POSITIONS.nightStand3.tileY),
     ];
-    new Plant(this, FURNITURE_POSITIONS.bedroomPlant1.tileX, FURNITURE_POSITIONS.bedroomPlant1.tileY, 'bonsai');
-    new Plant(this, FURNITURE_POSITIONS.bedroomPlant2.tileX, FURNITURE_POSITIONS.bedroomPlant2.tileY, 'succulent');
+    new Plant(this, FURNITURE_POSITIONS.bedroomPlant1.tileX, FURNITURE_POSITIONS.bedroomPlant1.tileY, 'bonsai', 2);
+    new Plant(this, FURNITURE_POSITIONS.bedroomPlant2.tileX, FURNITURE_POSITIONS.bedroomPlant2.tileY, 'succulent', 3);
     new Door(this, FURNITURE_POSITIONS.bedroomDoor.tileX, FURNITURE_POSITIONS.bedroomDoor.tileY);
 
     // ═══ PLANTS (decorative, zone borders & corners) ═══
-    // Recreation zone borders — tropical & hanging mix
-    new Plant(this, FURNITURE_POSITIONS.plant1.tileX, FURNITURE_POSITIONS.plant1.tileY, 'tropical');
-    new Plant(this, FURNITURE_POSITIONS.plant2.tileX, FURNITURE_POSITIONS.plant2.tileY, 'hanging');
-    new Plant(this, FURNITURE_POSITIONS.plant3.tileX, FURNITURE_POSITIONS.plant3.tileY, 'tropical');
-    new Plant(this, FURNITURE_POSITIONS.plant4.tileX, FURNITURE_POSITIONS.plant4.tileY, 'bonsai');
-    new Plant(this, FURNITURE_POSITIONS.plant5.tileX, FURNITURE_POSITIONS.plant5.tileY, 'succulent');
-    new Plant(this, FURNITURE_POSITIONS.plant6.tileX, FURNITURE_POSITIONS.plant6.tileY, 'hanging');
+    // Recreation zone borders — tropical & hanging mix (2x-3x varied)
+    new Plant(this, FURNITURE_POSITIONS.plant1.tileX, FURNITURE_POSITIONS.plant1.tileY, 'tropical', 3);
+    new Plant(this, FURNITURE_POSITIONS.plant2.tileX, FURNITURE_POSITIONS.plant2.tileY, 'hanging', 2);
+    new Plant(this, FURNITURE_POSITIONS.plant3.tileX, FURNITURE_POSITIONS.plant3.tileY, 'tropical', 2);
+    new Plant(this, FURNITURE_POSITIONS.plant4.tileX, FURNITURE_POSITIONS.plant4.tileY, 'bonsai', 2);
+    new Plant(this, FURNITURE_POSITIONS.plant5.tileX, FURNITURE_POSITIONS.plant5.tileY, 'succulent', 3);
+    new Plant(this, FURNITURE_POSITIONS.plant6.tileX, FURNITURE_POSITIONS.plant6.tileY, 'hanging', 2);
     // Zone dividers (between areas)
-    new Plant(this, 8, 5, 'tropical');     // Between jogos & gamer
-    new Plant(this, 8, 12, 'hanging');     // Between redes & lounge
-    new Plant(this, 1, 9, 'succulent');    // Redes left border
-    new Plant(this, 1, 14, 'bonsai');      // Redes left border
-    new Plant(this, 15, 8, 'tropical');    // Right border mid
-    new Plant(this, 15, 14, 'hanging');    // Right border low
+    new Plant(this, 8, 5, 'tropical', 3);     // Between jogos & gamer
+    new Plant(this, 8, 12, 'hanging', 2);     // Between redes & lounge
+    new Plant(this, 1, 9, 'succulent', 2);    // Redes left border
+    new Plant(this, 1, 14, 'bonsai', 3);      // Redes left border
+    new Plant(this, 15, 8, 'tropical', 2);    // Right border mid
+    new Plant(this, 15, 14, 'hanging', 3);    // Right border low
     // Work zone — bonsai & succulent (compact, desk-friendly)
-    new Plant(this, 17, 2, 'bonsai');
-    new Plant(this, 17, 10, 'succulent');
-    new Plant(this, 17, 16, 'bonsai');
-    new Plant(this, 34, 2, 'succulent');
-    new Plant(this, 34, 10, 'bonsai');
-    new Plant(this, 34, 20, 'succulent');
-    // Entrance — tropical statement plants
-    new Plant(this, 20, 20, 'tropical');
-    new Plant(this, 8, 19, 'tropical');
+    new Plant(this, 17, 2, 'bonsai', 2);
+    new Plant(this, 17, 10, 'succulent', 3);
+    new Plant(this, 17, 16, 'bonsai', 2);
+    new Plant(this, 34, 2, 'succulent', 2);
+    new Plant(this, 34, 10, 'bonsai', 3);
+    new Plant(this, 34, 20, 'succulent', 2);
+    // Entrance — tropical statement plants (3x for impact)
+    new Plant(this, 20, 20, 'tropical', 3);
+    new Plant(this, 8, 19, 'tropical', 3);
 
     // Entrance door
     new Door(this, ENTRANCE_POSITION.tileX, ENTRANCE_POSITION.tileY);

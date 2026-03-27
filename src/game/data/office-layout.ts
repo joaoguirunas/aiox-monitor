@@ -22,16 +22,16 @@ export const TILE_HEIGHT = 32;
 // ─── Clusters de projeto (zona de trabalho) ───────────────────────────────────
 export const CLUSTER_ORIGINS: TilePosition[] = [
   { tileX: 19, tileY: 2 },
-  { tileX: 19, tileY: 8 },
-  { tileX: 19, tileY: 14 },
+  { tileX: 19, tileY: 10 },
+  { tileX: 19, tileY: 18 },
   { tileX: 27, tileY: 2 },
-  { tileX: 27, tileY: 8 },
-  { tileX: 27, tileY: 14 },
+  { tileX: 27, tileY: 10 },
+  { tileX: 27, tileY: 18 },
 ];
 
-export const DESKS_PER_CLUSTER = 12;
+export const DESKS_PER_CLUSTER = 8;
 export const CLUSTER_COLS = 4;
-export const CLUSTER_ROWS = 3;
+export const CLUSTER_ROWS = 2;
 export const CLUSTER_COL_SPACING = 2;
 export const CLUSTER_ROW_SPACING = 2;
 

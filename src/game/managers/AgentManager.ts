@@ -169,6 +169,9 @@ export class AgentManager {
 
       try {
         if (existing) {
+          // Hot-swap skin if user changed it in config
+          existing.refreshSkin();
+
           // Skip reposition if agent is mid-transition from a WS update (avoid flickering)
           if (this.inTransition.has(key)) {
             // Still update tool state (labels, permission bubble) even during transition

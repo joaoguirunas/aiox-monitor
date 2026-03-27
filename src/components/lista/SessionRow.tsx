@@ -92,9 +92,10 @@ interface SessionRowProps {
   projects: Project[];
   terminals: Terminal[];
   onClick: () => void;
+  compact?: boolean;
 }
 
-export function SessionRow({ session, onClick }: SessionRowProps) {
+export function SessionRow({ session, onClick, compact }: SessionRowProps) {
   // Use enriched server-side data directly — no client-side cross-referencing needed
   // Agent: prefer session agent if known, fall back to terminal's agent
   const effectiveAgentName = (session.agent_name && session.agent_name !== '@unknown')
@@ -143,6 +144,48 @@ export function SessionRow({ session, onClick }: SessionRowProps) {
     : session.terminal_status === 'active'
       ? 'bg-accent-amber'
       : 'bg-text-muted/40';
+
+  if (compact) {
+    return (
+      <tr
+        className="border-b border-border/20 hover:bg-white/[0.02] cursor-pointer transition-colors duration-150"
+        onClick={onClick}
+      >
+        <td className="px-2 py-2">
+          {effectiveAgentName && effectiveAgentName !== '@unknown' ? (
+            <AgentBadge name={effectiveAgentName} displayName={effectiveAgentDisplay} />
+          ) : skill ? (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium border bg-accent-blue/10 text-accent-blue border-accent-blue/20">
+              /{skill}
+            </span>
+          ) : (
+            <span className="text-text-muted text-[11px]">—</span>
+          )}
+        </td>
+        <td className="px-2 py-2">
+          <div className="text-[11px] text-accent-violet/80 truncate max-w-[200px]">{promptText}</div>
+          {responsePreview && (
+            <div className="text-[10px] text-accent-emerald/60 truncate max-w-[200px] mt-0.5">{responsePreview}</div>
+          )}
+        </td>
+        <td className="px-2 py-2">
+          <div className="flex flex-wrap gap-0.5">
+            {session.tools.slice(0, 3).map((t) => (
+              <span key={t} className="px-1 py-0.5 text-[9px] font-mono bg-surface-3/60 text-text-muted rounded">
+                {t}
+              </span>
+            ))}
+            {session.tools.length > 3 && (
+              <span className="text-[9px] font-mono text-text-muted">+{session.tools.length - 3}</span>
+            )}
+          </div>
+        </td>
+        <td className="px-2 py-2 whitespace-nowrap">
+          {statusBadge}
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <tr

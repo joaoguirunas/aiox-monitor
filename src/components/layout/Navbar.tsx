@@ -8,10 +8,9 @@ import { ConnectionStatus } from '@/components/shared/ConnectionStatus';
 import { ProjectSelector } from '@/components/shared/ProjectSelector';
 
 const LINKS = [
+  { href: '/empresa', label: 'Real Time' },
   { href: '/kanban', label: 'Kanban' },
-  { href: '/lista', label: 'Lista' },
   { href: '/terminais', label: 'Terminais' },
-  { href: '/empresa', label: 'Empresa' },
   { href: '/empresa/config', label: 'Config' },
 ];
 

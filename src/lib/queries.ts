@@ -163,11 +163,13 @@ export function getAgentInstances(filters?: { projectId?: number }): AgentWithSt
       SELECT
         -(t.id) as id,
         t.project_id,
-        t.agent_name as name,
+        COALESCE(NULLIF(t.agent_name, '@unknown'), '@worker') as name,
         CASE
+          WHEN t.agent_display_name IS NOT NULL AND t.agent_display_name <> ''
+            THEN t.agent_display_name
           WHEN t.window_title IS NOT NULL AND t.window_title <> ''
-            THEN COALESCE(t.agent_display_name, t.agent_name) || ' (' || t.window_title || ')'
-          ELSE COALESCE(t.agent_display_name, t.agent_name)
+            THEN t.window_title
+          ELSE COALESCE(NULLIF(t.agent_name, '@unknown'), 'Terminal')
         END as display_name,
         CASE
           WHEN t.status = 'processing' THEN 'working'
@@ -180,9 +182,7 @@ export function getAgentInstances(filters?: { projectId?: number }): AgentWithSt
         t.last_active,
         1 as terminal_count
       FROM terminals t
-      ${whereClause} t.agent_name IS NOT NULL
-        AND t.agent_name <> '@unknown'
-        AND t.status <> 'inactive'
+      ${whereClause} t.status <> 'inactive'
       ORDER BY t.last_active DESC
     `).all(...params) as Row[],
   );
@@ -267,6 +267,16 @@ export function deactivateTerminal(projectId: number, pid: number): void {
   `).run(projectId, pid);
 }
 
+export function getStaleTerminals(olderThanSeconds = 7200): Terminal[] {
+  return rows<Terminal>(
+    db.prepare(`
+      SELECT * FROM terminals
+      WHERE status IN ('processing', 'active')
+        AND last_active < datetime('now', '-' || ? || ' seconds')
+    `).all(olderThanSeconds) as Row[],
+  );
+}
+
 export function deactivateStaleTerminals(olderThanSeconds = 7200): void {
   db.prepare(`
     UPDATE terminals
@@ -305,6 +315,30 @@ export function updateTerminalWindowTitle(id: number, windowTitle: string): void
 
 export function setTerminalActive(id: number): void {
   db.prepare(`UPDATE terminals SET status = 'active', last_active = datetime('now') WHERE id = ? AND status = 'inactive'`).run(id);
+}
+
+export function getPurgeableTerminals(olderThanSeconds = 86400): Terminal[] {
+  const aged = rows<Terminal>(
+    db.prepare(`
+      SELECT * FROM terminals
+      WHERE status = 'inactive'
+        AND last_active < datetime('now', '-' || ? || ' seconds')
+    `).all(olderThanSeconds) as Row[],
+  );
+  const dupes = rows<Terminal>(
+    db.prepare(`
+      SELECT * FROM terminals
+      WHERE id NOT IN (
+        SELECT MAX(id) FROM terminals GROUP BY project_id, pid
+      )
+    `).all() as Row[],
+  );
+  // Merge without duplicates by id
+  const seen = new Set(aged.map(t => t.id));
+  for (const d of dupes) {
+    if (!seen.has(d.id)) { aged.push(d); seen.add(d.id); }
+  }
+  return aged;
 }
 
 /** Remove inactive terminals older than the given threshold, plus duplicates (same PID, keep newest). */
@@ -644,6 +678,60 @@ export function updateCompanyConfig(
 
 export function isValidTheme(value: unknown): value is ThemeName {
   return ['espacial', 'moderno', 'oldschool', 'cyberpunk'].includes(value as string);
+}
+
+// ─── Terminal Health ─────────────────────────────────────────────────────────
+
+export interface TerminalHealth {
+  total: number;
+  active: number;
+  inactive: number;
+  duplicateSessions: number;
+  orphanTerminals: number;
+  enrichedCount: number;
+  enrichmentRate: number;
+  waitingPermission: number;
+}
+
+export function getTerminalHealth(): TerminalHealth {
+  const total = (db.prepare(`SELECT COUNT(*) AS n FROM terminals`).get() as Row).n as number;
+  const active = (db.prepare(`SELECT COUNT(*) AS n FROM terminals WHERE status != 'inactive'`).get() as Row).n as number;
+  const inactive = (db.prepare(`SELECT COUNT(*) AS n FROM terminals WHERE status = 'inactive'`).get() as Row).n as number;
+
+  const duplicateSessions = (db.prepare(`
+    SELECT COUNT(*) AS n FROM (
+      SELECT session_id FROM terminals
+      WHERE session_id IS NOT NULL AND status != 'inactive'
+      GROUP BY session_id HAVING COUNT(*) > 1
+    )
+  `).get() as Row).n as number;
+
+  const orphanTerminals = (db.prepare(`
+    SELECT COUNT(*) AS n FROM terminals
+    WHERE session_id IS NULL AND status != 'inactive'
+  `).get() as Row).n as number;
+
+  const enrichedCount = (db.prepare(`
+    SELECT COUNT(*) AS n FROM terminals
+    WHERE status != 'inactive' AND current_tool_detail IS NOT NULL
+  `).get() as Row).n as number;
+
+  const enrichmentRate = active > 0 ? enrichedCount / active : 0;
+
+  const waitingPermission = (db.prepare(`
+    SELECT COUNT(*) AS n FROM terminals WHERE waiting_permission = 1
+  `).get() as Row).n as number;
+
+  return {
+    total,
+    active,
+    inactive,
+    duplicateSessions,
+    orphanTerminals,
+    enrichedCount,
+    enrichmentRate,
+    waitingPermission,
+  };
 }
 
 // ─── Ganga Ativo ──────────────────────────────────────────────────────────────

@@ -101,6 +101,7 @@ export function initSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_events_agent       ON events(agent_id);
     CREATE INDEX IF NOT EXISTS idx_events_terminal    ON events(terminal_id);
     CREATE INDEX IF NOT EXISTS idx_events_session_type ON events(session_id, type);
+    CREATE INDEX IF NOT EXISTS idx_terminals_session ON terminals(session_id);
   `);
 
   // Seed singleton row for company_config
@@ -143,6 +144,21 @@ export function initSchema(db: DatabaseSync): void {
   for (const sql of gangaMigrations) {
     try { db.exec(sql); } catch { /* Column already exists */ }
   }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS autopilot_log (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      terminal_id    INTEGER NOT NULL REFERENCES terminals(id) ON DELETE CASCADE,
+      project_id     INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      window_title   TEXT,
+      agent_name     TEXT,
+      action         TEXT NOT NULL CHECK(action IN ('permission_approve','idle_skip','error')),
+      detail         TEXT,
+      created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_autopilot_log_created ON autopilot_log(created_at);
+    CREATE INDEX IF NOT EXISTS idx_autopilot_log_terminal ON autopilot_log(terminal_id);
+  `);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS ganga_log (

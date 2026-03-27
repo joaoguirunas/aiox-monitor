@@ -3,6 +3,7 @@
 > **Epic Proposal:** Terminais Reliability & Data Integrity
 > **Autor:** Atlas (Analyst) | **Data:** 2026-03-18
 > **Status:** Discovery Complete — Ready for Story Breakdown
+> **Última actualização:** 2026-03-24 (adicionado Autopilot System)
 
 ---
 
@@ -89,9 +90,100 @@ O modulo **Terminais** e o sistema central de rastreamento de sessoes ativas do 
     ├─ processing → active (5min sem evento)
     ├─ active → inactive (15min sem actividade)
     └─ DELETE inactive > 1h + deduplicate PIDs
+
+    ─── Parallel (every 3s) — Autopilot Engine ─────
+              │
+    autopilot-engine.ts tick()
+    ├─ Query: autopilot=1 AND waiting_permission=1
+    ├─ findSessionTty(pid) → walk process tree → TTY
+    ├─ sendApprovalToSession(tty) → JXA → iTerm2 sess.write({text:'y'})
+    ├─ DB: waiting_permission = 0
+    ├─ insertAutopilotLog(action)
+    └─ broadcast(terminal:update + autopilot:action)
 ```
 
-### 2.3 DB Schema
+### 2.3 Autopilot System
+
+O sistema Autopilot permite aprovar automaticamente pedidos de permissão do Claude Code em terminais seleccionados. Funciona como um loop independente do event processing.
+
+#### 2.3.1 Arquitectura
+
+```
+User toggle (TerminalCard)
+  │
+  ├─ Per-terminal: PATCH /api/terminals/{id}/autopilot {enabled: true}
+  └─ Global:       PATCH /api/terminals/autopilot {enabled: true}
+         │
+         v
+   setTerminalAutopilot(id, enabled) → DB update + WS broadcast
+         │
+         │    ┌─── Independently, every 3s ───────────────────┐
+         │    │                                                │
+         v    v                                                │
+   autopilot-engine.ts tick()                                  │
+   ├─ getAutopilotTerminals()                                  │
+   │   WHERE autopilot=1 AND waiting_permission=1              │
+   │   AND status != 'inactive'                                │
+   ├─ Per terminal:                                            │
+   │   ├─ Cooldown check (8s entre approvals)                  │
+   │   ├─ findSessionTty(pid)                                  │
+   │   │   ├─ Walk process tree: PID → parent → grandparent   │
+   │   │   └─ Find iTerm2 session TTY                          │
+   │   ├─ sendApprovalToSession(tty)                           │
+   │   │   └─ JXA osascript: sess.write({text: 'y'})          │
+   │   ├─ Clear waiting_permission = 0                         │
+   │   ├─ insertAutopilotLog(action: 'permission_approve')     │
+   │   └─ broadcast(terminal:update + autopilot:action)        │
+   └─ Best-effort: nunca crash                                 │
+                                                               │
+   cleanupCooldowns() (every 60s) ────────────────────────────┘
+```
+
+#### 2.3.2 API Routes
+
+| Method | Route | Descrição |
+|--------|-------|-----------|
+| `GET` | `/api/terminals/autopilot` | Summary: total, on, off, waiting, stats (24h) |
+| `PATCH` | `/api/terminals/autopilot` | Toggle ALL terminais activos |
+| `PATCH` | `/api/terminals/{id}/autopilot` | Toggle um terminal específico |
+| `GET` | `/api/terminals/autopilot/log` | Logs recentes (default 50, max 200) + stats |
+
+#### 2.3.3 DB: autopilot_log
+
+```sql
+CREATE TABLE IF NOT EXISTS autopilot_log (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  terminal_id    INTEGER NOT NULL REFERENCES terminals(id) ON DELETE CASCADE,
+  project_id     INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  window_title   TEXT,
+  agent_name     TEXT,
+  action         TEXT NOT NULL,   -- 'permission_approve' | 'idle_skip' | 'error'
+  detail         TEXT,
+  created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+-- Indexes: idx_autopilot_log_created, idx_autopilot_log_terminal
+```
+
+#### 2.3.4 Constraints
+
+| Parametro | Valor | Notas |
+|-----------|-------|-------|
+| Cycle interval | 3s | Tick do engine |
+| Cooldown per terminal | 8s | Previne double-tapping |
+| Cooldown cleanup | 60s | Remove entries expiradas |
+| osascript timeout | 5s | JXA execution limit |
+| PS timeout | 2s | Process tree walk limit |
+| Scope | iTerm2 only | Usa JXA, nao funciona em Terminal.app |
+
+#### 2.3.5 UI: TerminalCard Toggle
+
+O `TerminalCard` renderiza um botão de toggle autopilot:
+- **ON:** Badge verde com indicador pulsante
+- **OFF:** Badge cinza
+- **Toggling:** Estado de loading durante o PATCH
+- Ao clicar: `PATCH /api/terminals/{id}/autopilot {enabled: !isOn}` → broadcast WS → UI actualiza
+
+### 2.4 DB Schema
 
 ```sql
 CREATE TABLE terminals (
@@ -108,13 +200,14 @@ CREATE TABLE terminals (
   window_title       TEXT,
   current_tool_detail TEXT,
   waiting_permission INTEGER DEFAULT 0,
+  autopilot          INTEGER NOT NULL DEFAULT 0,
   first_seen_at      TEXT NOT NULL DEFAULT (datetime('now')),
   last_active        TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(project_id, pid)
 );
 ```
 
-### 2.4 Status Lifecycle
+### 2.5 Status Lifecycle
 
 ```
 [Novo]  ──evento──►  processing  ──5min idle──►  active  ──15min idle──►  inactive  ──1h──►  [DELETE]
@@ -124,7 +217,7 @@ CREATE TABLE terminals (
                         ◄──reactivate (syncSystem)──  still running  ◄────────┘
 ```
 
-### 2.5 Key Files
+### 2.6 Key Files
 
 | File | LOC | Responsibility |
 |------|-----|---------------|
@@ -141,7 +234,11 @@ CREATE TABLE terminals (
 | `src/app/terminais/page.tsx` | 106 | UI: grid com 3 seccoes (processing, active, inactive) |
 | `src/components/terminais/TerminalCard.tsx` | 153 | Card component: title, agent, tool detail, permission badge, metadata |
 | `src/app/api/terminals/route.ts` | 54 | GET /api/terminals: retorna terminais filtrados por projecto, ordenados |
-| `server.ts` | 119 | Scheduling: intervals para cleanup (15s), sync (30s), JSONL watcher (5s delay) |
+| `src/server/autopilot-engine.ts` | 225 | Autopilot engine: ciclo 3s, TTY resolution, JXA approval, cooldown, logging |
+| `src/app/api/terminals/autopilot/route.ts` | 57 | GET summary + PATCH global toggle (todos terminais activos) |
+| `src/app/api/terminals/[id]/autopilot/route.ts` | 35 | PATCH per-terminal toggle com broadcast WS |
+| `src/app/api/terminals/autopilot/log/route.ts` | 17 | GET autopilot logs + stats (24h) |
+| `server.ts` | ~130 | Scheduling: intervals para cleanup (15s), sync (30s), JSONL watcher (5s delay), autopilot engine |
 
 ---
 
@@ -158,6 +255,10 @@ CREATE TABLE terminals (
 | JSONL watcher (tool enrichment) | Parcial | Funciona para tool parsing, mas terminal matching e fragil |
 | Permission detection (7s timeout) | Parcial | Depende de terminal matching correcto |
 | Cleanup lifecycle | OK | processing→active→inactive→delete funcional |
+| Autopilot engine (per-terminal toggle) | OK | Engine 3s, JXA approval via iTerm2, cooldown 8s, logging |
+| Autopilot API (global + per-terminal) | OK | PATCH toggle, GET summary/stats/logs |
+| Autopilot UI (TerminalCard toggle) | OK | Toggle button com estados ON/OFF, loading state |
+| Autopilot logging & stats | OK | autopilot_log table, stats 24h, max 200 logs via API |
 | Empresa integration (getAgentInstances) | OK | Cada terminal activo com agente gera sprite |
 
 ---
@@ -254,6 +355,18 @@ A unicidade e baseada em `(project_id, pid)` — um identificador efemero. `sess
 
 Nao ha como saber se o JSONL watcher esta matched correctamente, quantos terminais estao orfaos, ou qual a taxa de match do enrichment. Diagnosticar problemas requer inspecao manual da DB.
 
+### 5.11 GAP — Autopilot Apenas iTerm2
+
+O `autopilot-engine.ts` usa JXA (`osascript -l JavaScript`) para enviar keystrokes ao iTerm2. Terminal.app e outros emuladores nao sao suportados. Diferente do `terminal-detector.ts` que suporta ambos, o autopilot so funciona com iTerm2.
+
+### 5.12 GAP — Autopilot Sem Selectividade de Permissao
+
+O autopilot aprova cegamente qualquer pedido de permissao (`y`). Nao distingue entre operacoes de baixo risco (Read, Grep) e alto risco (Bash com rm, Write em ficheiros criticos). Uma whitelist/blacklist de tools permitiria controlo mais granular.
+
+### 5.13 GAP — Autopilot Engine Desactivado no server.ts
+
+O `server.ts` actual tem o autopilot engine comentado/desactivado com nota "handled by OpenClaw cron". O import existe mas o engine nao e iniciado automaticamente pelo servidor — requer activacao externa.
+
 ---
 
 ## 6. Risk Assessment
@@ -266,6 +379,9 @@ Nao ha como saber se o JSONL watcher esta matched correctamente, quantos termina
 | macOS recusa permissao AppleScript | Media | Baixo — L2 falha gracefully | L1 (hook) continua a funcionar |
 | DB corruption (sqlite WAL + crash) | Baixa | Alto — dados perdidos | Backup periodico, schema resiliente |
 | Performance: JSONL watcher com muitos ficheiros | Media | Medio — latencia | Ja tem filtro 1h; monitorar |
+| Autopilot aprova operacoes destrutivas | Media | Alto — rm, force push, etc. | Tool whitelist/blacklist (gap 5.12) |
+| Autopilot TTY mismatch (PID reciclado) | Baixa | Medio — aprovacao noutro terminal | Cooldown 8s mitiga parcialmente |
+| Autopilot JXA falha silenciosamente | Baixa | Baixo — log de erro, nao crash | Logging funcional, best-effort |
 
 ---
 
@@ -367,4 +483,12 @@ O formato dos ficheiros `~/.claude/projects/<hash>/<session>.jsonl` nao e oficia
 
 ### 9.4 Concurrency
 
-SQLite com WAL mode suporta concurrent reads mas single writer. O servidor usa `busy_timeout = 5000`. Com multiplos intervalos a escrever (cleanup, sync, JSONL watcher), podem ocorrer busy waits. Nao e um problema actual mas pode ser com scale.
+SQLite com WAL mode suporta concurrent reads mas single writer. O servidor usa `busy_timeout = 5000`. Com multiplos intervalos a escrever (cleanup, sync, JSONL watcher, autopilot engine), podem ocorrer busy waits. Nao e um problema actual mas pode ser com scale.
+
+### 9.5 Autopilot — TTY Resolution
+
+O `autopilot-engine.ts` precisa encontrar o TTY do iTerm2 session para enviar keystrokes. O Claude Code tipicamente corre dentro de `script` (que aloca um novo pty), por isso o PID do claude esta num TTY diferente do session do iTerm2. O engine caminha a process tree (PID → parent → grandparent) para encontrar o TTY original do session. Se todos os TTYs na arvore sao iguais, usa o proprio. Nao funciona em Terminal.app porque o JXA de aprovacao usa API especifica do iTerm2 (`sess.write({text: 'y'})`).
+
+### 9.6 Autopilot — Cooldown Design
+
+O cooldown de 8s por terminal previne double-tapping: se o permission wait e detectado pelo JSONL watcher e imediatamente processado pelo autopilot, o `waiting_permission` e limpo mas pode ser re-setado pelo proximo tick do JSONL watcher antes do Claude Code consumir a aprovacao. O cooldown garante que o engine nao envia "y" repetidamente. O mapa de cooldowns e limpo a cada 60s para evitar memory leaks.

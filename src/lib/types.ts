@@ -233,6 +233,12 @@ export interface WsThemeChange extends WsMessage {
   theme: ThemeName;
 }
 
+export interface WsTerminalRemoved extends WsMessage {
+  type: 'terminal:removed';
+  terminalId: number;
+  projectId: number;
+}
+
 export interface WsPing extends WsMessage {
   type: 'ping';
 }
@@ -251,6 +257,7 @@ export type WsIncomingMessage =
   | WsEventNew
   | WsAgentUpdate
   | WsTerminalUpdate
+  | WsTerminalRemoved
   | WsProjectUpdate
   | WsThemeChange
   | WsGangaHeartbeat

@@ -22,6 +22,8 @@ interface FilterBarProps {
   terminals: Terminal[];
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
+  /** Compact mode for side panel — stacks vertically, hides date pickers */
+  compact?: boolean;
 }
 
 export type { ViewMode };
@@ -58,7 +60,7 @@ function bestPerTitle(terminals: Terminal[]): Terminal[] {
   return Array.from(map.values());
 }
 
-export function FilterBar({ filters, onFiltersChange, projects, agents, terminals, viewMode, onViewModeChange }: FilterBarProps) {
+export function FilterBar({ filters, onFiltersChange, projects, agents, terminals, viewMode, onViewModeChange, compact }: FilterBarProps) {
   // Search with 300ms debounce
   const [searchInput, setSearchInput] = useState(filters.search ?? '');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -107,17 +109,17 @@ export function FilterBar({ filters, onFiltersChange, projects, agents, terminal
   });
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className={`flex flex-col ${compact ? 'gap-1.5' : 'gap-2'}`}>
       {/* Line 1: Search + Dropdowns */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className={`flex items-center gap-2 flex-wrap ${compact ? 'gap-1.5' : ''}`}>
         {/* Search field */}
         <div className="relative">
           <input
             type="text"
             value={searchInput}
             onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Pesquisar prompts, respostas, tools..."
-            className="bg-surface-1/50 border border-border/50 text-text-secondary text-[11px] font-medium rounded-md pl-7 pr-7 py-1.5 w-[220px] hover:border-border focus:outline-none focus:border-accent-blue/30 transition-colors placeholder:text-text-muted/40"
+            placeholder={compact ? 'Pesquisar...' : 'Pesquisar prompts, respostas, tools...'}
+            className={`bg-surface-1/50 border border-border/50 text-text-secondary text-[11px] font-medium rounded-md pl-7 pr-7 py-1.5 hover:border-border focus:outline-none focus:border-accent-blue/30 transition-colors placeholder:text-text-muted/40 ${compact ? 'w-[140px]' : 'w-[220px]'}`}
           />
           <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-text-muted/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -188,22 +190,26 @@ export function FilterBar({ filters, onFiltersChange, projects, agents, terminal
           <ChevronIcon />
         </div>
 
-        <input
-          type="datetime-local"
-          value={filters.since ?? ''}
-          onChange={(e) => onFiltersChange({ ...filters, since: e.target.value || undefined })}
-          title="Desde"
-          placeholder="Desde"
-          className={`${selectClass} w-[155px] text-[10px] ${filters.since ? 'text-text-secondary' : 'text-text-muted/40'}`}
-        />
-        <input
-          type="datetime-local"
-          value={filters.until ?? ''}
-          onChange={(e) => onFiltersChange({ ...filters, until: e.target.value || undefined })}
-          title="Até"
-          placeholder="Até"
-          className={`${selectClass} w-[155px] text-[10px] ${filters.until ? 'text-text-secondary' : 'text-text-muted/40'}`}
-        />
+        {!compact && (
+          <>
+            <input
+              type="datetime-local"
+              value={filters.since ?? ''}
+              onChange={(e) => onFiltersChange({ ...filters, since: e.target.value || undefined })}
+              title="Desde"
+              placeholder="Desde"
+              className={`${selectClass} w-[155px] text-[10px] ${filters.since ? 'text-text-secondary' : 'text-text-muted/40'}`}
+            />
+            <input
+              type="datetime-local"
+              value={filters.until ?? ''}
+              onChange={(e) => onFiltersChange({ ...filters, until: e.target.value || undefined })}
+              title="Até"
+              placeholder="Até"
+              className={`${selectClass} w-[155px] text-[10px] ${filters.until ? 'text-text-secondary' : 'text-text-muted/40'}`}
+            />
+          </>
+        )}
 
         {filters.search && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-accent-violet/10 text-accent-violet border border-accent-violet/20">

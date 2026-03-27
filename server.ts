@@ -9,6 +9,7 @@ import { syncSystemTerminals, cleanupStaleTerminals } from './src/server/termina
 import { getCompanyConfig } from './src/lib/queries';
 import { startGangaEngine, stopGangaEngine } from './src/server/ganga/ganga-engine';
 import { startJsonlWatcher } from './src/server/jsonl-watcher';
+import { startAutopilotEngine, stopAutopilotEngine } from './src/server/autopilot-engine';
 
 // Process-level safety net — prevent crashes from unhandled errors
 process.on('uncaughtException', (err) => {
@@ -117,6 +118,8 @@ app.prepare().then(() => {
   syncGangaState();
   // Re-check ganga state every 30s (picks up config changes)
   setInterval(syncGangaState, 30_000);
+
+  // Autopilot operational loop is handled by OpenClaw cron, not by the local monitor.
 
   httpServer.listen(port, () => {
     console.log(`> Ready on http://localhost:${port}`);

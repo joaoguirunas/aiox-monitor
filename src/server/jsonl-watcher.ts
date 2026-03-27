@@ -96,46 +96,30 @@ function findTerminalBySessionId(sessionId: string): { id: number; project_id: n
   return null;
 }
 
-/** Match JSONL to terminal by project directory path */
+/** Match JSONL to terminal by project directory path.
+ *  ONLY used when there's exactly 1 active terminal for the project.
+ *  With multiple terminals, returns null to force session_id or lsof matching. */
 function findTerminalByProjectDir(projectDirName: string): { id: number; project_id: number } | null {
-  // projectDirName is like "-Users-joaoramos-Desktop-aiox-monitor"
-  // Uses cached path→projectId map (refreshed every 30s) to avoid SELECT on every call.
   try {
     const cache = getProjectPathCache();
     const projectId = cache.get(projectDirName);
     if (projectId === undefined) return null;
 
-    // Prefer terminal actively processing (executing a tool) — avoids cross-session enrichment
-    const processing = db.prepare(
-      `SELECT id, project_id FROM terminals WHERE project_id = ? AND status = 'processing' ORDER BY last_active DESC LIMIT 1`,
-    ).get(projectId) as Record<string, unknown> | undefined;
-    if (processing) return { id: processing.id as number, project_id: processing.project_id as number };
-    // Fallback: any non-inactive terminal
-    const active = db.prepare(
+    // Count active terminals — if multiple, don't guess (return null)
+    const countRow = db.prepare(
+      `SELECT COUNT(*) as cnt FROM terminals WHERE project_id = ? AND status != 'inactive'`,
+    ).get(projectId) as { cnt: number } | undefined;
+    if ((countRow?.cnt ?? 0) > 1) return null;  // multiple terminals → need precise matching
+
+    // Single terminal — safe to use
+    const row = db.prepare(
       `SELECT id, project_id FROM terminals WHERE project_id = ? AND status != 'inactive' ORDER BY last_active DESC LIMIT 1`,
     ).get(projectId) as Record<string, unknown> | undefined;
-    if (active) return { id: active.id as number, project_id: active.project_id as number };
+    if (row) return { id: row.id as number, project_id: row.project_id as number };
   } catch { /* ignore */ }
   return null;
 }
 
-/** Try to find terminal by PID using lsof on the JSONL file */
-async function findTerminalByLsof(filePath: string): Promise<{ id: number; project_id: number } | null> {
-  try {
-    const { execFile } = await import('node:child_process');
-    const { promisify } = await import('node:util');
-    const execFileAsync = promisify(execFile);
-    const { stdout } = await execFileAsync('lsof', ['-t', filePath], { timeout: 3000 });
-    const pids = stdout.trim().split('\n').map(Number).filter(Boolean);
-    for (const pid of pids) {
-      const row = db.prepare(
-        `SELECT id, project_id FROM terminals WHERE pid = ? AND status != 'inactive' ORDER BY last_active DESC LIMIT 1`,
-      ).get(pid) as Record<string, unknown> | undefined;
-      if (row) return { id: row.id as number, project_id: row.project_id as number };
-    }
-  } catch { /* lsof failed or no match */ }
-  return null;
-}
 
 function updateTerminalToolDetail(terminalId: number, toolDetail: string | null, waitingPermission: number): void {
   try {
@@ -233,9 +217,11 @@ function broadcastTerminalUpdate(terminalId: number): void {
 function handleEvents(wf: WatchedFile, events: TranscriptEvent[]): void {
   if (events.length === 0) return;
 
-  // Try to resolve terminal if not yet matched (3 strategies)
+  // Try to resolve terminal (retry periodically — session_id may appear after first events)
   if (wf.terminalId === null) {
+    // Strategy 1: match by Claude session ID (most reliable — set by hook from stdin)
     const match = findTerminalBySessionId(wf.sessionId)
+      // Strategy 2: project dir (only works with single terminal per project)
       ?? findTerminalByProjectDir(wf.projectDirName);
     if (match) {
       wf.terminalId = match.id;
@@ -243,15 +229,8 @@ function handleEvents(wf: WatchedFile, events: TranscriptEvent[]): void {
       if (wf.detectedAgent) {
         applyDetectedAgent(wf.terminalId, wf.detectedAgent);
       }
-    } else {
-      // Async fallback: lsof (will match on next event cycle)
-      findTerminalByLsof(wf.path).then(m => {
-        if (m && wf.terminalId === null) {
-          wf.terminalId = m.id;
-          if (wf.detectedAgent) applyDetectedAgent(wf.terminalId, wf.detectedAgent);
-        }
-      }).catch(() => {});
     }
+    // No async lsof fallback — Claude doesn't keep JSONL files open
   }
 
   let changed = false;
@@ -394,9 +373,9 @@ async function watchFile(filePath: string): Promise<void> {
     detectedAgent: null,
   };
 
-  // Try to match terminal immediately (session_id first, then project dir fallback)
+  // Try to match terminal immediately (session_id first, then single-terminal project fallback)
   const match = findTerminalBySessionId(sessionId)
-    ?? findTerminalByProjectDir(projectDirFromPath(filePath));
+    ?? findTerminalByProjectDir(wf.projectDirName);
   if (match) wf.terminalId = match.id;
 
   // Quick agent scan — detect AIOX agent from early transcript lines.

@@ -26,11 +26,15 @@ def get_project_info():
     return {"project_path": project_path, "project_name": project_name}
 
 
-def get_terminal_info():
+def get_terminal_info(input_data=None):
     """Capture terminal/process identifiers."""
+    # session_id comes from stdin JSON (Claude Code sends it in every hook payload)
+    session_id = None
+    if isinstance(input_data, dict):
+        session_id = input_data.get("session_id")
     info = {
         "terminal_pid": os.getppid(),  # PID of the Claude Code process (parent)
-        "terminal_session_id": os.environ.get("CLAUDE_SESSION_ID"),
+        "terminal_session_id": session_id,
     }
     # Maestri sets this env var for terminals within its workspaces
     maestri_id = os.environ.get("MAESTRI_TERMINAL_ID")
@@ -231,7 +235,7 @@ def main():
         pass  # Empty or invalid stdin — proceed with empty payload
 
     project = get_project_info()
-    terminal = get_terminal_info()
+    terminal = get_terminal_info(input_data)
 
     # Hook type: try env var first, then stdin JSON field
     hook_type = os.environ.get("CLAUDE_HOOK_TYPE", "") or input_data.get("hook_event_name", "")

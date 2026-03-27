@@ -73,11 +73,19 @@ export function PhaserGame() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Resize handler
+  // Resize handler — adapts to container size (not full window)
   useEffect(() => {
     const handleResize = () => {
       if (!gameRef.current) return;
-      gameRef.current.scale.resize(window.innerWidth, window.innerHeight - NAVBAR_HEIGHT);
+      const container = document.getElementById('phaser-container');
+      if (container) {
+        const { width, height } = container.getBoundingClientRect();
+        if (width > 0 && height > 0) {
+          gameRef.current.scale.resize(width, height);
+        }
+      } else {
+        gameRef.current.scale.resize(window.innerWidth, window.innerHeight - NAVBAR_HEIGHT);
+      }
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -118,11 +126,11 @@ export function PhaserGame() {
   }, [lastMessage, selectedProjectId, fetchAgentsOnly]);
 
   return (
-    <div className="relative w-full" style={{ height: `calc(100vh - ${NAVBAR_HEIGHT}px)` }}>
+    <div className="relative w-full h-full">
       <div id="phaser-container" className="w-full h-full" />
       <button
         onClick={fetchAndSync}
-        className="absolute top-3 right-3 z-10 px-2.5 py-1 text-[11px] font-medium text-text-muted hover:text-text-secondary rounded-md border border-border/50 hover:border-border bg-surface-0/80 backdrop-blur-sm transition-colors"
+        className="absolute top-3 left-3 z-10 px-2.5 py-1 text-[11px] font-medium text-text-muted hover:text-text-secondary rounded-md border border-border/50 hover:border-border bg-surface-0/80 backdrop-blur-sm transition-colors"
       >
         Atualizar
       </button>

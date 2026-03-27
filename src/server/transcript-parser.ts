@@ -160,7 +160,7 @@ function extractEvents(record: Record<string, unknown>): TranscriptEvent[] | nul
     return null;
   }
 
-  // assistant → tool_use blocks
+  // assistant → tool_use blocks + agent detection from Skill/Agent tool calls
   if (type === 'assistant') {
     const message = record.message as Record<string, unknown> | undefined;
     const content = (message?.content ?? []) as Array<Record<string, unknown>>;
@@ -177,6 +177,22 @@ function extractEvents(record: Record<string, unknown>): TranscriptEvent[] | nul
           toolName,
           friendlyStatus: formatToolStatus(toolName, toolInput),
         });
+
+        // Detect agent from Skill/Agent tool inputs — e.g. {"skill":"AIOX:agents:sm-chief"}
+        if (toolName === 'Skill' || toolName === 'Agent') {
+          const inputStr = JSON.stringify(toolInput);
+          const agentMatch = inputStr.match(/(?:AIOX:)?agents:([a-zA-Z0-9_-]+)/);
+          if (agentMatch && agentMatch[1] !== 'unknown') {
+            events.push({ type: 'agent_detected', agentName: `@${agentMatch[1]}` });
+          }
+        }
+      }
+      // Also scan text blocks for agent patterns (system-reminder with skill loading)
+      if (block.type === 'text' && typeof block.text === 'string') {
+        const agentMatch = (block.text as string).match(/(?:AIOX:)?agents:([a-zA-Z0-9_-]+)/);
+        if (agentMatch && agentMatch[1] !== 'unknown') {
+          events.push({ type: 'agent_detected', agentName: `@${agentMatch[1]}` });
+        }
       }
     }
 

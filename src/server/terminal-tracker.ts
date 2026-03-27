@@ -23,6 +23,8 @@ import type { Terminal } from '../lib/types';
 
 // Cache window titles by PID — detected once, reused across events
 const windowTitleCache = new Map<number, string>();
+
+
 let lastDetectionTime = 0;
 let cachedDetectionResult: Awaited<ReturnType<typeof detectSystemTerminals>> = [];
 

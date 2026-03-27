@@ -335,18 +335,27 @@ function startPermissionTimer(wf: WatchedFile): void {
 
 // ─── File Watching ──────────────────────────────────────────────────────────
 
-/** Quick scan of a JSONL file for agent activation patterns.
- *  Reads only the first 50KB — agent activation happens early in the transcript. */
+/** Scan a JSONL file for agent activation patterns.
+ *  Reads the last 500KB of the file (agent can be activated at any point).
+ *  Falls back to first 100KB for smaller files. */
 async function scanForAgent(filePath: string): Promise<string | null> {
   try {
     const fh = await (await import('node:fs/promises')).open(filePath, 'r');
     try {
-      const buf = Buffer.alloc(50_000);
-      const { bytesRead } = await fh.read(buf, 0, 50_000, 0);
+      const fileStat = await fh.stat();
+      const fileSize = fileStat.size;
+      // Read the last 500KB (most recent agent activation matters most)
+      const readSize = Math.min(500_000, fileSize);
+      const startPos = Math.max(0, fileSize - readSize);
+      const buf = Buffer.alloc(readSize);
+      const { bytesRead } = await fh.read(buf, 0, readSize, startPos);
       const text = buf.toString('utf-8', 0, bytesRead);
-      // Look for <command-message>AIOX:agents:X</command-message> or agents:X
-      const match = text.match(/(?:AIOX:)?agents:([a-zA-Z0-9_-]+)/);
-      if (match && match[1] !== 'unknown') return `@${match[1]}`;
+      // Find the LAST agent activation (most recent wins)
+      const matches = [...text.matchAll(/(?:AIOX:)?agents:([a-zA-Z0-9_-]+)/g)];
+      const valid = matches
+        .map(m => m[1])
+        .filter(n => n !== 'unknown' && n !== 'agent-name' && n.length > 1);
+      if (valid.length > 0) return `@${valid[valid.length - 1]}`;
     } finally {
       await fh.close();
     }

@@ -11,17 +11,17 @@ const config: Config = {
       colors: {
         // Surface layers (depth system)
         surface: {
-          0: '#0c0e14',
-          1: '#12141c',
-          2: '#181b25',
-          3: '#1f2330',
-          4: '#272b3b',
+          0: '#08090d',
+          1: '#0d0f15',
+          2: '#13151d',
+          3: '#191c26',
+          4: '#21242f',
         },
         // Borders
         border: {
-          DEFAULT: '#1c2033',
-          hover: '#2a3050',
-          accent: 'rgba(99,102,241,0.15)',
+          DEFAULT: '#181b28',
+          hover: '#252a3a',
+          accent: 'rgba(99,102,241,0.12)',
         },
         // Text hierarchy
         'text-primary': '#eef2ff',
@@ -60,8 +60,10 @@ const config: Config = {
         '2xs': ['0.6875rem', { lineHeight: '1rem' }],
       },
       borderRadius: {
-        'xl': '0.875rem',
-        '2xl': '1rem',
+        'xl': '0.5rem',
+        '2xl': '0.625rem',
+        'lg': '0.375rem',
+        'md': '0.25rem',
       },
       boxShadow: {
         'glow-sm': '0 0 8px -2px rgba(99,102,241,0.3)',

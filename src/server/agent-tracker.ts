@@ -77,6 +77,7 @@ function resolveDisplayName(agentName: string): string | undefined {
     .join(' ');
 }
 
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const STOP_TYPES = new Set<EventType>(['Stop', 'SubagentStop']);

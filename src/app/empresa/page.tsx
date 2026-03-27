@@ -5,7 +5,6 @@ import dynamic from 'next/dynamic';
 import { NAVBAR_HEIGHT } from '@/game/constants';
 import { ListaPanel } from '@/components/realtime/ListaPanel';
 
-const LISTA_WIDTH = 720;
 const STORAGE_KEY = 'aiox-lista-collapsed';
 
 const PhaserGame = dynamic(
@@ -47,15 +46,15 @@ export default function RealTimePage() {
       className="relative flex w-full"
       style={{ height: `calc(100vh - ${NAVBAR_HEIGHT}px)` }}
     >
-      {/* Left: Phaser Game — takes all available space */}
+      {/* Left: Phaser Game — takes available space */}
       <div className="flex-1 min-w-0 relative">
         <PhaserGame />
       </div>
 
-      {/* Right: Lista Panel — collapsible */}
+      {/* Right: Lista Panel — 50% width when open */}
       <div
         className="shrink-0 relative transition-[width] duration-300 ease-in-out"
-        style={{ width: listaCollapsed ? 0 : LISTA_WIDTH }}
+        style={{ width: listaCollapsed ? 0 : '50%' }}
       >
         <ListaPanel collapsed={listaCollapsed} onToggle={toggleLista} />
       </div>

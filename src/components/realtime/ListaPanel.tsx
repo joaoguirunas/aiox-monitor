@@ -1,18 +1,15 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import type { Event, EventFilters, SessionWithSummary } from '@/lib/types';
+import { useState, useEffect, useCallback } from 'react';
+import type { EventFilters, SessionWithSummary } from '@/lib/types';
 import { PIXELLAB_SPRITES } from '@/game/data/pixellab-sprites';
 import { getAgentColor } from '@/lib/constants';
-import { useEvents } from '@/hooks/useEvents';
 import { useSessions } from '@/hooks/useSessions';
 import { useProjects } from '@/hooks/useProjects';
 import { useAgents } from '@/hooks/useAgents';
 import { useTerminals } from '@/hooks/useTerminals';
 import { useProjectContext } from '@/contexts/ProjectContext';
-import { TimeAgo } from '@/components/shared/TimeAgo';
 import { SessionDetail } from '@/components/lista/SessionDetail';
-import { EventDetail } from '@/components/lista/EventDetail';
 import type { AgentWithStats } from '@/lib/types';
 
 interface ListaPanelProps {
@@ -20,9 +17,48 @@ interface ListaPanelProps {
   onToggle: () => void;
 }
 
-// ─── Session Card (replaces table row) ─────────────────────────────────────
+// ─── Time helpers (UTC-aware) ────────────────────────────────────────────────
 
-function SessionCard({ session, onClick, agentData, projectName }: {
+function parseUTC(dateStr: string): Date {
+  const normalized = dateStr.endsWith('Z') ? dateStr : dateStr.replace(' ', 'T') + 'Z';
+  return new Date(normalized);
+}
+
+function timeAgo(dateStr: string): string {
+  const s = Math.max(0, Math.floor((Date.now() - parseUTC(dateStr).getTime()) / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
+}
+
+function liveTimer(dateStr: string): string {
+  const s = Math.max(0, Math.floor((Date.now() - parseUTC(dateStr).getTime()) / 1000));
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    return `${h}h ${m % 60}m`;
+  }
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+// ─── Live Timer Hook ─────────────────────────────────────────────────────────
+
+function useTick(enabled: boolean, intervalMs = 1000) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    const id = setInterval(() => setTick(t => t + 1), intervalMs);
+    return () => clearInterval(id);
+  }, [enabled, intervalMs]);
+}
+
+// ─── Session Row ─────────────────────────────────────────────────────────────
+
+const GRID_COLS = '44px 92px 90px 78px 96px 100px 1fr 54px';
+
+function SessionRow({ session, onClick, agentData, projectName }: {
   session: SessionWithSummary; onClick: () => void; agentData?: AgentWithStats; projectName?: string;
 }) {
   const agentName = (session.agent_name && session.agent_name !== '@unknown')
@@ -32,151 +68,234 @@ function SessionCard({ session, onClick, agentData, projectName }: {
     ? session.agent_display_name
     : session.terminal_agent_display_name ?? session.agent_display_name;
 
-  const promptText = session.prompt
-    ? session.prompt.length > 100 ? session.prompt.slice(0, 100) + '...' : session.prompt
-    : null;
-
   const isActive = session.status === 'active';
   const isProcessing = session.terminal_status === 'processing';
 
-  const statusDot = isProcessing
-    ? 'bg-emerald-400 animate-pulse'
-    : session.terminal_status === 'active'
-      ? 'bg-amber-400'
-      : 'bg-zinc-500/40';
-
   const hasAgent = agentName && agentName !== '@unknown';
-  const agentColor = hasAgent ? getAgentColor(agentName) : '#4a5272';
-  const spritePath = hasAgent ? PIXELLAB_SPRITES[agentName!]?.directions.south : undefined;
-  const agentLabel = agentDisplay ?? agentName ?? '';
+  const agentColor = hasAgent ? getAgentColor(agentName) : '#3a3f52';
+  const spritePath = hasAgent ? PIXELLAB_SPRITES[agentName!]?.directions?.south : undefined;
+  const agentLabel = agentDisplay ?? agentName ?? '—';
   const agentInitial = agentLabel.charAt(0).toUpperCase();
-  const roleText = agentData?.role || undefined;
+  const roleText = agentData?.role ?? '—';
+  const teamText = agentData?.team ?? '—';
 
-  const ringClass = isProcessing
-    ? 'ring-2 ring-emerald-400/50 animate-pulse'
-    : isActive
-      ? 'ring-2 ring-accent-blue/40'
-      : '';
+  // Comando: tool detail when active, otherwise first line of prompt
+  let command = '';
+  if (isActive && session.terminal_current_tool_detail) {
+    command = session.terminal_current_tool_detail;
+  } else if (session.prompt) {
+    const firstLine = session.prompt.split('\n')[0];
+    command = firstLine.length > 55 ? firstLine.slice(0, 55) + '…' : firstLine;
+  }
 
-  // Status badge
-  const statusBadge = isActive ? (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-accent-amber/10 text-accent-amber border border-accent-amber/20 animate-pulse shrink-0">
-      Em curso
-    </span>
-  ) : session.status === 'completed' ? (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
-      Completo
-    </span>
-  ) : (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20 shrink-0">
-      Interrompida
-    </span>
-  );
+  const isPermWait = session.terminal_waiting_permission === 1;
 
   return (
     <button
       onClick={onClick}
       className={`
-        w-full text-left px-3 py-2.5 rounded-lg border transition-all duration-150
-        hover:shadow-sm hover:shadow-black/5
+        w-full text-left grid items-center gap-x-1 px-4
+        transition-colors duration-100 group
         ${isActive
-          ? 'bg-surface-1/60 border-accent-blue/20 hover:border-accent-blue/40'
-          : 'bg-surface-1/30 border-border/30 hover:border-border/60'
-        }
+          ? 'h-[60px] bg-accent-blue/[0.04] hover:bg-accent-blue/[0.07] border-l-2 border-l-accent-blue/30'
+          : 'h-[48px] hover:bg-white/[0.025]'}
       `}
+      style={{ gridTemplateColumns: GRID_COLS }}
     >
-      {/* Row 1: [Avatar] | Agent+Role | Janela | Projeto | Status | Time */}
-      <div className="flex items-center gap-2.5">
-        {/* Avatar */}
+      {/* Avatar — circular */}
+      <div className="flex items-center justify-center pr-1">
         {spritePath ? (
-          <span
-            className={`flex items-center justify-center w-9 h-9 rounded-full overflow-hidden border-2 shrink-0 ${ringClass}`}
-            style={{ borderColor: agentColor }}
+          <div
+            className="w-[32px] h-[32px] shrink-0 border"
+            style={{
+              borderColor: agentColor + '40',
+              background: agentColor + '12',
+              borderRadius: '50%',
+              overflow: 'hidden',
+              clipPath: 'circle(50%)',
+            }}
           >
-            <img src={spritePath} alt={agentLabel} className="w-full h-full object-cover" style={{ imageRendering: 'pixelated' }} />
-          </span>
+            <img
+              src={spritePath}
+              alt={agentLabel}
+              className="w-full h-full object-cover"
+              style={{ imageRendering: 'pixelated' }}
+            />
+          </div>
         ) : (
-          <span
-            className={`flex items-center justify-center w-9 h-9 rounded-full text-[11px] font-bold text-white/90 shrink-0 ${ringClass}`}
-            style={{ backgroundColor: agentColor }}
+          <div
+            className="w-[32px] h-[32px] shrink-0 flex items-center justify-center text-[11px] font-bold text-white/90"
+            style={{
+              backgroundColor: hasAgent ? agentColor : '#1e2030',
+              borderRadius: '50%',
+            }}
           >
             {hasAgent ? agentInitial : '⚡'}
-          </span>
+          </div>
         )}
-
-        {/* Agent + Role */}
-        <div className="min-w-[90px] max-w-[110px] shrink-0">
-          {hasAgent ? (
-            <>
-              <span className="block text-[12px] font-semibold truncate" style={{ color: agentColor }}>
-                {agentLabel}
-              </span>
-              {roleText && (
-                <span className="block text-[9px] text-text-muted/60 truncate">{roleText}</span>
-              )}
-            </>
-          ) : (
-            <span className="block text-[11px] text-text-muted truncate">—</span>
-          )}
-        </div>
-
-        {/* Janela (terminal title) */}
-        <div className="flex-1 min-w-0">
-          {session.terminal_title ? (
-            <span className="flex items-center gap-1.5 text-[11px] text-text-secondary truncate">
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`} />
-              <span className="truncate">{session.terminal_title}</span>
-            </span>
-          ) : (
-            <span className="text-[10px] text-text-muted/30">—</span>
-          )}
-          {/* Inline tool detail for active sessions */}
-          {isActive && session.terminal_current_tool_detail && (
-            <span className="flex items-center gap-1 mt-0.5 text-[9px] font-mono text-accent-blue/70 truncate">
-              {session.terminal_waiting_permission === 1 && (
-                <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse shrink-0" />
-              )}
-              <span className="truncate">{session.terminal_current_tool_detail}</span>
-            </span>
-          )}
-        </div>
-
-        {/* Projeto */}
-        {projectName && (
-          <span className="w-[90px] shrink-0 text-[10px] text-text-muted truncate text-right">
-            {projectName}
-          </span>
-        )}
-
-        {/* Status + Time */}
-        <div className="flex items-center gap-2 shrink-0">
-          {statusBadge}
-          <TimeAgo dateStr={session.started_at} />
-        </div>
       </div>
 
-      {/* Row 2: Prompt (if any) — indented past avatar */}
-      {promptText && (
-        <p className="text-[10px] leading-relaxed text-text-secondary/70 mt-1 ml-[46px] line-clamp-1">
-          {promptText}
-        </p>
-      )}
+      {/* Agente */}
+      <div className="truncate pr-3">
+        <span
+          className="text-[12px] font-semibold leading-none"
+          style={{ color: hasAgent ? agentColor : '#6a7098' }}
+        >
+          {agentLabel}
+        </span>
+      </div>
 
-      {/* Row 3: Tool detail for non-active sessions */}
-      {!isActive && session.terminal_current_tool_detail && (
-        <div className="mt-1 ml-[46px] flex items-center gap-1 text-[9px] font-mono text-accent-blue/70 truncate">
-          {session.terminal_waiting_permission === 1 && (
-            <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse shrink-0" />
+      {/* Role */}
+      <div className="truncate pr-3">
+        <span className="text-[11px] text-[#8892b0] leading-none">{roleText}</span>
+      </div>
+
+      {/* Squad */}
+      <div className="truncate pr-3">
+        <span className="text-[11px] text-[#6b7394] leading-none">{teamText}</span>
+      </div>
+
+      {/* Janela */}
+      <div className="truncate pr-3 flex items-center gap-1.5 min-w-0">
+        <span className={`w-[5px] h-[5px] rounded-full shrink-0 ${
+          isProcessing ? 'bg-emerald-400 animate-pulse' : session.terminal_status === 'active' ? 'bg-amber-400' : 'bg-zinc-700/50'
+        }`} />
+        <span className="text-[11px] text-[#8892b0] truncate leading-none">
+          {session.terminal_title ?? '—'}
+        </span>
+      </div>
+
+      {/* Projeto */}
+      <div className="truncate pr-3">
+        <span className="text-[11px] text-[#6b7394] leading-none">{projectName ?? '—'}</span>
+      </div>
+
+      {/* Comando */}
+      <div className="min-w-0 truncate pr-3">
+        <span className={`text-[11px] font-mono leading-none ${
+          isActive && session.terminal_current_tool_detail
+            ? 'text-accent-blue/80'
+            : 'text-[#505878]'
+        }`}>
+          {isPermWait && (
+            <span className="inline-block w-[5px] h-[5px] rounded-full bg-amber-400 animate-pulse mr-1.5 align-middle" />
           )}
-          <span className="truncate">{session.terminal_current_tool_detail}</span>
+          {command || '—'}
+        </span>
+      </div>
+
+      {/* Tempo */}
+      <div className="text-right">
+        <span className={`text-[10px] font-mono tabular-nums ${
+          isActive ? 'text-accent-blue/70' : 'text-[#6b7394]'
+        }`}>
+          {isActive ? liveTimer(session.started_at) : timeAgo(session.started_at)}
+        </span>
+      </div>
+    </button>
+  );
+}
+
+// ─── Column Header ──────────────────────────────────────────────────────────
+
+function ColHeader() {
+  return (
+    <div
+      className="grid items-center gap-x-1 px-4 h-[30px] bg-[#0c0d14] shrink-0 select-none"
+      style={{ gridTemplateColumns: GRID_COLS }}
+    >
+      <div />
+      <div><span className="text-[9px] font-medium text-[#505878] uppercase tracking-[0.14em]">Agente</span></div>
+      <div><span className="text-[9px] font-medium text-[#505878] uppercase tracking-[0.14em]">Role</span></div>
+      <div><span className="text-[9px] font-medium text-[#505878] uppercase tracking-[0.14em]">Squad</span></div>
+      <div><span className="text-[9px] font-medium text-[#505878] uppercase tracking-[0.14em]">Janela</span></div>
+      <div><span className="text-[9px] font-medium text-[#505878] uppercase tracking-[0.14em]">Projeto</span></div>
+      <div><span className="text-[9px] font-medium text-[#505878] uppercase tracking-[0.14em]">Comando</span></div>
+      <div />
+    </div>
+  );
+}
+
+// ─── Filter Bar ─────────────────────────────────────────────────────────────
+
+function FilterBar({ projects, terminals, filters, onFilterChange, searchInput, onSearch }: {
+  projects: { id: number; name: string }[];
+  terminals: { id: number; window_title?: string; pid: number; agent_name?: string }[];
+  filters: EventFilters;
+  onFilterChange: (f: Partial<EventFilters>) => void;
+  searchInput: string;
+  onSearch: (value: string) => void;
+}) {
+  const activeTerminals = terminals.filter(t => t.window_title || t.agent_name);
+
+  return (
+    <div className="px-4 py-2.5 shrink-0 flex flex-wrap items-center gap-2">
+      {/* Search inline */}
+      <div className="relative">
+        <input
+          type="text"
+          value={searchInput}
+          onChange={(e) => onSearch(e.target.value)}
+          placeholder="Pesquisar..."
+          className="w-[140px] bg-white/[0.03] border border-white/[0.06] text-[#8892b0] text-[10px] rounded-md pl-7 pr-2 py-1 hover:border-white/[0.1] focus:outline-none focus:border-accent-blue/30 focus:w-[200px] transition-all placeholder:text-[#3d4462]"
+        />
+        <svg className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#3d4462]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+      </div>
+
+      {/* Separator */}
+      {projects.length > 0 && <div className="w-px h-4 bg-white/[0.06]" />}
+
+      {/* Project badges */}
+      {projects.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            onClick={() => onFilterChange({ projectId: undefined })}
+            className={`px-2.5 py-1 text-[10px] font-medium rounded-md transition-all ${
+              !filters.projectId
+                ? 'bg-accent-blue/15 text-accent-blue border border-accent-blue/25'
+                : 'bg-white/[0.03] text-[#6b7394] border border-white/[0.06] hover:border-white/[0.12] hover:text-[#8892b0]'
+            }`}
+          >
+            Todos
+          </button>
+          {projects.map(p => (
+            <button
+              key={p.id}
+              onClick={() => onFilterChange({ projectId: filters.projectId === p.id ? undefined : p.id })}
+              className={`px-2.5 py-1 text-[10px] font-medium rounded-md transition-all ${
+                filters.projectId === p.id
+                  ? 'bg-accent-blue/15 text-accent-blue border border-accent-blue/25'
+                  : 'bg-white/[0.03] text-[#6b7394] border border-white/[0.06] hover:border-white/[0.12] hover:text-[#8892b0]'
+              }`}
+            >
+              {p.name}
+            </button>
+          ))}
         </div>
       )}
 
-      {/* Tool count (discrete) */}
-      {session.tool_count > 0 && (
-        <span className="block text-[9px] text-text-muted/30 mt-0.5 ml-[46px]">{session.tool_count} ações</span>
+      {/* Terminal filter */}
+      {activeTerminals.length > 1 && (
+        <>
+          <div className="w-px h-4 bg-white/[0.06]" />
+          <select
+            value={filters.terminalId ?? ''}
+            onChange={(e) => onFilterChange({ terminalId: e.target.value ? Number(e.target.value) : undefined })}
+            className="px-2 py-1 text-[10px] font-medium rounded-md bg-white/[0.03] text-[#8892b0] border border-white/[0.06] hover:border-white/[0.12] focus:outline-none focus:border-accent-blue/30 transition-all cursor-pointer appearance-none pr-6"
+            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236b7394' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center' }}
+          >
+            <option value="">Todos terminais</option>
+            {activeTerminals.map(t => (
+              <option key={t.id} value={t.id}>
+                {t.window_title || t.agent_name || `PID ${t.pid}`}
+              </option>
+            ))}
+          </select>
+        </>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -184,9 +303,8 @@ function SessionCard({ session, onClick, agentData, projectName }: {
 
 export function ListaPanel({ collapsed, onToggle }: ListaPanelProps) {
   const [filters, setFilters] = useState<EventFilters>({ limit: 30 });
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [selectedSession, setSelectedSession] = useState<SessionWithSummary | null>(null);
-  const { selectedProjectId, setSelectedProjectId } = useProjectContext();
+  const { selectedProjectId } = useProjectContext();
 
   const effectiveFilters: EventFilters = {
     ...filters,
@@ -211,68 +329,66 @@ export function ListaPanel({ collapsed, onToggle }: ListaPanelProps) {
   const { agents } = useAgents(effectiveFilters.projectId);
   const { terminals } = useTerminals(effectiveFilters.projectId);
 
-  const agentMap = new Map(agents.map((a) => [a.id, a]));
   const agentByName = new Map(agents.map((a) => [a.name, a]));
   const projectMap = new Map(projects.map((p) => [p.id, p]));
 
-  // Search with debounce
-  const [searchInput, setSearchInput] = useState('');
-  const [searchDebounced, setSearchDebounced] = useState('');
+  // Live tick for active session timers
+  const hasActive = sessions.some(s => s.status === 'active');
+  useTick(hasActive);
 
-  const handleSearch = (value: string) => {
+  const [searchInput, setSearchInput] = useState('');
+  const handleSearch = useCallback((value: string) => {
     setSearchInput(value);
     clearTimeout((handleSearch as unknown as { timer?: ReturnType<typeof setTimeout> }).timer);
     (handleSearch as unknown as { timer?: ReturnType<typeof setTimeout> }).timer = setTimeout(() => {
-      setSearchDebounced(value);
       setFilters(f => ({ ...f, search: value || undefined }));
     }, 300);
-  };
+  }, []);
+
+  const handleFilterChange = useCallback((partial: Partial<EventFilters>) => {
+    setFilters(f => ({ ...f, ...partial }));
+  }, []);
 
   if (collapsed) return null;
 
-  // Active sessions first
   const sorted = [...sessions].sort((a, b) => {
     if (a.status === 'active' && b.status !== 'active') return -1;
     if (a.status !== 'active' && b.status === 'active') return 1;
     return 0;
   });
-
   const activeSessions = sorted.filter(s => s.status === 'active');
   const pastSessions = sorted.filter(s => s.status !== 'active');
 
   return (
-    <div className="h-full flex flex-col bg-surface-0/95 border-l border-border/30 overflow-hidden backdrop-blur-sm">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-border/20 shrink-0">
+    <div className="h-full flex flex-col bg-[#0a0b10] border-l border-white/[0.06] overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 h-[48px] shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-accent-blue animate-pulse" />
-            <h2 className="text-[13px] font-semibold text-text-primary font-display tracking-tight">
-              Activity Feed
-            </h2>
+            <div className="w-[7px] h-[7px] rounded-full bg-accent-blue animate-pulse" />
+            <h2 className="text-[13px] font-semibold text-[#c8cfe0] tracking-tight font-display">Activity Feed</h2>
           </div>
           {!sessionsLoading && (
-            <span className="text-[10px] text-text-muted/60 bg-surface-3/30 px-2 py-0.5 rounded-full">
-              {sessions.length} sessoes
+            <span className="text-[10px] text-[#505878] font-mono tabular-nums bg-white/[0.03] px-1.5 py-0.5 rounded">
+              {sessions.length}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <button
             onClick={refresh}
             disabled={sessionsLoading}
-            className="p-1.5 rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-3/40 transition-colors disabled:opacity-30"
+            className="p-1.5 rounded text-[#505878] hover:text-[#8892b0] hover:bg-white/[0.04] transition-colors disabled:opacity-20"
             title="Atualizar"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 12a9 9 0 11-6.219-8.56" />
-              <polyline points="21 3 21 9 15 9" />
+              <path d="M21 12a9 9 0 11-6.219-8.56" /><polyline points="21 3 21 9 15 9" />
             </svg>
           </button>
           <button
             onClick={onToggle}
-            className="p-1.5 rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-3/40 transition-colors"
-            title="Recolher painel"
+            className="p-1.5 rounded text-[#505878] hover:text-[#8892b0] hover:bg-white/[0.04] transition-colors"
+            title="Recolher"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
               <path d="M13 17l5-5-5-5M6 17l5-5-5-5" />
@@ -281,108 +397,94 @@ export function ListaPanel({ collapsed, onToggle }: ListaPanelProps) {
         </div>
       </div>
 
-      {/* ── Search ── */}
-      <div className="px-5 py-3 border-b border-border/10 shrink-0">
-        <div className="relative">
-          <input
-            type="text"
-            value={searchInput}
-            onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Pesquisar sessoes..."
-            className="w-full bg-surface-1/40 border border-border/30 text-text-secondary text-[12px] rounded-lg pl-9 pr-3 py-2 hover:border-border/60 focus:outline-none focus:border-accent-blue/40 focus:ring-1 focus:ring-accent-blue/10 transition-all placeholder:text-text-muted/30"
-          />
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        </div>
-      </div>
+      {/* Search + Filters (inline) */}
+      <FilterBar
+        projects={projects}
+        terminals={terminals}
+        filters={effectiveFilters}
+        onFilterChange={handleFilterChange}
+        searchInput={searchInput}
+        onSearch={handleSearch}
+      />
 
-      {/* ── Content ── */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
-        {/* Loading */}
+      {/* Column headers */}
+      {!sessionsLoading && sessions.length > 0 && <ColHeader />}
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
         {sessionsLoading && (
-          <div className="space-y-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="p-4 rounded-xl border border-border/20 bg-surface-1/20">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="h-5 w-16 shimmer rounded-full" />
-                  <div className="h-3 w-24 shimmer rounded" />
-                </div>
-                <div className="h-3 shimmer rounded w-full mb-2" />
-                <div className="h-3 shimmer rounded w-3/4" />
-              </div>
+          <div className="px-4 py-4 space-y-1">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="h-[46px] rounded bg-white/[0.02] shimmer" />
             ))}
           </div>
         )}
 
-        {/* Empty state */}
         {!sessionsLoading && sessions.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-10 h-10 rounded-full bg-surface-3/30 flex items-center justify-center mb-3">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="text-text-muted/40">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="w-10 h-10 rounded-full bg-white/[0.03] flex items-center justify-center mb-3">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="text-[#3d4462]">
+                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points="13 2 13 9 20 9" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <p className="text-[13px] text-text-secondary font-medium">Nenhuma sessao</p>
-            <p className="text-[11px] text-text-muted/50 mt-1">Inicie o Claude Code para ver atividade</p>
+            <p className="text-[12px] text-[#505878]">Nenhuma sessao activa</p>
+            <p className="text-[11px] text-[#3d4462] mt-1">Inicie o Claude Code para ver atividade</p>
           </div>
         )}
 
-        {/* Active Sessions */}
         {activeSessions.length > 0 && (
-          <section>
-            <div className="flex items-center gap-2 mb-3 px-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-blue animate-pulse" />
-              <h3 className="text-[10px] font-semibold text-text-muted uppercase tracking-widest">
+          <div>
+            <div className="flex items-center gap-2 px-4 h-[28px] bg-accent-blue/[0.03]">
+              <span className="w-[5px] h-[5px] rounded-full bg-accent-blue animate-pulse" />
+              <span className="text-[9px] font-semibold text-accent-blue/50 uppercase tracking-[0.14em]">
                 Em curso ({activeSessions.length})
-              </h3>
+              </span>
             </div>
-            <div className="space-y-1.5">
-              {activeSessions.map((s) => (
-                <SessionCard key={s.id} session={s} onClick={() => setSelectedSession(s)} agentData={agentByName.get(s.terminal_agent_name ?? s.agent_name ?? '')} projectName={projectMap.get(s.project_id)?.name} />
-              ))}
-            </div>
-          </section>
+            {activeSessions.map((s) => (
+              <SessionRow
+                key={s.id}
+                session={s}
+                onClick={() => setSelectedSession(s)}
+                agentData={agentByName.get(s.terminal_agent_name ?? s.agent_name ?? '')}
+                projectName={projectMap.get(s.project_id)?.name}
+              />
+            ))}
+          </div>
         )}
 
-        {/* Past Sessions */}
         {pastSessions.length > 0 && (
-          <section>
-            <div className="flex items-center gap-2 mb-3 px-1">
-              <h3 className="text-[10px] font-semibold text-text-muted/60 uppercase tracking-widest">
+          <div>
+            <div className="flex items-center gap-2 px-4 h-[28px] mt-1">
+              <span className="text-[9px] font-semibold text-[#505878] uppercase tracking-[0.14em]">
                 Recentes ({pastSessions.length})
-              </h3>
+              </span>
             </div>
-            <div className="space-y-1.5">
-              {pastSessions.map((s) => (
-                <SessionCard key={s.id} session={s} onClick={() => setSelectedSession(s)} agentData={agentByName.get(s.terminal_agent_name ?? s.agent_name ?? '')} projectName={projectMap.get(s.project_id)?.name} />
-              ))}
-            </div>
-          </section>
+            {pastSessions.map((s) => (
+              <SessionRow
+                key={s.id}
+                session={s}
+                onClick={() => setSelectedSession(s)}
+                agentData={agentByName.get(s.terminal_agent_name ?? s.agent_name ?? '')}
+                projectName={projectMap.get(s.project_id)?.name}
+              />
+            ))}
+          </div>
         )}
 
-        {/* Load more */}
         {hasMore && !sessionsLoading && (
-          <div className="flex justify-center pt-2 pb-4">
+          <div className="flex justify-center py-4">
             <button
               onClick={loadMore}
               disabled={loadingMore}
-              className="px-5 py-2 text-[11px] font-medium text-text-muted hover:text-text-secondary rounded-lg border border-border/40 hover:border-border/70 transition-all disabled:opacity-40"
+              className="px-4 py-1.5 text-[10px] text-[#505878] hover:text-[#8892b0] border border-white/[0.06] hover:border-white/[0.1] rounded-md transition-all disabled:opacity-30 font-medium"
             >
-              {loadingMore ? (
-                <span className="flex items-center gap-2">
-                  <span className="w-3 h-3 border border-text-muted/40 border-t-text-muted rounded-full animate-spin" />
-                  A carregar...
-                </span>
-              ) : (
-                'Carregar mais'
-              )}
+              {loadingMore ? 'A carregar...' : 'Carregar mais'}
             </button>
           </div>
         )}
       </div>
 
-      {/* Detail drawer */}
       <SessionDetail
         session={selectedSession}
         agents={agents}

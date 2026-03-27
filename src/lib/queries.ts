@@ -101,6 +101,16 @@ export function upsertAgent(
       last_active  = datetime('now')
   `).run(projectId, name, opts?.displayName ?? null, opts?.role ?? null, opts?.team ?? null);
 
+  // Force-fill role/team if they exist in the incoming opts but the DB still has NULL
+  if (opts?.role || opts?.team) {
+    db.prepare(`
+      UPDATE agents SET
+        role = CASE WHEN role IS NULL THEN ? ELSE role END,
+        team = CASE WHEN team IS NULL THEN ? ELSE team END
+      WHERE project_id = ? AND name = ?
+    `).run(opts.role ?? null, opts.team ?? null, projectId, name);
+  }
+
   return row<Agent>(
     db.prepare(`SELECT * FROM agents WHERE project_id = ? AND name = ?`).get(
       projectId,

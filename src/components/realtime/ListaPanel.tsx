@@ -22,18 +22,18 @@ interface ListaPanelProps {
 
 // ─── Session Card (replaces table row) ─────────────────────────────────────
 
-function SessionCard({ session, onClick, agentData }: { session: SessionWithSummary; onClick: () => void; agentData?: AgentWithStats }) {
+function SessionCard({ session, onClick, agentData, projectName }: {
+  session: SessionWithSummary; onClick: () => void; agentData?: AgentWithStats; projectName?: string;
+}) {
   const agentName = (session.agent_name && session.agent_name !== '@unknown')
     ? session.agent_name
     : session.terminal_agent_name ?? session.agent_name;
   const agentDisplay = (session.agent_name && session.agent_name !== '@unknown')
     ? session.agent_display_name
     : session.terminal_agent_display_name ?? session.agent_display_name;
-  const skill = session.skill
-    ?? (session.prompt?.match(/^\/([a-zA-Z0-9_-]+)/)?.[1] || undefined);
 
   const promptText = session.prompt
-    ? session.prompt.length > 120 ? session.prompt.slice(0, 120) + '...' : session.prompt
+    ? session.prompt.length > 100 ? session.prompt.slice(0, 100) + '...' : session.prompt
     : null;
 
   const isActive = session.status === 'active';
@@ -48,9 +48,9 @@ function SessionCard({ session, onClick, agentData }: { session: SessionWithSumm
   const hasAgent = agentName && agentName !== '@unknown';
   const agentColor = hasAgent ? getAgentColor(agentName) : '#4a5272';
   const spritePath = hasAgent ? PIXELLAB_SPRITES[agentName!]?.directions.south : undefined;
-  const roleTeam = agentData ? [agentData.role, agentData.team].filter(Boolean).join(' · ') : '';
   const agentLabel = agentDisplay ?? agentName ?? '';
   const agentInitial = agentLabel.charAt(0).toUpperCase();
+  const roleText = agentData?.role || undefined;
 
   const ringClass = isProcessing
     ? 'ring-2 ring-emerald-400/50 animate-pulse'
@@ -58,21 +58,36 @@ function SessionCard({ session, onClick, agentData }: { session: SessionWithSumm
       ? 'ring-2 ring-accent-blue/40'
       : '';
 
+  // Status badge
+  const statusBadge = isActive ? (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-accent-amber/10 text-accent-amber border border-accent-amber/20 animate-pulse shrink-0">
+      Em curso
+    </span>
+  ) : session.status === 'completed' ? (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+      Completo
+    </span>
+  ) : (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20 shrink-0">
+      Interrompida
+    </span>
+  );
+
   return (
     <button
       onClick={onClick}
       className={`
-        w-full text-left px-3.5 py-3 rounded-xl border transition-all duration-200
-        hover:shadow-md hover:shadow-black/10 hover:-translate-y-[1px]
+        w-full text-left px-3 py-2.5 rounded-lg border transition-all duration-150
+        hover:shadow-sm hover:shadow-black/5
         ${isActive
           ? 'bg-surface-1/60 border-accent-blue/20 hover:border-accent-blue/40'
           : 'bg-surface-1/30 border-border/30 hover:border-border/60'
         }
       `}
     >
-      {/* Top row: avatar + info */}
-      <div className="flex items-center gap-3">
-        {/* Single avatar — sprite, initial, or generic */}
+      {/* Row 1: [Avatar] | Agent+Role | Janela | Projeto | Status | Time */}
+      <div className="flex items-center gap-2.5">
+        {/* Avatar */}
         {spritePath ? (
           <span
             className={`flex items-center justify-center w-9 h-9 rounded-full overflow-hidden border-2 shrink-0 ${ringClass}`}
@@ -82,88 +97,84 @@ function SessionCard({ session, onClick, agentData }: { session: SessionWithSumm
           </span>
         ) : (
           <span
-            className={`flex items-center justify-center w-9 h-9 rounded-full text-[12px] font-bold text-white/90 shrink-0 ${ringClass}`}
+            className={`flex items-center justify-center w-9 h-9 rounded-full text-[11px] font-bold text-white/90 shrink-0 ${ringClass}`}
             style={{ backgroundColor: agentColor }}
           >
             {hasAgent ? agentInitial : '⚡'}
           </span>
         )}
 
-        <div className="flex-1 min-w-0">
-          {/* Agent name + terminal + time */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              {hasAgent ? (
-                <span className="flex flex-col min-w-0">
-                  <span className="text-[12px] font-semibold truncate" style={{ color: agentColor }}>
-                    {agentLabel}
-                  </span>
-                  {roleTeam && (
-                    <span className="text-[10px] text-text-muted truncate">{roleTeam}</span>
-                  )}
-                </span>
-              ) : skill ? (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-accent-blue/10 text-accent-blue border-accent-blue/20">
-                  /{skill}
-                </span>
-              ) : null}
-              {session.terminal_title && (
-                <span className="inline-flex items-center gap-1 text-[10px] text-text-muted truncate">
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`} />
-                  <span className="truncate">{session.terminal_title}</span>
-                </span>
+        {/* Agent + Role */}
+        <div className="min-w-[90px] max-w-[110px] shrink-0">
+          {hasAgent ? (
+            <>
+              <span className="block text-[12px] font-semibold truncate" style={{ color: agentColor }}>
+                {agentLabel}
+              </span>
+              {roleText && (
+                <span className="block text-[9px] text-text-muted/60 truncate">{roleText}</span>
               )}
-            </div>
-            <TimeAgo dateStr={session.started_at} />
-          </div>
-
-          {/* Prompt */}
-          {promptText && (
-            <p className="text-[11px] leading-relaxed text-text-secondary/80 mt-1 line-clamp-2">
-              {promptText}
-            </p>
+            </>
+          ) : (
+            <span className="block text-[11px] text-text-muted truncate">—</span>
           )}
         </div>
-      </div>
 
-      {/* Bottom row: tools + status */}
-      <div className="flex items-center justify-between gap-2 mt-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {session.tools.slice(0, 4).map((t) => (
-            <span key={t} className="px-1.5 py-0.5 text-[9px] font-mono bg-surface-3/60 text-text-muted rounded-md">
-              {t}
+        {/* Janela (terminal title) */}
+        <div className="flex-1 min-w-0">
+          {session.terminal_title ? (
+            <span className="flex items-center gap-1.5 text-[11px] text-text-secondary truncate">
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`} />
+              <span className="truncate">{session.terminal_title}</span>
             </span>
-          ))}
-          {session.tools.length > 4 && (
-            <span className="text-[9px] font-mono text-text-muted/60">+{session.tools.length - 4}</span>
+          ) : (
+            <span className="text-[10px] text-text-muted/30">—</span>
           )}
-          {session.tool_count > 0 && (
-            <span className="text-[9px] text-text-muted/40 ml-1">{session.tool_count} ações</span>
+          {/* Inline tool detail for active sessions */}
+          {isActive && session.terminal_current_tool_detail && (
+            <span className="flex items-center gap-1 mt-0.5 text-[9px] font-mono text-accent-blue/70 truncate">
+              {session.terminal_waiting_permission === 1 && (
+                <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse shrink-0" />
+              )}
+              <span className="truncate">{session.terminal_current_tool_detail}</span>
+            </span>
           )}
         </div>
-        {isActive ? (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-accent-amber/10 text-accent-amber border border-accent-amber/20 animate-pulse">
-            Em curso
-          </span>
-        ) : session.status === 'completed' ? (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            Completo
-          </span>
-        ) : (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20">
-            Interrompida
+
+        {/* Projeto */}
+        {projectName && (
+          <span className="w-[90px] shrink-0 text-[10px] text-text-muted truncate text-right">
+            {projectName}
           </span>
         )}
+
+        {/* Status + Time */}
+        <div className="flex items-center gap-2 shrink-0">
+          {statusBadge}
+          <TimeAgo dateStr={session.started_at} />
+        </div>
       </div>
 
-      {/* Live tool detail */}
-      {session.terminal_current_tool_detail && (
-        <div className="mt-2 flex items-center gap-1.5 text-[10px] font-mono text-accent-blue/80 bg-accent-blue/5 rounded-lg px-2.5 py-1 border border-accent-blue/10">
+      {/* Row 2: Prompt (if any) — indented past avatar */}
+      {promptText && (
+        <p className="text-[10px] leading-relaxed text-text-secondary/70 mt-1 ml-[46px] line-clamp-1">
+          {promptText}
+        </p>
+      )}
+
+      {/* Row 3: Tool detail for non-active sessions */}
+      {!isActive && session.terminal_current_tool_detail && (
+        <div className="mt-1 ml-[46px] flex items-center gap-1 text-[9px] font-mono text-accent-blue/70 truncate">
           {session.terminal_waiting_permission === 1 && (
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+            <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse shrink-0" />
           )}
           <span className="truncate">{session.terminal_current_tool_detail}</span>
         </div>
+      )}
+
+      {/* Tool count (discrete) */}
+      {session.tool_count > 0 && (
+        <span className="block text-[9px] text-text-muted/30 mt-0.5 ml-[46px]">{session.tool_count} ações</span>
       )}
     </button>
   );
@@ -326,9 +337,9 @@ export function ListaPanel({ collapsed, onToggle }: ListaPanelProps) {
                 Em curso ({activeSessions.length})
               </h3>
             </div>
-            <div className="space-y-2.5">
+            <div className="space-y-1.5">
               {activeSessions.map((s) => (
-                <SessionCard key={s.id} session={s} onClick={() => setSelectedSession(s)} agentData={agentByName.get(s.terminal_agent_name ?? s.agent_name ?? '')} />
+                <SessionCard key={s.id} session={s} onClick={() => setSelectedSession(s)} agentData={agentByName.get(s.terminal_agent_name ?? s.agent_name ?? '')} projectName={projectMap.get(s.project_id)?.name} />
               ))}
             </div>
           </section>
@@ -342,9 +353,9 @@ export function ListaPanel({ collapsed, onToggle }: ListaPanelProps) {
                 Recentes ({pastSessions.length})
               </h3>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {pastSessions.map((s) => (
-                <SessionCard key={s.id} session={s} onClick={() => setSelectedSession(s)} agentData={agentByName.get(s.terminal_agent_name ?? s.agent_name ?? '')} />
+                <SessionCard key={s.id} session={s} onClick={() => setSelectedSession(s)} agentData={agentByName.get(s.terminal_agent_name ?? s.agent_name ?? '')} projectName={projectMap.get(s.project_id)?.name} />
               ))}
             </div>
           </section>

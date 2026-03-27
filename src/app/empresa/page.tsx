@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { NAVBAR_HEIGHT } from '@/game/constants';
 import { ListaPanel } from '@/components/realtime/ListaPanel';
 
-const LISTA_WIDTH = 620;
+const LISTA_WIDTH = 720;
 const STORAGE_KEY = 'aiox-lista-collapsed';
 
 const PhaserGame = dynamic(

@@ -15,6 +15,16 @@ function formatDuration(startedAt: string, endedAt?: string | null): string {
   return `${mins}m ${secs}s`;
 }
 
+function formatRelativeTime(baseDate: string, eventDate: string): string {
+  const base = parseUTC(baseDate).getTime();
+  const ev = parseUTC(eventDate).getTime();
+  const diffSec = Math.max(0, Math.floor((ev - base) / 1000));
+  if (diffSec < 60) return `+${diffSec}s`;
+  const mins = Math.floor(diffSec / 60);
+  const secs = diffSec % 60;
+  return `+${mins}m${secs > 0 ? `${secs}s` : ''}`;
+}
+
 interface SessionDetailProps {
   session: SessionWithSummary | null;
   agents: AgentWithStats[];
@@ -32,7 +42,6 @@ export function SessionDetail({ session, agents, projects, terminals, onClose }:
   const [events, setEvents] = useState<Event[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
 
-  // Fetch events on-demand when session is selected
   useEffect(() => {
     if (!session) {
       setEvents([]);
@@ -71,10 +80,15 @@ export function SessionDetail({ session, agents, projects, terminals, onClose }:
   const terminal = session.terminal_id ? terminals.find((t) => t.id === session.terminal_id) : undefined;
   const fullDate = parseUTC(session.started_at).toLocaleString('pt-BR');
 
-  // Build timeline from fetched events
   const toolEvents = events.filter(
     (e) => e.type === 'PreToolUse' && e.tool,
   );
+
+  const statusConfig = session.status === 'completed'
+    ? { label: 'Completo', color: 'bg-accent-emerald/15 text-accent-emerald border-accent-emerald/25', dot: 'bg-accent-emerald' }
+    : session.status === 'interrupted'
+      ? { label: 'Interrompida', color: 'bg-red-500/15 text-red-400 border-red-500/25', dot: 'bg-red-400' }
+      : { label: 'Em curso', color: 'bg-accent-amber/15 text-accent-amber border-accent-amber/25', dot: 'bg-accent-amber animate-pulse' };
 
   return (
     <>
@@ -88,85 +102,70 @@ export function SessionDetail({ session, agents, projects, terminals, onClose }:
         role="dialog"
         aria-label="Detalhes da sessão"
         aria-modal="true"
-        className="fixed inset-y-0 right-0 w-full max-w-lg bg-surface-1 border-l border-border z-50 overflow-y-auto flex flex-col shadow-drawer animate-slide-in-right"
+        className="fixed inset-y-0 right-0 w-full max-w-xl bg-surface-1 border-l border-border z-50 overflow-y-auto flex flex-col shadow-drawer animate-slide-in-right"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <div className="flex items-center gap-2.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent-violet" />
-            <h2 className="text-[13px] font-semibold text-text-primary font-display">Sessão</h2>
-            <span className="text-[10px] text-text-muted font-mono">#{session.id}</span>
+        <div className="px-5 py-4 border-b border-border">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent-violet" />
+              <h2 className="text-[13px] font-semibold text-text-primary font-display">Sessão</h2>
+              <span className="text-[10px] text-text-muted font-mono">#{session.id}</span>
+              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-medium rounded-full border ${statusConfig.color}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`} />
+                {statusConfig.label}
+              </span>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-3/60 transition-colors"
+              aria-label="Fechar"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-3/60 transition-colors"
-            aria-label="Fechar"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {agent && <AgentBadge name={agent.name} displayName={agent.display_name} />}
+            {project && (
+              <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded bg-surface-3/60 text-text-secondary border border-border/30">
+                {project.name}
+              </span>
+            )}
+            <span className={`font-mono text-xs font-medium ${session.status === 'active' ? 'text-accent-amber' : 'text-text-primary'}`}>
+              {formatDuration(session.started_at, session.ended_at)}
+            </span>
+          </div>
         </div>
 
         {/* Content */}
-        <div className="px-5 py-5 space-y-5 flex-1">
-          {/* Metadata */}
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Início">{fullDate}</Field>
-            <Field label="Fim">
-              {session.ended_at
-                ? parseUTC(session.ended_at).toLocaleString('pt-BR')
-                : <span className="text-accent-amber text-xs">Em curso</span>}
-            </Field>
-            <Field label="Duração">
-              <span className={`font-mono text-xs ${session.status === 'active' ? 'text-accent-amber' : 'text-text-primary'}`}>
-                {formatDuration(session.started_at, session.ended_at)}
+        <div className="px-5 py-5 space-y-6 flex-1">
+          {/* Metadata chips */}
+          <div className="flex flex-wrap gap-2">
+            {terminal && (
+              <span className="inline-flex items-center gap-1.5 bg-surface-0/60 border border-border/30 rounded-lg px-3 py-1.5 text-xs text-text-secondary">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${terminal.status === 'processing' ? 'bg-accent-emerald animate-pulse' : terminal.status === 'active' ? 'bg-accent-amber' : 'bg-text-muted/40'}`} />
+                {terminal.window_title || `PID ${terminal.pid}`}
               </span>
-            </Field>
-            <Field label="Projeto">{project?.name ?? '—'}</Field>
-            <Field label="Agente">
-              {agent ? (
-                <AgentBadge name={agent.name} displayName={agent.display_name} />
-              ) : (
-                <span className="text-text-muted">—</span>
-              )}
-            </Field>
-            <Field label="Terminal">
-              {terminal ? (
-                <div>
-                  <span className="inline-flex items-center gap-1.5 text-xs">
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${terminal.status === 'processing' ? 'bg-accent-emerald animate-pulse' : terminal.status === 'active' ? 'bg-accent-amber' : 'bg-text-muted/40'}`} />
-                    {terminal.window_title || `PID ${terminal.pid}`}
-                  </span>
-                  {terminal.window_title && (
-                    <div className="text-[10px] text-text-muted font-mono mt-0.5">PID {terminal.pid}</div>
-                  )}
-                </div>
-              ) : (
-                <span className="text-text-muted">—</span>
-              )}
-            </Field>
-            <Field label="Status">
-              {session.status === 'completed' ? (
-                <span className="text-accent-emerald text-xs font-medium">Completo</span>
-              ) : session.status === 'interrupted' ? (
-                <span className="text-red-400 text-xs font-medium">Interrompida</span>
-              ) : (
-                <span className="text-accent-amber text-xs font-medium">Em curso</span>
-              )}
-            </Field>
-            <Field label="Eventos">{session.event_count}</Field>
+            )}
+            <span className="inline-flex items-center gap-1.5 bg-surface-0/60 border border-border/30 rounded-lg px-3 py-1.5 text-xs text-text-secondary">
+              {fullDate}
+            </span>
+            <span className="inline-flex items-center gap-1.5 bg-surface-0/60 border border-border/30 rounded-lg px-3 py-1.5 text-xs text-text-secondary">
+              {session.event_count} eventos
+            </span>
           </div>
 
           {/* Prompt */}
           {session.prompt && (
             <div>
-              <label className="block text-2xs font-medium text-text-muted uppercase tracking-widest mb-2">
+              <label className="block text-2xs font-medium text-text-muted uppercase tracking-widest mb-3">
                 Prompt do Utilizador
               </label>
               <div className="rounded-lg overflow-hidden border border-accent-violet/20 bg-accent-violet/[0.04]">
                 <div className="w-full h-[3px] bg-accent-violet/30" />
-                <pre className="text-2xs p-3 overflow-x-auto whitespace-pre-wrap break-all text-text-primary leading-relaxed">
+                <pre className="text-xs p-4 whitespace-pre-wrap break-all text-text-primary leading-relaxed max-h-[200px] overflow-y-auto">
                   {session.prompt}
                 </pre>
               </div>
@@ -176,7 +175,7 @@ export function SessionDetail({ session, agents, projects, terminals, onClose }:
           {/* Tools Timeline */}
           {loadingEvents ? (
             <div>
-              <label className="block text-2xs font-medium text-text-muted uppercase tracking-widest mb-2">
+              <label className="block text-2xs font-medium text-text-muted uppercase tracking-widest mb-3">
                 Ações
               </label>
               <div className="space-y-1.5">
@@ -190,18 +189,35 @@ export function SessionDetail({ session, agents, projects, terminals, onClose }:
             </div>
           ) : toolEvents.length > 0 ? (
             <div>
-              <label className="block text-2xs font-medium text-text-muted uppercase tracking-widest mb-2">
+              <label className="block text-2xs font-medium text-text-muted uppercase tracking-widest mb-3">
                 Ações ({session.tool_count})
               </label>
-              <div className="space-y-1 max-h-[250px] overflow-y-auto">
-                {toolEvents.map((e) => (
-                  <div key={e.id} className="flex items-start gap-2 py-1.5 px-2 rounded bg-surface-0/50">
-                    <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-mono bg-accent-blue/10 text-accent-blue rounded">
-                      {e.tool}
+              <div className="max-h-[300px] overflow-y-auto">
+                {toolEvents.map((e, idx) => (
+                  <div
+                    key={e.id}
+                    className={`flex items-start gap-2.5 py-2 px-2 ${idx % 2 === 1 ? 'bg-surface-0/30' : ''}`}
+                  >
+                    {/* Timestamp column */}
+                    <span className="shrink-0 w-12 text-[10px] font-mono text-text-muted text-right pt-0.5">
+                      {formatRelativeTime(session.started_at, e.created_at)}
                     </span>
-                    <span className="text-[11px] text-text-secondary truncate">
-                      {humanizeTool(e.tool, e.input_summary)}
-                    </span>
+                    {/* Timeline connector */}
+                    <div className="relative flex flex-col items-center shrink-0 pt-1">
+                      <span className="w-2 h-2 rounded-full bg-accent-blue/40 border-2 border-accent-blue/60 z-10" />
+                      {idx < toolEvents.length - 1 && (
+                        <div className="w-0.5 bg-border/20 absolute top-3 bottom-[-12px]" />
+                      )}
+                    </div>
+                    {/* Tool badge + input */}
+                    <div className="flex items-start gap-2 min-w-0 flex-1">
+                      <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-mono bg-accent-blue/10 text-accent-blue rounded">
+                        {e.tool}
+                      </span>
+                      <span className="text-[11px] text-text-secondary truncate pt-0.5">
+                        {humanizeTool(e.tool, e.input_summary)}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -211,12 +227,12 @@ export function SessionDetail({ session, agents, projects, terminals, onClose }:
           {/* Response */}
           {session.response && (
             <div>
-              <label className="block text-2xs font-medium text-text-muted uppercase tracking-widest mb-2">
+              <label className="block text-2xs font-medium text-text-muted uppercase tracking-widest mb-3">
                 Resposta do Claude
               </label>
               <div className="rounded-lg overflow-hidden border border-accent-emerald/20 bg-accent-emerald/[0.04]">
                 <div className="w-full h-[3px] bg-accent-emerald/30" />
-                <pre className="text-2xs p-3 overflow-x-auto whitespace-pre-wrap break-all text-text-primary leading-relaxed">
+                <pre className="text-2xs p-3 whitespace-pre-wrap break-all text-text-primary leading-relaxed max-h-[300px] overflow-y-auto">
                   {session.response}
                 </pre>
               </div>
@@ -242,13 +258,4 @@ function humanizeTool(tool: string | null | undefined, input: string | null | un
     case 'Skill': return short(input, 50);
     default: return short(input, 70);
   }
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-2xs font-medium text-text-muted uppercase tracking-widest mb-1">{label}</dt>
-      <dd className="text-[13px] text-text-primary">{children}</dd>
-    </div>
-  );
 }

@@ -24,11 +24,13 @@ const PhaserGame = dynamic(
 
 export default function RealTimePage() {
   const [listaCollapsed, setListaCollapsed] = useState(true);
+  const [skinDebug, setSkinDebug] = useState('');
 
   // Persist collapsed state
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === 'false') setListaCollapsed(false);
+    setSkinDebug(localStorage.getItem('aiox-skin-config') || 'EMPTY');
   }, []);
 
   const toggleLista = useCallback(() => {
@@ -46,6 +48,9 @@ export default function RealTimePage() {
       className="relative flex w-full"
       style={{ height: `calc(100vh - ${NAVBAR_HEIGHT}px)` }}
     >
+      {/* DEBUG: skin localStorage */}
+      <pre style={{position:'absolute',top:0,left:0,zIndex:99,fontSize:'10px',background:'#111',color:'#0f0',padding:'4px',maxHeight:'60px',overflow:'auto',opacity:0.9,pointerEvents:'none'}}>{skinDebug}</pre>
+
       {/* Left: Phaser Game — takes available space */}
       <div className="flex-1 min-w-0 relative">
         <PhaserGame />

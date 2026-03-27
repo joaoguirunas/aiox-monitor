@@ -82,10 +82,13 @@ export function saveSkinConfig(config: SkinAssignment): void {
   localStorage.setItem(SKIN_STORAGE_KEY, JSON.stringify(config));
 }
 
-/** Retorna a skin atribuída a um agente, ou null se for default */
+/** Retorna a skin atribuída a um agente, ou null se for default.
+ *  Faz lookup com e sem @ para garantir match independente do formato. */
 export function getAgentSkin(agentName: string): SkinDefinition | null {
   const config = loadSkinConfig();
-  const skinId = config[agentName];
+  const withAt = agentName.startsWith('@') ? agentName : `@${agentName}`;
+  const withoutAt = agentName.startsWith('@') ? agentName.slice(1) : agentName;
+  const skinId = config[withAt] ?? config[withoutAt];
   if (!skinId || skinId === 'default') return null;
   return ALL_SKINS.find(s => s.id === skinId) ?? null;
 }

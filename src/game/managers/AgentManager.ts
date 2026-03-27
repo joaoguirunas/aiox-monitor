@@ -146,7 +146,6 @@ export class AgentManager {
   syncAll(agents: Agent[]): void {
     // Filter out @unknown agents — they clutter the office
     const visible = agents.filter(a => a.name !== '@unknown');
-    console.log('[AgentManager] syncAll called with', visible.length, 'visible agents');
     const activeKeys = new Set<string>();
 
     // Ensure clusters exist for all projects that have agents

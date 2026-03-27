@@ -64,7 +64,7 @@ export class AgentSprite extends Phaser.GameObjects.Container {
     // Check for custom skin first, then PixelLab default
     const skinDef = getAgentSkin(agentName);
     const skinSouthKey = skinDef ? `skin-${skinDef.id}-south` : '';
-    const hasSkin = !!skinDef && scene.textures.exists(skinSouthKey);
+    const hasSkin = !!skinDef;
 
     const plEntry = Object.values(PIXELLAB_SPRITES).find(e => e.agentKey === config.key);
     const plSouthKey = pixelLabTextureKey(config.key, 'south');

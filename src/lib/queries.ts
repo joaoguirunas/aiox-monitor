@@ -89,15 +89,17 @@ export function getProjectStats(id: number): { events: number; agents: number; s
 export function upsertAgent(
   projectId: number,
   name: string,
-  displayName?: string,
+  opts?: { displayName?: string; role?: string; team?: string },
 ): Agent {
   db.prepare(`
-    INSERT INTO agents (project_id, name, display_name)
-    VALUES (?, ?, ?)
+    INSERT INTO agents (project_id, name, display_name, role, team)
+    VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(project_id, name) DO UPDATE SET
       display_name = COALESCE(excluded.display_name, display_name),
+      role         = COALESCE(excluded.role, role),
+      team         = COALESCE(excluded.team, team),
       last_active  = datetime('now')
-  `).run(projectId, name, displayName ?? null);
+  `).run(projectId, name, opts?.displayName ?? null, opts?.role ?? null, opts?.team ?? null);
 
   return row<Agent>(
     db.prepare(`SELECT * FROM agents WHERE project_id = ? AND name = ?`).get(
@@ -118,6 +120,20 @@ export function updateAgentStatus(
     SET status = ?, current_tool = ?, last_active = datetime('now')
     WHERE project_id = ? AND name = ?
   `).run(status, currentTool, projectId, name);
+}
+
+export function updateAgentFields(
+  id: number,
+  fields: { display_name?: string; role?: string; team?: string },
+): void {
+  const sets: string[] = [];
+  const params: (string | null)[] = [];
+  if (fields.display_name !== undefined) { sets.push('display_name = ?'); params.push(fields.display_name || null); }
+  if (fields.role !== undefined) { sets.push('role = ?'); params.push(fields.role || null); }
+  if (fields.team !== undefined) { sets.push('team = ?'); params.push(fields.team || null); }
+  if (sets.length === 0) return;
+  params.push(id as unknown as string);
+  db.prepare(`UPDATE agents SET ${sets.join(', ')} WHERE id = ?`).run(...params);
 }
 
 export function getAgents(filters?: { projectId?: number }): AgentWithStats[] {
@@ -180,8 +196,11 @@ export function getAgentInstances(filters?: { projectId?: number }): AgentWithSt
         t.current_tool_detail,
         t.waiting_permission,
         t.last_active,
+        a.role,
+        a.team,
         1 as terminal_count
       FROM terminals t
+      LEFT JOIN agents a ON a.project_id = t.project_id AND a.name = t.agent_name
       ${whereClause} t.status <> 'inactive'
       ORDER BY t.last_active DESC
     `).all(...params) as Row[],

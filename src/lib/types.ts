@@ -11,6 +11,8 @@ export interface Agent {
   project_id: number;
   name: string;
   display_name?: string;
+  role?: string;
+  team?: string;
   status: AgentStatus;
   current_tool?: string;
   current_tool_detail?: string;

@@ -3,16 +3,17 @@
 import { useState, useMemo } from 'react';
 import type { Event, EventFilters, SessionWithSummary } from '@/lib/types';
 import { PIXELLAB_SPRITES } from '@/game/data/pixellab-sprites';
+import { getAgentColor } from '@/lib/constants';
 import { useEvents } from '@/hooks/useEvents';
 import { useSessions } from '@/hooks/useSessions';
 import { useProjects } from '@/hooks/useProjects';
 import { useAgents } from '@/hooks/useAgents';
 import { useTerminals } from '@/hooks/useTerminals';
 import { useProjectContext } from '@/contexts/ProjectContext';
-import { AgentBadge } from '@/components/shared/Badge';
 import { TimeAgo } from '@/components/shared/TimeAgo';
 import { SessionDetail } from '@/components/lista/SessionDetail';
 import { EventDetail } from '@/components/lista/EventDetail';
+import type { AgentWithStats } from '@/lib/types';
 
 interface ListaPanelProps {
   collapsed: boolean;
@@ -21,45 +22,7 @@ interface ListaPanelProps {
 
 // ─── Session Card (replaces table row) ─────────────────────────────────────
 
-// Agent avatar colors (mirrors Badge.tsx AGENT_COLORS)
-const AGENT_COLORS: Record<string, string> = {
-  '@dev': '#6366f1', '@qa': '#34d399', '@architect': '#a78bfa', '@pm': '#fb923c',
-  '@sm': '#22d3ee', '@po': '#fbbf24', '@analyst': '#818cf8', '@devops': '#f87171',
-  '@data-engineer': '#f472b6', '@ux-design-expert': '#e879f9', '@aiox-master': '#fbbf24',
-};
-
-function AgentAvatar({ name, displayName, isProcessing, isActive }: {
-  name: string; displayName?: string | null; isProcessing: boolean; isActive: boolean;
-}) {
-  const color = AGENT_COLORS[name] ?? '#4a5272';
-  const spritePath = PIXELLAB_SPRITES[name]?.directions.south;
-  const label = displayName ?? name;
-  const initial = label.charAt(0).toUpperCase();
-
-  const ringClass = isProcessing
-    ? 'ring-2 ring-emerald-400/50 animate-pulse'
-    : isActive
-      ? 'ring-2 ring-amber-400/40'
-      : '';
-
-  return spritePath ? (
-    <span
-      className={`flex items-center justify-center w-8 h-8 rounded-full overflow-hidden border-2 shrink-0 ${ringClass}`}
-      style={{ borderColor: color }}
-    >
-      <img src={spritePath} alt={label} className="w-full h-full object-cover" style={{ imageRendering: 'pixelated' }} />
-    </span>
-  ) : (
-    <span
-      className={`flex items-center justify-center w-8 h-8 rounded-full text-[11px] font-bold text-white/90 shrink-0 ${ringClass}`}
-      style={{ backgroundColor: color }}
-    >
-      {initial}
-    </span>
-  );
-}
-
-function SessionCard({ session, onClick }: { session: SessionWithSummary; onClick: () => void }) {
+function SessionCard({ session, onClick, agentData }: { session: SessionWithSummary; onClick: () => void; agentData?: AgentWithStats }) {
   const agentName = (session.agent_name && session.agent_name !== '@unknown')
     ? session.agent_name
     : session.terminal_agent_name ?? session.agent_name;
@@ -83,12 +46,23 @@ function SessionCard({ session, onClick }: { session: SessionWithSummary; onClic
       : 'bg-zinc-500/40';
 
   const hasAgent = agentName && agentName !== '@unknown';
+  const agentColor = hasAgent ? getAgentColor(agentName) : '#4a5272';
+  const spritePath = hasAgent ? PIXELLAB_SPRITES[agentName!]?.directions.south : undefined;
+  const roleTeam = agentData ? [agentData.role, agentData.team].filter(Boolean).join(' · ') : '';
+  const agentLabel = agentDisplay ?? agentName ?? '';
+  const agentInitial = agentLabel.charAt(0).toUpperCase();
+
+  const ringClass = isProcessing
+    ? 'ring-2 ring-emerald-400/50 animate-pulse'
+    : isActive
+      ? 'ring-2 ring-accent-blue/40'
+      : '';
 
   return (
     <button
       onClick={onClick}
       className={`
-        w-full text-left p-4 rounded-xl border transition-all duration-200
+        w-full text-left px-3.5 py-3 rounded-xl border transition-all duration-200
         hover:shadow-md hover:shadow-black/10 hover:-translate-y-[1px]
         ${isActive
           ? 'bg-surface-1/60 border-accent-blue/20 hover:border-accent-blue/40'
@@ -96,23 +70,45 @@ function SessionCard({ session, onClick }: { session: SessionWithSummary; onClic
         }
       `}
     >
-      {/* Top row: avatar + agent + terminal + time */}
-      <div className="flex items-start gap-3 mb-2.5">
-        {hasAgent && (
-          <AgentAvatar name={agentName!} displayName={agentDisplay} isProcessing={isProcessing} isActive={isActive} />
+      {/* Top row: avatar + info */}
+      <div className="flex items-center gap-3">
+        {/* Single avatar — sprite, initial, or generic */}
+        {spritePath ? (
+          <span
+            className={`flex items-center justify-center w-9 h-9 rounded-full overflow-hidden border-2 shrink-0 ${ringClass}`}
+            style={{ borderColor: agentColor }}
+          >
+            <img src={spritePath} alt={agentLabel} className="w-full h-full object-cover" style={{ imageRendering: 'pixelated' }} />
+          </span>
+        ) : (
+          <span
+            className={`flex items-center justify-center w-9 h-9 rounded-full text-[12px] font-bold text-white/90 shrink-0 ${ringClass}`}
+            style={{ backgroundColor: agentColor }}
+          >
+            {hasAgent ? agentInitial : '⚡'}
+          </span>
         )}
+
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-3">
+          {/* Agent name + terminal + time */}
+          <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               {hasAgent ? (
-                <AgentBadge name={agentName} displayName={agentDisplay} />
+                <span className="flex flex-col min-w-0">
+                  <span className="text-[12px] font-semibold truncate" style={{ color: agentColor }}>
+                    {agentLabel}
+                  </span>
+                  {roleTeam && (
+                    <span className="text-[10px] text-text-muted truncate">{roleTeam}</span>
+                  )}
+                </span>
               ) : skill ? (
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-accent-blue/10 text-accent-blue border-accent-blue/20">
                   /{skill}
                 </span>
               ) : null}
               {session.terminal_title && (
-                <span className="inline-flex items-center gap-1.5 text-[11px] text-text-muted truncate">
+                <span className="inline-flex items-center gap-1 text-[10px] text-text-muted truncate">
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot}`} />
                   <span className="truncate">{session.terminal_title}</span>
                 </span>
@@ -123,7 +119,7 @@ function SessionCard({ session, onClick }: { session: SessionWithSummary; onClic
 
           {/* Prompt */}
           {promptText && (
-            <p className="text-[12px] leading-relaxed text-text-secondary/90 mt-1.5 line-clamp-2">
+            <p className="text-[11px] leading-relaxed text-text-secondary/80 mt-1 line-clamp-2">
               {promptText}
             </p>
           )}
@@ -131,7 +127,7 @@ function SessionCard({ session, onClick }: { session: SessionWithSummary; onClic
       </div>
 
       {/* Bottom row: tools + status */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 mt-2">
         <div className="flex flex-wrap items-center gap-1.5">
           {session.tools.slice(0, 4).map((t) => (
             <span key={t} className="px-1.5 py-0.5 text-[9px] font-mono bg-surface-3/60 text-text-muted rounded-md">
@@ -142,7 +138,7 @@ function SessionCard({ session, onClick }: { session: SessionWithSummary; onClic
             <span className="text-[9px] font-mono text-text-muted/60">+{session.tools.length - 4}</span>
           )}
           {session.tool_count > 0 && (
-            <span className="text-[9px] text-text-muted/40 ml-1">{session.tool_count} acoes</span>
+            <span className="text-[9px] text-text-muted/40 ml-1">{session.tool_count} ações</span>
           )}
         </div>
         {isActive ? (
@@ -162,7 +158,7 @@ function SessionCard({ session, onClick }: { session: SessionWithSummary; onClic
 
       {/* Live tool detail */}
       {session.terminal_current_tool_detail && (
-        <div className="mt-2.5 flex items-center gap-1.5 text-[10px] font-mono text-accent-blue/80 bg-accent-blue/5 rounded-lg px-2.5 py-1.5 border border-accent-blue/10">
+        <div className="mt-2 flex items-center gap-1.5 text-[10px] font-mono text-accent-blue/80 bg-accent-blue/5 rounded-lg px-2.5 py-1 border border-accent-blue/10">
           {session.terminal_waiting_permission === 1 && (
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
           )}
@@ -205,6 +201,7 @@ export function ListaPanel({ collapsed, onToggle }: ListaPanelProps) {
   const { terminals } = useTerminals(effectiveFilters.projectId);
 
   const agentMap = new Map(agents.map((a) => [a.id, a]));
+  const agentByName = new Map(agents.map((a) => [a.name, a]));
   const projectMap = new Map(projects.map((p) => [p.id, p]));
 
   // Search with debounce
@@ -331,7 +328,7 @@ export function ListaPanel({ collapsed, onToggle }: ListaPanelProps) {
             </div>
             <div className="space-y-2.5">
               {activeSessions.map((s) => (
-                <SessionCard key={s.id} session={s} onClick={() => setSelectedSession(s)} />
+                <SessionCard key={s.id} session={s} onClick={() => setSelectedSession(s)} agentData={agentByName.get(s.terminal_agent_name ?? s.agent_name ?? '')} />
               ))}
             </div>
           </section>
@@ -347,7 +344,7 @@ export function ListaPanel({ collapsed, onToggle }: ListaPanelProps) {
             </div>
             <div className="space-y-2">
               {pastSessions.map((s) => (
-                <SessionCard key={s.id} session={s} onClick={() => setSelectedSession(s)} />
+                <SessionCard key={s.id} session={s} onClick={() => setSelectedSession(s)} agentData={agentByName.get(s.terminal_agent_name ?? s.agent_name ?? '')} />
               ))}
             </div>
           </section>

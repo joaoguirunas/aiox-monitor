@@ -1,4 +1,5 @@
 import { PIXELLAB_SPRITES } from '@/game/data/pixellab-sprites';
+import { getAgentColor } from '@/lib/constants';
 import type { EventType } from '@/lib/types';
 
 const EVENT_TYPE_STYLES: Record<EventType, string> = {
@@ -29,36 +30,20 @@ export function EventTypeBadge({ type }: EventTypeBadgeProps) {
   );
 }
 
-// Agent color mapping (inline styles for dynamic agent colors)
-const AGENT_COLORS: Record<string, string> = {
-  '@dev': '#6366f1',
-  '@qa': '#34d399',
-  '@architect': '#a78bfa',
-  '@pm': '#fb923c',
-  '@sm': '#22d3ee',
-  '@po': '#fbbf24',
-  '@analyst': '#818cf8',
-  '@devops': '#f87171',
-  '@data-engineer': '#f472b6',
-  '@ux-design-expert': '#e879f9',
-  '@aiox-master': '#fbbf24',
-};
-
-function getAgentColor(name: string | null | undefined): string {
-  if (!name) return '#4a5272';
-  return AGENT_COLORS[name] ?? '#4a5272';
-}
-
 interface AgentBadgeProps {
   name: string | null | undefined;
   displayName?: string | null;
+  role?: string | null;
+  team?: string | null;
 }
 
-export function AgentBadge({ name, displayName }: AgentBadgeProps) {
+export function AgentBadge({ name, displayName, role, team }: AgentBadgeProps) {
   const label = displayName ?? name ?? 'unknown';
   const color = getAgentColor(name);
   const initial = label.charAt(0).toUpperCase();
   const spritePath = name ? PIXELLAB_SPRITES[name]?.directions.south : undefined;
+
+  const subtitle = [role, team].filter(Boolean).join(' · ');
 
   return (
     <span className="inline-flex items-center gap-1.5 text-2xs font-semibold">
@@ -77,7 +62,12 @@ export function AgentBadge({ name, displayName }: AgentBadgeProps) {
           {initial}
         </span>
       )}
-      <span style={{ color }}>{label}</span>
+      <span className="flex flex-col leading-tight">
+        <span style={{ color }}>{label}</span>
+        {subtitle && (
+          <span className="text-[9px] font-normal text-text-muted">{subtitle}</span>
+        )}
+      </span>
     </span>
   );
 }

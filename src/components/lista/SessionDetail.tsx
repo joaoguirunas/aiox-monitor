@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Event, AgentWithStats, Project, Terminal, SessionWithSummary } from '@/lib/types';
 import { PIXELLAB_SPRITES } from '@/game/data/pixellab-sprites';
+import { getAgentColor as getAgentColorFromConstants } from '@/lib/constants';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -48,12 +49,7 @@ function getToolColor(tool: string | null | undefined): string {
   return TOOL_COLORS[tool] ?? 'bg-surface-3 text-text-secondary';
 }
 
-const AGENT_COLORS: Record<string, string> = {
-  '@dev': '#6366f1', '@qa': '#34d399', '@architect': '#a78bfa',
-  '@pm': '#fb923c', '@sm': '#22d3ee', '@po': '#fbbf24',
-  '@analyst': '#818cf8', '@devops': '#f87171', '@data-engineer': '#f472b6',
-  '@ux-design-expert': '#e879f9', '@aiox-master': '#fbbf24',
-};
+// Agent colors imported from constants (getAgentColorFromConstants)
 
 function humanizeTool(tool: string | null | undefined, input: string | null | undefined): string {
   if (!tool || !input) return '—';
@@ -173,10 +169,13 @@ export function SessionDetail({ session, agents, projects, terminals, onClose }:
   const isActive = session.status === 'active';
   const agentName = session.terminal_agent_name ?? session.agent_name ?? null;
   const agentDisplay = session.terminal_agent_display_name ?? session.agent_display_name ?? agentName;
-  const agent = session.agent_id ? agents.find((a) => a.id === session.agent_id) : undefined;
+  const agent = session.agent_id
+    ? agents.find((a) => a.id === session.agent_id)
+    : agentName ? agents.find((a) => a.name === agentName) : undefined;
   const project = projects.find((p) => p.id === session.project_id);
   const terminal = session.terminal_id ? terminals.find((t) => t.id === session.terminal_id) : undefined;
-  const agentColor = AGENT_COLORS[agentName ?? ''] ?? '#4a5272';
+  const agentColor = getAgentColorFromConstants(agentName);
+  const agentRoleTeam = agent ? [agent.role, agent.team].filter(Boolean).join(' · ') : '';
 
   const spritePath = agentName ? PIXELLAB_SPRITES[agentName]?.directions.south : undefined;
   const currentToolDetail = terminal?.current_tool_detail ?? session.terminal_current_tool_detail;
@@ -257,7 +256,10 @@ export function SessionDetail({ session, agents, projects, terminals, onClose }:
                   {statusConfig.label}
                 </span>
               </div>
-              {agentName && agentName !== agentDisplay && (
+              {agentRoleTeam && (
+                <span className="text-[11px] text-text-muted">{agentRoleTeam}</span>
+              )}
+              {agentName && agentName !== agentDisplay && !agentRoleTeam && (
                 <span className="text-xs text-text-muted font-mono">{agentName}</span>
               )}
               {isActive && (

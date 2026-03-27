@@ -131,6 +131,15 @@ export function initSchema(db: DatabaseSync): void {
   // Migration: autopilot per terminal
   try { db.exec(`ALTER TABLE terminals ADD COLUMN autopilot INTEGER NOT NULL DEFAULT 0`); } catch { /* exists */ }
 
+  // Migration: agent role and team
+  const agentMigrations = [
+    `ALTER TABLE agents ADD COLUMN role TEXT`,
+    `ALTER TABLE agents ADD COLUMN team TEXT`,
+  ];
+  for (const sql of agentMigrations) {
+    try { db.exec(sql); } catch { /* Column already exists */ }
+  }
+
   // Migrate old 'active' status to 'processing' is not needed —
   // the CHECK constraint update is handled by SQLite allowing existing data
   // We just need to ensure the CHECK allows the new values.

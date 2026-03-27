@@ -2,26 +2,72 @@ import { upsertAgent, updateAgentStatus } from '../lib/queries';
 import { broadcast } from './ws-broadcaster';
 import { db } from '../lib/db';
 import type { Agent, EventType } from '../lib/types';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
-// Known display names for standard AIOX agents — custom/squad agents get auto-generated names
-const KNOWN_DISPLAY_NAMES: Record<string, string> = {
-  '@dev': 'Dex',
-  '@qa': 'Quinn',
-  '@architect': 'Aria',
-  '@pm': 'Morgan',
-  '@sm': 'River',
-  '@po': 'Pax',
-  '@analyst': 'Atlas',
-  '@devops': 'Gage',
-  '@data-engineer': 'Dara',
-  '@ux-design-expert': 'Uma',
-  '@aiox-master': 'AIOX',
+// ─── Known AIOX agents with role & team ─────────────────────────────────────
+
+const KNOWN_AGENTS: Record<string, { display: string; role: string; team: string }> = {
+  '@dev':              { display: 'Dex',    role: 'Developer',        team: 'Engineering' },
+  '@qa':               { display: 'Quinn',  role: 'QA Engineer',      team: 'Quality' },
+  '@architect':        { display: 'Aria',   role: 'Architect',        team: 'Engineering' },
+  '@pm':               { display: 'Morgan', role: 'Product Manager',  team: 'Product' },
+  '@sm':               { display: 'River',  role: 'Scrum Master',     team: 'Product' },
+  '@po':               { display: 'Pax',    role: 'Product Owner',    team: 'Product' },
+  '@analyst':          { display: 'Atlas',  role: 'Analyst',          team: 'Research' },
+  '@devops':           { display: 'Gage',   role: 'DevOps Engineer',  team: 'Infrastructure' },
+  '@data-engineer':    { display: 'Dara',   role: 'Data Engineer',    team: 'Engineering' },
+  '@ux-design-expert': { display: 'Uma',    role: 'UX Designer',      team: 'Design' },
+  '@aiox-master':      { display: 'AIOX',   role: 'Orchestrator',     team: 'Management' },
 };
+
+// ─── Custom agent metadata cache ────────────────────────────────────────────
+
+interface CustomAgentMeta {
+  role: string;
+  team: string;
+}
+
+const customAgentCache = new Map<string, CustomAgentMeta>();
+
+/** Try to read role from .aiox-core/development/agents/{name}.md YAML frontmatter */
+function resolveCustomAgentMeta(agentName: string): CustomAgentMeta {
+  const cached = customAgentCache.get(agentName);
+  if (cached) return cached;
+
+  const defaults: CustomAgentMeta = { role: 'Agent', team: 'Custom' };
+
+  const id = agentName.startsWith('@') ? agentName.slice(1) : agentName;
+  if (!id) {
+    customAgentCache.set(agentName, defaults);
+    return defaults;
+  }
+
+  try {
+    const filePath = join(process.cwd(), '.aiox-core', 'development', 'agents', `${id}.md`);
+    const content = readFileSync(filePath, 'utf-8');
+    // Extract persona.role from YAML block — look for "role:" line
+    const roleMatch = content.match(/^\s*role:\s*(.+)$/m);
+    if (roleMatch) {
+      const role = roleMatch[1].trim().replace(/^['"]|['"]$/g, '');
+      const meta: CustomAgentMeta = { role, team: 'Custom' };
+      customAgentCache.set(agentName, meta);
+      return meta;
+    }
+  } catch {
+    // File not found or unreadable — use defaults
+  }
+
+  customAgentCache.set(agentName, defaults);
+  return defaults;
+}
+
+// ─── Display name resolver ──────────────────────────────────────────────────
 
 /** Generate a display name for an agent — known agents get persona names, others get title-cased */
 function resolveDisplayName(agentName: string): string | undefined {
-  const known = KNOWN_DISPLAY_NAMES[agentName];
-  if (known) return known;
+  const known = KNOWN_AGENTS[agentName];
+  if (known) return known.display;
   // Custom agents: "@my-squad-agent" → "My Squad Agent"
   const id = agentName.startsWith('@') ? agentName.slice(1) : agentName;
   if (!id) return undefined;
@@ -30,6 +76,8 @@ function resolveDisplayName(agentName: string): string | undefined {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
 }
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 const STOP_TYPES = new Set<EventType>(['Stop', 'SubagentStop']);
 
@@ -58,6 +106,8 @@ function getTerminalEnrichment(projectId: number, agentName: string): { waiting_
   }
 }
 
+// ─── Main tracker ───────────────────────────────────────────────────────────
+
 export function trackAgent(
   projectId: number,
   agentName: string,
@@ -65,7 +115,21 @@ export function trackAgent(
   toolName?: string,
 ): Agent {
   const displayName = resolveDisplayName(agentName);
-  const agent = upsertAgent(projectId, agentName, displayName);
+
+  // Resolve role & team
+  const known = KNOWN_AGENTS[agentName];
+  let role: string;
+  let team: string;
+  if (known) {
+    role = known.role;
+    team = known.team;
+  } else {
+    const meta = resolveCustomAgentMeta(agentName);
+    role = meta.role;
+    team = meta.team;
+  }
+
+  const agent = upsertAgent(projectId, agentName, { displayName, role, team });
 
   if (STOP_TYPES.has(eventType)) {
     updateAgentStatus(projectId, agentName, 'idle', null);
@@ -100,7 +164,6 @@ export function detectAgentFromPayload(payload: unknown): string {
   const text = typeof payload === 'string' ? payload : JSON.stringify(payload ?? '');
 
   // 1. AIOX:agents:{name} or agents:{name} — captures the agent ID after the colon
-  //    Matches: "AIOX:agents:my-custom-agent", "agents:squad-creator"
   const colonMatch = text.match(/(?:AIOX:)?agents:([a-zA-Z0-9_-]+)/);
   if (colonMatch) {
     const name = `@${colonMatch[1]}`;
@@ -122,11 +185,8 @@ export function detectAgentFromPayload(payload: unknown): string {
   }
 
   // 4. @{name} — direct mention with word boundary
-  //    Must be preceded by whitespace/start and followed by non-alphanumeric/end
-  //    Avoid matching email addresses (check no preceding alphanumeric/dot)
   const atMatches = [...text.matchAll(/(?:^|[\s"'({[,;:])(@[a-zA-Z][a-zA-Z0-9_-]*)/g)];
   if (atMatches.length > 0) {
-    // Pick the longest match to avoid @dev matching before @devops
     const sorted = atMatches
       .map((m) => m[1])
       .filter((n) => n !== '@unknown')

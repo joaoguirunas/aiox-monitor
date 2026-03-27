@@ -9,7 +9,6 @@ import { ProjectSelector } from '@/components/shared/ProjectSelector';
 
 const LINKS = [
   { href: '/empresa', label: 'Real Time' },
-  { href: '/kanban', label: 'Kanban' },
   { href: '/terminais', label: 'Terminais' },
   { href: '/empresa/config', label: 'Config' },
 ];

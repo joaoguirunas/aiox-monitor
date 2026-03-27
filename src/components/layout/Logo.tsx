@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 export function Logo() {
   return (
-    <Link href="/kanban" className="flex items-center gap-2.5 group">
+    <Link href="/empresa" className="flex items-center gap-2.5 group">
       {/* Animated Mark */}
       <div className="relative w-[22px] h-[22px] flex-shrink-0">
         <svg width="22" height="22" viewBox="0 0 22 22" fill="none" className="absolute inset-0">

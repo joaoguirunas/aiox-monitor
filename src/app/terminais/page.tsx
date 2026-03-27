@@ -1,18 +1,33 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useTerminals } from '@/hooks/useTerminals';
 import { useProjectContext } from '@/contexts/ProjectContext';
-import { TrackedTerminalCard } from '@/components/terminais/TerminalCard';
+import { TerminalKanban } from '@/components/terminais/TerminalKanban';
+import type { TerminalWithMeta } from '@/app/api/terminals/route';
 
 export default function TerminaisPage() {
   const { selectedProjectId } = useProjectContext();
   const { terminals, loading, refresh } = useTerminals(selectedProjectId);
 
+  // Group by project when no specific project is selected
+  const projectGroups = useMemo(() => {
+    if (selectedProjectId) return null;
+
+    const groups = new Map<number, { name: string; terminals: TerminalWithMeta[] }>();
+    for (const t of terminals) {
+      const pid = t.project_id;
+      if (!groups.has(pid)) {
+        groups.set(pid, { name: t.project_name ?? `Projeto ${pid}`, terminals: [] });
+      }
+      groups.get(pid)!.terminals.push(t);
+    }
+    return groups.size > 1 ? groups : null;
+  }, [terminals, selectedProjectId]);
+
   const processing = terminals.filter(t => t.status === 'processing');
   const active = terminals.filter(t => t.status === 'active');
   const inactive = terminals.filter(t => t.status === 'inactive');
-
-  const hasData = terminals.length > 0;
 
   return (
     <main className="w-full px-4 py-5">
@@ -23,6 +38,8 @@ export default function TerminaisPage() {
           <span className="text-[11px] text-text-muted">
             {loading ? 'A carregar...' : (
               <>
+                {terminals.length} total
+                {' · '}
                 {processing.length} processando
                 {' · '}
                 {active.length} ativo{active.length !== 1 ? 's' : ''}
@@ -42,64 +59,49 @@ export default function TerminaisPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-36 rounded-lg bg-surface-1/30 border border-border/40 shimmer" />
-          ))}
+        <div className="rounded-xl bg-surface-1/30 border border-border/40 overflow-hidden">
+          <div className="grid grid-cols-[1fr_1fr_1fr] divide-x divide-border/20">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="px-4 py-3">
+                <div className="h-4 w-20 rounded bg-surface-2/30 shimmer mb-3" />
+                <div className="h-24 rounded bg-surface-2/20 shimmer" />
+              </div>
+            ))}
+          </div>
         </div>
-      ) : !hasData ? (
+      ) : terminals.length === 0 ? (
         <div className="py-12 text-center">
           <p className="text-sm text-text-secondary font-medium">Nenhum terminal rastreado</p>
           <p className="text-[11px] text-text-muted mt-1.5">Terminais aparecem aqui quando o hook do monitor recebe eventos</p>
         </div>
-      ) : (
-        <div className="space-y-6">
-          {/* Processando */}
-          {processing.length > 0 && (
-            <TerminalSection label="Processando" count={processing.length} dot="bg-accent-blue">
-              {processing.map(t => (
-                <TrackedTerminalCard key={t.id} id={t.id} pid={t.pid} status={t.status} projectName={t.project_name} windowTitle={t.window_title} agentName={t.agent_name} agentDisplayName={t.agent_display_name} currentTool={t.current_tool} currentInput={t.current_input} currentToolDetail={t.current_tool_detail} waitingPermission={t.waiting_permission} autopilot={t.autopilot} firstSeen={t.first_seen_at} lastActive={t.last_active} />
-              ))}
-            </TerminalSection>
-          )}
-
-          {/* Ativos */}
-          {active.length > 0 && (
-            <TerminalSection label="Ativos" count={active.length} dot="bg-emerald-400">
-              {active.map(t => (
-                <TrackedTerminalCard key={t.id} id={t.id} pid={t.pid} status={t.status} projectName={t.project_name} windowTitle={t.window_title} agentName={t.agent_name} agentDisplayName={t.agent_display_name} currentTool={t.current_tool} currentInput={t.current_input} currentToolDetail={t.current_tool_detail} waitingPermission={t.waiting_permission} autopilot={t.autopilot} firstSeen={t.first_seen_at} lastActive={t.last_active} />
-              ))}
-            </TerminalSection>
-          )}
-
-          {/* Inativos */}
-          {inactive.length > 0 && (
-            <TerminalSection label="Inativos" count={inactive.length} dot="bg-zinc-500">
-              {inactive.map(t => (
-                <TrackedTerminalCard key={t.id} id={t.id} pid={t.pid} status={t.status} projectName={t.project_name} windowTitle={t.window_title} agentName={t.agent_name} agentDisplayName={t.agent_display_name} currentTool={t.current_tool} currentInput={t.current_input} currentToolDetail={t.current_tool_detail} waitingPermission={t.waiting_permission} autopilot={t.autopilot} firstSeen={t.first_seen_at} lastActive={t.last_active} />
-              ))}
-            </TerminalSection>
-          )}
+      ) : projectGroups ? (
+        /* Multiple projects — one Kanban block per project */
+        <div className="space-y-4">
+          {Array.from(projectGroups.entries()).map(([pid, group]) => (
+            <section key={pid} aria-label={`Projeto ${group.name}`} className="rounded-xl bg-surface-1/30 border border-border/40 overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-border/30 bg-surface-1/40">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-[13px] font-semibold text-text-primary font-display">{group.name}</h2>
+                  <span className="text-[11px] text-text-muted">
+                    {group.terminals.length} terminal{group.terminals.length !== 1 ? 'is' : ''}
+                  </span>
+                </div>
+                {group.terminals.some(t => t.status === 'processing') && (
+                  <span className="text-[11px] font-medium text-emerald-400/80">
+                    {group.terminals.filter(t => t.status === 'processing').length} trabalhando
+                  </span>
+                )}
+              </div>
+              <TerminalKanban terminals={group.terminals} />
+            </section>
+          ))}
         </div>
+      ) : (
+        /* Single project or all in one — single Kanban block */
+        <section className="rounded-xl bg-surface-1/30 border border-border/40 overflow-hidden">
+          <TerminalKanban terminals={terminals} />
+        </section>
       )}
     </main>
-  );
-}
-
-function TerminalSection({ label, count, dot, children }: { label: string; count: number; dot: string; children: React.ReactNode }) {
-  return (
-    <section>
-      <div className="flex items-center gap-3 mb-3">
-        <div className="flex items-center gap-2">
-          <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
-          <h2 className="text-[13px] font-semibold text-text-primary font-display">{label}</h2>
-        </div>
-        <div className="h-px flex-1 bg-border/60" />
-        <span className="text-[11px] tabular-nums text-text-muted">{count}</span>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
-        {children}
-      </div>
-    </section>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useWebSocket } from './useWebSocket';
-import type { WsTerminalUpdate } from '@/lib/types';
+import type { WsTerminalUpdate, WsTerminalRemoved } from '@/lib/types';
 import type { TerminalsResponse, TerminalWithMeta } from '@/app/api/terminals/route';
 
 export function useTerminals(projectId?: number | null) {
@@ -63,6 +63,15 @@ export function useTerminals(projectId?: number | null) {
       if (!exists) updated.unshift({ ...msg.terminal } as TerminalWithMeta);
       return updated;
     });
+  }, [lastMessage, projectId]);
+
+  // Real-time removal of deactivated/purged terminals
+  useEffect(() => {
+    if (!lastMessage || lastMessage.type !== 'terminal:removed') return;
+    const msg = lastMessage as WsTerminalRemoved;
+    if (projectId && msg.projectId !== projectId) return;
+
+    setTerminals(prev => prev.filter(t => t.id !== msg.terminalId));
   }, [lastMessage, projectId]);
 
   const refresh = useCallback(() => doFetch(), [doFetch]);

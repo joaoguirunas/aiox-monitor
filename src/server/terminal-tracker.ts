@@ -2,6 +2,8 @@ import {
   upsertTerminal,
   deactivateTerminal as dbDeactivateTerminal,
   deactivateStaleTerminals,
+  getStaleTerminals,
+  getPurgeableTerminals,
   markTerminalsActive,
   getTerminalsByProject,
   getAllTerminals,
@@ -102,18 +104,39 @@ export function trackTerminal(
 }
 
 export function deactivateTerminal(projectId: number, pid: number): void {
+  // Get terminal id before deactivation for the removed broadcast
+  const terminalBefore = getTerminalsByProject(projectId).find(t => t.pid === pid);
   dbDeactivateTerminal(projectId, pid);
   windowTitleCache.delete(pid);
   try {
-    const terminal = getTerminalsByProject(projectId).find(t => t.pid === pid);
-    if (terminal) broadcast({ type: 'terminal:update', terminal, projectId });
+    if (terminalBefore) {
+      broadcast({ type: 'terminal:removed', terminalId: terminalBefore.id, projectId });
+    }
   } catch { /* fire-and-forget */ }
 }
 
 export function cleanupStaleTerminals(): void {
   markTerminalsActive(300);       // processing > 5min without event → active (idle)
+
+  // Collect terminals that will be deactivated (stale) before the operation
+  const staleTerminals = getStaleTerminals(900);
   deactivateStaleTerminals(900);  // no activity for 15min → inactive
+
+  // Broadcast removal for each deactivated terminal
+  for (const t of staleTerminals) {
+    try { broadcast({ type: 'terminal:removed', terminalId: t.id, projectId: t.project_id }); } catch { /* ignore */ }
+  }
+
+  // Collect terminals that will be purged before the operation
+  const purgeableTerminals = getPurgeableTerminals(3600);
   purgeOldInactiveTerminals(3600); // delete inactive > 1h + deduplicate PIDs
+
+  // Broadcast removal for each purged terminal (skip already broadcast stale ones)
+  const alreadyBroadcast = new Set(staleTerminals.map(t => t.id));
+  for (const t of purgeableTerminals) {
+    if (alreadyBroadcast.has(t.id)) continue;
+    try { broadcast({ type: 'terminal:removed', terminalId: t.id, projectId: t.project_id }); } catch { /* ignore */ }
+  }
 }
 
 /**

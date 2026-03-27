@@ -3,19 +3,16 @@ import { tileToPixel } from '../utils/iso-utils';
 import type { OfficeTheme } from '../data/themes';
 
 /**
- * Modern workstation — theme-aware desk with a single iMac monitor.
- * Uses furnitureBaseColor/AccentColor/EdgeColor like all other furniture.
+ * High-tech standing desk workstation — procedural rendering.
+ * Scaled for 128px agents (rendered at 96px).
+ * Modern minimalist design: single pedestal, floating surface, LED accents.
  */
-/** Target display width for the desk-imac sprite */
-const DESK_SPRITE_WIDTH = 52;
 
 export class Desk extends Phaser.GameObjects.Container {
   private occupied = false;
   private graphics: Phaser.GameObjects.Graphics;
   private screenGlow: Phaser.GameObjects.Graphics;
-  private deskSprite: Phaser.GameObjects.Image | null = null;
   private agentColor = 0x00ccff;
-  private usesSprite = false;
 
   // Theme colors (defaults = moderno theme)
   private baseColor = 0x1a2040;
@@ -35,17 +32,7 @@ export class Desk extends Phaser.GameObjects.Container {
     this.screenGlow = scene.add.graphics();
     this.add(this.screenGlow);
 
-    // Use desk-imac sprite if available, procedural fallback otherwise
-    if (scene.textures.exists('desk-imac')) {
-      this.usesSprite = true;
-      this.deskSprite = scene.add.image(0, -8, 'desk-imac');
-      const ratio = this.deskSprite.width / this.deskSprite.height;
-      this.deskSprite.setDisplaySize(DESK_SPRITE_WIDTH, DESK_SPRITE_WIDTH / ratio);
-      this.deskSprite.setOrigin(0.5, 0.5);
-      this.deskSprite.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-      this.add(this.deskSprite);
-    }
-
+    // Always use procedural rendering (no sprite)
     try {
       this.drawIdle();
     } catch (err) {
@@ -54,187 +41,232 @@ export class Desk extends Phaser.GameObjects.Container {
     scene.add.existing(this);
   }
 
-  // ── Desk body (high-tech standing desk style) ──────────────
+  // ══════════════════════════════════════════════════════════════
+  // HIGH-TECH STANDING DESK — scaled for 128px agents
+  // ══════════════════════════════════════════════════════════════
+
   private drawDeskBody(g: Phaser.GameObjects.Graphics, active: boolean): void {
-    // Ground shadow (soft, elongated)
-    g.fillStyle(0x000000, 0.10);
-    g.fillEllipse(0, 10, 36, 8);
+    // ── Ground shadow (soft, wide) ──
+    g.fillStyle(0x000000, 0.12);
+    g.fillEllipse(0, 18, 70, 14);
 
-    // Base plate (slim elliptical foot)
-    g.fillStyle(this.baseColor, 0.95);
-    g.fillEllipse(0, 8, 20, 5);
-    g.lineStyle(0.5, this.edgeColor, 0.3);
-    g.strokeEllipse(0, 8, 20, 5);
-
-    // Central pedestal (single slim column)
+    // ── Base plate (slim elliptical foot — premium metal) ──
     g.fillStyle(this.baseColor, 1);
-    g.fillRect(-2, 0, 4, 10);
-    // Pedestal highlight (metallic look)
-    g.fillStyle(this.edgeColor, 0.15);
-    g.fillRect(-1, 1, 2, 8);
+    g.fillEllipse(0, 14, 32, 7);
+    // Base highlight
+    g.fillStyle(this.edgeColor, 0.2);
+    g.fillEllipse(0, 13, 28, 4);
+    // Base edge
+    g.lineStyle(1, this.edgeColor, 0.4);
+    g.strokeEllipse(0, 14, 32, 7);
 
-    // Desk top surface (ultra-slim, floating look)
+    // ── Central pedestal (single column — standing desk style) ──
+    g.fillStyle(this.baseColor, 1);
+    g.fillRect(-4, -2, 8, 18);
+    // Pedestal metallic highlight (left edge)
+    g.fillStyle(this.edgeColor, 0.25);
+    g.fillRect(-3, 0, 2, 14);
+    // Pedestal dark edge (right)
+    g.fillStyle(0x000000, 0.15);
+    g.fillRect(1, 0, 2, 14);
+
+    // ── Desk top surface (ultra-slim floating look — 78px wide) ──
+    // Main surface
     g.fillStyle(this.accentColor, 1);
-    g.fillRect(-26, -2, 52, 4);
+    g.fillRect(-39, -6, 78, 6);
 
     // Surface front edge (thin 3D depth)
     g.fillStyle(this.baseColor, 1);
-    g.fillRect(-26, 2, 52, 1);
+    g.fillRect(-39, 0, 78, 2);
+    g.fillStyle(0x000000, 0.15);
+    g.fillRect(-39, 0, 78, 2);
 
-    // Surface right edge (thin 3D depth)
+    // Surface right edge (3D depth)
     g.fillStyle(this.baseColor, 0.9);
-    g.fillRect(26, -2, 1, 4);
-    g.fillStyle(0x000000, 0.2);
-    g.fillRect(26, -2, 1, 4);
+    g.fillRect(39, -6, 2, 8);
+    g.fillStyle(0x000000, 0.25);
+    g.fillRect(39, -6, 2, 8);
 
-    // Top surface subtle gradient/highlight
-    g.fillStyle(0xffffff, 0.03);
-    g.fillRect(-24, -1, 48, 1);
+    // Top surface subtle highlight (premium finish)
+    g.fillStyle(0xffffff, 0.04);
+    g.fillRect(-37, -5, 74, 2);
 
-    // Edge glow line (premium finish)
-    g.lineStyle(0.5, this.edgeColor, active ? 0.5 : 0.25);
-    g.strokeRect(-26, -2, 52, 4);
+    // Edge outline
+    g.lineStyle(1, this.edgeColor, active ? 0.6 : 0.3);
+    g.strokeRect(-39, -6, 78, 6);
 
-    // Active state: ambient LED strip under desk
+    // ── Active state: LED strip under desk ──
     if (active) {
-      g.fillStyle(this.agentColor, 0.08);
-      g.fillRect(-24, 2, 48, 1);
-      g.lineStyle(0.5, this.agentColor, 0.2);
-      g.lineBetween(-20, 3, 20, 3);
+      // LED glow area
+      g.fillStyle(this.agentColor, 0.1);
+      g.fillRect(-35, 1, 70, 2);
+      // LED line
+      g.lineStyle(1, this.agentColor, 0.35);
+      g.lineBetween(-32, 2, 32, 2);
+      // Corner accents
+      g.fillStyle(this.agentColor, 0.2);
+      g.fillCircle(-36, -3, 1.5);
+      g.fillCircle(36, -3, 1.5);
     }
   }
 
-  // ── iMac monitor ──────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════
+  // iMac MONITOR — scaled proportionally
+  // ══════════════════════════════════════════════════════════════
+
   private drawIMac(g: Phaser.GameObjects.Graphics, active: boolean): void {
     const mx = 0;
-    const my = -16;
-    const mw = 12;
-    const mh = 9;
+    const my = -26;   // Raised higher for larger desk
+    const mw = 18;    // 50% larger (was 12)
+    const mh = 14;    // 50% larger (was 9)
 
-    // Monitor body
+    // ── Monitor body ──
     g.fillStyle(this.accentColor, 1);
     g.fillRect(mx - mw, my - mh, mw * 2, mh * 2);
 
     // Monitor top edge (3D)
     g.fillStyle(this.accentColor, 0.9);
-    g.fillRect(mx - mw, my - mh - 2, mw * 2, 2);
-    g.fillStyle(0xffffff, 0.03);
-    g.fillRect(mx - mw + 1, my - mh - 2, mw * 2 - 2, 1);
+    g.fillRect(mx - mw, my - mh - 3, mw * 2, 3);
+    g.fillStyle(0xffffff, 0.04);
+    g.fillRect(mx - mw + 2, my - mh - 3, mw * 2 - 4, 1);
 
     // Monitor side panel (3D)
     g.fillStyle(this.accentColor, 1);
-    g.fillRect(mx + mw, my - mh, 2, mh * 2);
+    g.fillRect(mx + mw, my - mh, 3, mh * 2);
     g.fillStyle(0x000000, 0.3);
-    g.fillRect(mx + mw, my - mh, 2, mh * 2);
+    g.fillRect(mx + mw, my - mh, 3, mh * 2);
 
-    // Screen area
+    // ── Screen area ──
     if (active) {
       // Dark screen with code
       g.fillStyle(0x0a1428, 1);
-      g.fillRect(mx - mw + 1, my - mh + 1, mw * 2 - 2, mh * 2 - 3);
+      g.fillRect(mx - mw + 2, my - mh + 2, mw * 2 - 4, mh * 2 - 5);
 
-      // Code lines
-      g.fillStyle(this.agentColor, 0.45);
-      const lineWidths = [16, 10, 18, 8, 14, 10];
+      // Code lines (more lines for bigger screen)
+      g.fillStyle(this.agentColor, 0.5);
+      const lineWidths = [24, 16, 28, 12, 20, 14, 22, 10, 18];
       for (let i = 0; i < lineWidths.length; i++) {
-        const ly = my - mh + 3 + i * 2.5;
-        if (ly >= my + mh - 3) break;
-        g.fillRect(mx - mw + 3, ly, Math.min(lineWidths[i], mw * 2 - 6), 1);
+        const ly = my - mh + 5 + i * 3;
+        if (ly >= my + mh - 5) break;
+        g.fillRect(mx - mw + 5, ly, Math.min(lineWidths[i], mw * 2 - 10), 1.5);
       }
-      // Accent color lines (secondary)
-      g.fillStyle(0x44dd88, 0.25);
-      const accWidths = [6, 12, 4];
+      // Accent color lines (secondary — green)
+      g.fillStyle(0x44dd88, 0.3);
+      const accWidths = [10, 18, 8, 14];
       for (let i = 0; i < accWidths.length; i++) {
-        const ly = my - mh + 4 + i * 5;
-        if (ly >= my + mh - 3) break;
-        g.fillRect(mx - mw + 5, ly, accWidths[i], 1);
+        const ly = my - mh + 6 + i * 6;
+        if (ly >= my + mh - 5) break;
+        g.fillRect(mx - mw + 8, ly, accWidths[i], 1.5);
       }
 
       // Screen top reflection
-      g.fillStyle(0xffffff, 0.04);
-      g.fillRect(mx - mw + 1, my - mh + 1, mw * 2 - 2, 2);
+      g.fillStyle(0xffffff, 0.05);
+      g.fillRect(mx - mw + 2, my - mh + 2, mw * 2 - 4, 3);
     } else {
-      // Standby screen — slightly brighter than pure off
+      // Standby screen
       g.fillStyle(this.screenOffColor, 1);
-      g.fillRect(mx - mw + 1, my - mh + 1, mw * 2 - 2, mh * 2 - 3);
-      // Subtle screen border glow (makes the monitor shape visible)
-      g.lineStyle(0.5, this.screenGlowColor, 0.08);
-      g.strokeRect(mx - mw + 1, my - mh + 1, mw * 2 - 2, mh * 2 - 3);
-      // Standby dot — brighter for visibility
-      g.fillStyle(this.screenGlowColor, 0.35);
-      g.fillCircle(mx, my, 1.2);
+      g.fillRect(mx - mw + 2, my - mh + 2, mw * 2 - 4, mh * 2 - 5);
+      // Subtle screen border glow
+      g.lineStyle(0.5, this.screenGlowColor, 0.1);
+      g.strokeRect(mx - mw + 2, my - mh + 2, mw * 2 - 4, mh * 2 - 5);
+      // Standby dot
+      g.fillStyle(this.screenGlowColor, 0.4);
+      g.fillCircle(mx, my, 2);
     }
 
     // Bezel border
-    g.lineStyle(1, this.edgeColor, 0.4);
+    g.lineStyle(1, this.edgeColor, 0.5);
     g.strokeRect(mx - mw, my - mh, mw * 2, mh * 2);
 
-    // Chin
+    // ── Chin (Apple logo area) ──
     g.fillStyle(this.baseColor, 1);
-    g.fillRect(mx - mw, my + mh - 2, mw * 2, 3);
+    g.fillRect(mx - mw, my + mh - 3, mw * 2, 5);
+    // Apple logo hint
+    g.fillStyle(this.edgeColor, 0.15);
+    g.fillCircle(mx, my + mh, 2);
 
-    // Stand neck
+    // ── Stand neck ──
     g.fillStyle(this.baseColor, 1);
-    g.fillRect(mx - 2, my + mh + 1, 4, 4);
-    // Stand base
-    g.fillStyle(this.baseColor, 0.9);
-    g.fillEllipse(mx, my + mh + 6, 10, 3);
-    g.lineStyle(0.5, this.edgeColor, 0.2);
-    g.strokeEllipse(mx, my + mh + 6, 10, 3);
+    g.fillRect(mx - 3, my + mh + 2, 6, 8);
+    // Neck highlight
+    g.fillStyle(this.edgeColor, 0.15);
+    g.fillRect(mx - 2, my + mh + 3, 2, 6);
+
+    // ── Stand base (premium ellipse) ──
+    g.fillStyle(this.baseColor, 0.95);
+    g.fillEllipse(mx, my + mh + 12, 16, 5);
+    g.lineStyle(0.5, this.edgeColor, 0.3);
+    g.strokeEllipse(mx, my + mh + 12, 16, 5);
   }
 
-  // ── Keyboard ──────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════
+  // KEYBOARD — Magic Keyboard style, scaled
+  // ══════════════════════════════════════════════════════════════
+
   private drawKeyboard(g: Phaser.GameObjects.Graphics, active: boolean): void {
+    const kx = 0;
+    const ky = -2;
+    const kw = 22;  // 50% larger
+    const kh = 6;   // 50% larger
+
     // Body
     g.fillStyle(this.accentColor, 1);
-    g.fillRect(-7, -3, 14, 4);
-    // Edge
-    g.lineStyle(0.5, this.edgeColor, 0.25);
-    g.strokeRect(-7, -3, 14, 4);
+    g.fillRect(kx - kw / 2, ky - kh / 2, kw, kh);
 
-    // Key rows
-    g.fillStyle(this.edgeColor, 0.25);
-    for (let row = 0; row < 2; row++) {
-      for (let col = 0; col < 5; col++) {
-        g.fillRect(-5 + col * 2.5, -2.2 + row * 2, 1.5, 1);
+    // Edge
+    g.lineStyle(0.5, this.edgeColor, 0.3);
+    g.strokeRect(kx - kw / 2, ky - kh / 2, kw, kh);
+
+    // Key rows (3 rows for bigger keyboard)
+    g.fillStyle(this.edgeColor, 0.3);
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 8; col++) {
+        g.fillRect(kx - 9 + col * 2.4, ky - 2 + row * 2, 1.8, 1.2);
       }
     }
 
     // Active backlight
     if (active) {
-      g.fillStyle(this.agentColor, 0.06);
-      g.fillRect(-7, -3, 14, 4);
+      g.fillStyle(this.agentColor, 0.08);
+      g.fillRect(kx - kw / 2, ky - kh / 2, kw, kh);
     }
   }
 
-  // ── Mouse ─────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════
+  // MOUSE — Magic Mouse style, scaled
+  // ══════════════════════════════════════════════════════════════
+
   private drawMouse(g: Phaser.GameObjects.Graphics): void {
+    const mx = 18;  // Positioned to the right
+    const my = -1;
+
     g.fillStyle(this.accentColor, 1);
-    g.fillEllipse(11, -1, 3.5, 2.5);
-    g.lineStyle(0.5, this.edgeColor, 0.2);
-    g.strokeEllipse(11, -1, 3.5, 2.5);
+    g.fillEllipse(mx, my, 5, 3.5);
+    g.lineStyle(0.5, this.edgeColor, 0.25);
+    g.strokeEllipse(mx, my, 5, 3.5);
+    // Mouse center line
+    g.lineStyle(0.5, this.edgeColor, 0.15);
+    g.lineBetween(mx, my - 2.5, mx, my + 2.5);
   }
 
-  // ── Draw states ───────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════
+  // DRAW STATES
+  // ══════════════════════════════════════════════════════════════
+
   private drawIdle(): void {
     const g = this.graphics;
     g.clear();
     this.screenGlow.clear();
 
-    if (this.usesSprite) {
-      // Sprite mode: only draw the screen glow overlay, sprite handles visuals
-      if (this.deskSprite) this.deskSprite.setAlpha(0.7);
-      this.screenGlow.fillStyle(this.screenGlowColor, 0.015);
-      this.screenGlow.fillEllipse(0, -8, 24, 8);
-    } else {
-      // Procedural fallback
-      this.drawDeskBody(g, false);
-      this.drawIMac(g, false);
-      this.drawKeyboard(g, false);
-      this.drawMouse(g);
-      this.screenGlow.fillStyle(this.screenGlowColor, 0.015);
-      this.screenGlow.fillEllipse(0, -8, 24, 8);
-    }
+    // Always procedural
+    this.drawDeskBody(g, false);
+    this.drawIMac(g, false);
+    this.drawKeyboard(g, false);
+    this.drawMouse(g);
+
+    // Subtle ambient glow
+    this.screenGlow.fillStyle(this.screenGlowColor, 0.02);
+    this.screenGlow.fillEllipse(0, -16, 40, 14);
   }
 
   private drawActive(color: number): void {
@@ -242,23 +274,20 @@ export class Desk extends Phaser.GameObjects.Container {
     g.clear();
     this.screenGlow.clear();
 
-    if (this.usesSprite) {
-      // Sprite mode: brighten sprite and add glow
-      if (this.deskSprite) this.deskSprite.setAlpha(1);
-      this.screenGlow.fillStyle(color, 0.08);
-      this.screenGlow.fillEllipse(0, -8, 30, 10);
-    } else {
-      // Procedural fallback
-      this.drawDeskBody(g, true);
-      this.drawIMac(g, true);
-      this.drawKeyboard(g, true);
-      this.drawMouse(g);
-      this.screenGlow.fillStyle(color, 0.05);
-      this.screenGlow.fillEllipse(0, -8, 30, 10);
-    }
+    // Always procedural
+    this.drawDeskBody(g, true);
+    this.drawIMac(g, true);
+    this.drawKeyboard(g, true);
+    this.drawMouse(g);
+
+    // Active screen glow
+    this.screenGlow.fillStyle(color, 0.08);
+    this.screenGlow.fillEllipse(0, -16, 50, 18);
   }
 
-  // ── Public API ────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════
+  // PUBLIC API
+  // ══════════════════════════════════════════════════════════════
 
   applyTheme(theme: OfficeTheme): void {
     this.baseColor = theme.furnitureBaseColor;
@@ -293,7 +322,6 @@ export class Desk extends Phaser.GameObjects.Container {
   destroy(fromScene?: boolean): void {
     this.graphics.destroy();
     this.screenGlow.destroy();
-    if (this.deskSprite) this.deskSprite.destroy();
     super.destroy(fromScene);
   }
 }

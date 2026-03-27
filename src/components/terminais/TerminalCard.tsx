@@ -28,10 +28,10 @@ function timeAgo(iso: string): string {
     const diff = Date.now() - d.getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return 'agora';
-    if (mins < 60) return `${mins}m atrás`;
+    if (mins < 60) return `${mins}m`;
     const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h atrás`;
-    return `${Math.floor(hours / 24)}d atrás`;
+    if (hours < 24) return `${hours}h`;
+    return `${Math.floor(hours / 24)}d`;
   } catch {
     return iso;
   }
@@ -40,7 +40,7 @@ function timeAgo(iso: string): string {
 function formatTime(iso: string): string {
   try {
     const d = new Date(iso + (iso.endsWith('Z') ? '' : 'Z'));
-    return d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
   } catch {
     return iso;
   }
@@ -93,99 +93,86 @@ export function TrackedTerminalCard({
 
   const displayTitle = windowTitle ? cleanWindowTitle(windowTitle) : null;
 
+  const borderClass = status === 'processing'
+    ? 'border-accent-blue/20'
+    : 'border-border/40';
+
   return (
-    <div className={`rounded-lg border border-border/40 bg-surface-1/30 transition-colors hover:bg-white/[0.02] ${status === 'inactive' ? 'opacity-50' : ''}`}>
-      <div className="px-4 py-3">
-        {/* Header: Title + status */}
-        <div className="flex items-center justify-between mb-2.5">
-          <div className="flex items-center gap-2 min-w-0">
+    <div className={`rounded-lg border ${borderClass} bg-surface-1/30 transition-colors hover:bg-white/[0.02] ${status === 'inactive' ? 'opacity-50' : ''}`}>
+      <div className="px-3 py-2">
+        {/* Header: dot + title + PID + status + agent + autopilot — all compact */}
+        <div className="flex items-center justify-between gap-1.5 mb-1">
+          <div className="flex items-center gap-1.5 min-w-0">
             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[status]} ${status === 'processing' ? 'animate-pulse' : ''}`} />
-            <span className="text-[13px] font-medium text-text-primary truncate">
+            <span className="text-[12px] font-medium text-text-primary truncate">
               {displayTitle || `PID ${pid}`}
             </span>
+            {displayTitle && <span className="text-[9px] font-mono text-text-muted/40 shrink-0">{pid}</span>}
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {displayTitle && <span className="text-[10px] font-mono text-text-muted/50">{pid}</span>}
-            <span className="text-[11px] text-text-muted">{STATUS_LABEL[status]}</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[10px] text-text-muted">{STATUS_LABEL[status]}</span>
+            {status !== 'inactive' && (
+              <button
+                onClick={toggleAutopilot}
+                disabled={toggling}
+                title={isOn ? 'Autopilot ON' : 'Autopilot OFF'}
+                className={`
+                  flex items-center gap-1 px-1.5 py-px rounded-full text-[9px] font-semibold uppercase tracking-wider
+                  transition-all duration-200 disabled:opacity-50
+                  ${isOn
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30'
+                    : 'bg-zinc-700/40 text-zinc-500 border border-zinc-600/30 hover:bg-zinc-700/60 hover:text-zinc-400'
+                  }
+                `}
+              >
+                <span className={`w-1 h-1 rounded-full ${isOn ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+                {isOn ? 'auto' : 'off'}
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Agent + Autopilot toggle */}
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            {agentName && agentName !== '@unknown' && (
-              <>
-                <span className={`text-[12px] font-medium ${agentColor}`}>
-                  {agentDisplayName ?? agentName}
-                </span>
-                {agentDisplayName && (
-                  <span className="text-[11px] text-text-muted ml-1.5">{agentName}</span>
-                )}
-              </>
+        {/* Agent name */}
+        {agentName && agentName !== '@unknown' && (
+          <div className="mb-1">
+            <span className={`text-[11px] font-medium ${agentColor}`}>
+              {agentDisplayName ?? agentName}
+            </span>
+            {agentDisplayName && (
+              <span className="text-[10px] text-text-muted ml-1">{agentName}</span>
             )}
           </div>
-          {status !== 'inactive' && (
-            <button
-              onClick={toggleAutopilot}
-              disabled={toggling}
-              title={isOn ? 'Autopilot ON — clique para desligar' : 'Autopilot OFF — clique para ligar'}
-              className={`
-                flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider
-                transition-all duration-200 disabled:opacity-50
-                ${isOn
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30'
-                  : 'bg-zinc-700/40 text-zinc-500 border border-zinc-600/30 hover:bg-zinc-700/60 hover:text-zinc-400'
-                }
-              `}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${isOn ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
-              {isOn ? 'auto' : 'off'}
-            </button>
-          )}
-        </div>
+        )}
 
         {/* Tool Detail (JSONL-enriched) */}
         {currentToolDetail && (
-          <div className="mb-2.5 px-2.5 py-1.5 rounded-md bg-accent-blue/10 border border-accent-blue/20 flex items-center gap-2">
+          <div className="mb-1 px-2 py-1 rounded-md bg-accent-blue/10 border border-accent-blue/20 flex items-center gap-1.5">
             {waitingPermission === 1 && (
-              <span className="shrink-0 w-2 h-2 rounded-full bg-amber-400 animate-pulse" title="Waiting for permission" />
+              <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" title="Waiting for permission" />
             )}
-            <p className="text-[11px] font-mono text-accent-blue truncate">{currentToolDetail}</p>
+            <p className="text-[10px] font-mono text-accent-blue truncate">{currentToolDetail}</p>
           </div>
         )}
 
         {/* Permission waiting (without tool detail) */}
         {!currentToolDetail && waitingPermission === 1 && (
-          <div className="mb-2.5 px-2.5 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/20 flex items-center gap-2">
-            <span className="shrink-0 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            <p className="text-[11px] font-medium text-amber-400">Aguardando permissão</p>
+          <div className="mb-1 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 flex items-center gap-1.5">
+            <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            <p className="text-[10px] font-medium text-amber-400">Aguardando permissão</p>
           </div>
         )}
 
         {/* Tool (fallback to old hook data) */}
         {!currentToolDetail && toolDisplay && status === 'processing' && (
-          <div className="mb-2.5 px-2.5 py-1.5 rounded-md bg-surface-2/40 border border-border/30">
-            <p className="text-[11px] font-mono text-text-muted truncate">{toolDisplay}</p>
+          <div className="mb-1 px-2 py-1 rounded-md bg-surface-2/40 border border-border/30">
+            <p className="text-[10px] font-mono text-text-muted truncate">{toolDisplay}</p>
           </div>
         )}
 
-        {/* Metadata */}
-        <div className="space-y-1 text-[11px]">
-          {projectName && (
-            <div className="flex justify-between">
-              <span className="text-text-muted">Projeto</span>
-              <span className="text-text-secondary">{projectName}</span>
-            </div>
-          )}
-          <div className="flex justify-between">
-            <span className="text-text-muted">Início</span>
-            <span className="text-text-secondary">{formatTime(firstSeen)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-text-muted">Atividade</span>
-            <span className="text-text-secondary">{timeAgo(lastActive)}</span>
-          </div>
-        </div>
+        {/* Metadata — single inline line */}
+        <p className="text-[10px] text-text-muted truncate">
+          {[projectName, formatTime(firstSeen), timeAgo(lastActive)].filter(Boolean).join(' · ')}
+        </p>
       </div>
     </div>
   );

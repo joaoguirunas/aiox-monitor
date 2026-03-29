@@ -155,7 +155,7 @@ export function SessionRow({ session, onClick, compact }: SessionRowProps) {
           {effectiveAgentName && effectiveAgentName !== '@unknown' ? (
             <AgentBadge name={effectiveAgentName} displayName={effectiveAgentDisplay} />
           ) : skill ? (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium border bg-accent-blue/10 text-accent-blue border-accent-blue/20">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium border bg-accent-orange/10 text-accent-orange border-accent-orange/20">
               /{skill}
             </span>
           ) : (
@@ -202,7 +202,7 @@ export function SessionRow({ session, onClick, compact }: SessionRowProps) {
         {effectiveAgentName && effectiveAgentName !== '@unknown' ? (
           <AgentBadge name={effectiveAgentName} displayName={effectiveAgentDisplay} />
         ) : skill ? (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-accent-blue/10 text-accent-blue border-accent-blue/20">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border bg-accent-orange/10 text-accent-orange border-accent-orange/20">
             /{skill}
           </span>
         ) : (
@@ -217,7 +217,7 @@ export function SessionRow({ session, onClick, compact }: SessionRowProps) {
               <span className="truncate max-w-[120px]">{session.terminal_title}</span>
             </span>
             {session.terminal_current_tool_detail && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-accent-blue truncate max-w-[180px]">
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-accent-orange truncate max-w-[180px]">
                 {session.terminal_waiting_permission === 1 && (
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
                 )}

@@ -3,7 +3,7 @@ import { getAgentColor } from '@/lib/constants';
 import type { EventType } from '@/lib/types';
 
 const EVENT_TYPE_STYLES: Record<EventType, string> = {
-  PreToolUse: 'bg-accent-blue/10 text-accent-blue border-accent-blue/20',
+  PreToolUse: 'bg-accent-orange/10 text-accent-orange border-accent-orange/20',
   PostToolUse: 'bg-accent-emerald/10 text-accent-emerald border-accent-emerald/20',
   UserPromptSubmit: 'bg-accent-violet/10 text-accent-violet border-accent-violet/20',
   Stop: 'bg-surface-3 text-text-muted border-border',

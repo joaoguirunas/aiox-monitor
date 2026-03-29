@@ -1,7 +1,7 @@
 import type { AgentStatus } from './types';
 
 export const AGENT_COLORS: Record<string, string> = {
-  '@dev': '#6366f1',
+  '@dev': '#FF4400',
   '@qa': '#34d399',
   '@architect': '#a78bfa',
   '@pm': '#fb923c',
@@ -33,6 +33,6 @@ export function hashColor(name: string): string {
 
 /** Get agent color: known AIOX agents use fixed palette, custom agents get hashed color */
 export function getAgentColor(name: string | null | undefined): string {
-  if (!name) return '#4a5272';
+  if (!name) return 'rgba(244,244,232,0.4)';
   return AGENT_COLORS[name] ?? hashColor(name);
 }

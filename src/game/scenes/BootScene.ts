@@ -79,7 +79,7 @@ export class BootScene extends Phaser.Scene {
     this.add
       .text(centerX, centerY + 10, 'a inicializar estação...', {
         fontSize: '13px',
-        color: '#4a5272',
+        color: 'rgba(244,244,232,0.4)',
         fontFamily: 'monospace',
       })
       .setOrigin(0.5);

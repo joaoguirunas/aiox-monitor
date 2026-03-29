@@ -108,7 +108,7 @@ export function AgentDetailPanel({ agent, onClose }: AgentDetailPanelProps) {
     }
   }, [lastMessage, agent.id]);
 
-  const agentColor = AGENT_COLORS[agent.name] ?? '#6366f1';
+  const agentColor = AGENT_COLORS[agent.name] ?? '#FF4400';
   const displayName = agent.display_name ?? agent.name;
   const initial = displayName.charAt(0).toUpperCase();
 

@@ -10,6 +10,8 @@ import { getCompanyConfig } from './src/lib/queries';
 import { startGangaEngine, stopGangaEngine } from './src/server/ganga/ganga-engine';
 import { startJsonlWatcher } from './src/server/jsonl-watcher';
 import { startAutopilotEngine, stopAutopilotEngine } from './src/server/autopilot-engine';
+import { createPtyWebSocketServer } from './src/server/command-room/pty-websocket-server';
+import { ProcessManager } from './src/server/command-room/process-manager';
 
 // Process-level safety net — prevent crashes from unhandled errors
 process.on('uncaughtException', (err) => {
@@ -39,6 +41,8 @@ app.prepare().then(() => {
   });
 
   const wss = new WebSocketServer({ noServer: true });
+  const ptyWsServer = createPtyWebSocketServer();
+  const ptyWss = ptyWsServer.getWss();
 
   wss.on('error', (err) => {
     console.error('[server] WebSocket server error:', err);
@@ -46,10 +50,21 @@ app.prepare().then(() => {
 
   httpServer.on('upgrade', (req, socket, head) => {
     try {
-      const { pathname } = new URL(req.url ?? '', `http://localhost:${port}`);
+      const parsed = new URL(req.url ?? '', `http://localhost:${port}`);
+      const { pathname } = parsed;
+
       if (pathname === '/ws') {
         wss.handleUpgrade(req, socket as Parameters<typeof wss.handleUpgrade>[1], head, (ws: WsType) => {
           wss.emit('connection', ws, req);
+        });
+      } else if (pathname === '/pty') {
+        const terminalId = parsed.searchParams.get('id');
+        if (!terminalId) {
+          socket.destroy();
+          return;
+        }
+        ptyWss.handleUpgrade(req, socket as Parameters<typeof ptyWss.handleUpgrade>[1], head, (ws: WsType) => {
+          ptyWsServer.handleConnection(ws, terminalId);
         });
       } else {
         socket.destroy();
@@ -120,6 +135,16 @@ app.prepare().then(() => {
   setInterval(syncGangaState, 30_000);
 
   // Autopilot operational loop is handled by OpenClaw cron, not by the local monitor.
+
+  // ─── Graceful shutdown: kill all PTY processes on SIGTERM/SIGINT ──────────
+  const gracefulShutdown = () => {
+    console.log('[server] Shutting down — killing all PTY processes...');
+    try { ptyWsServer.shutdown(); } catch { /* ignore */ }
+    try { ProcessManager.getInstance().killAll(); } catch { /* ignore */ }
+    process.exit(0);
+  };
+  process.on('SIGTERM', gracefulShutdown);
+  process.on('SIGINT', gracefulShutdown);
 
   httpServer.listen(port, () => {
     console.log(`> Ready on http://localhost:${port}`);

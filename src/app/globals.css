@@ -3,94 +3,334 @@
 @tailwind utilities;
 
 @layer base {
-  /* Scrollbar — sleek, thin, matches dark theme */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: #1f2330;
-    border-radius: 3px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: #272b3b;
+  /* ═══════════════════════════════════════════════════════════════════ */
+  /* REVOS Design System — CSS Custom Properties                       */
+  /* Brandbook v2.0 Dark Cockpit + Growth Sales #FF4400 override       */
+  /* ═══════════════════════════════════════════════════════════════════ */
+  :root {
+    /* ── Brand ──────────────────────────────────────────────────────── */
+    --brand: #FF4400;
+    --brand-light: #FF6B35;
+    --brand-dim: rgba(255, 68, 0, 0.15);
+
+    /* ── Surfaces (Brandbook Dark Cockpit) ──────────────────────────── */
+    --bb-dark: #050505;
+    --bb-surface: #0F0F11;
+    --bb-surface-alt: #161618;
+
+    /* ── Text (Brandbook cream hierarchy) ───────────────────────────── */
+    --bb-cream: rgb(244, 244, 232);
+    --bb-warm-white: #FFFFED;
+    --bb-dim: rgba(244, 244, 232, 0.4);
+
+    /* ── Gray scale ─────────────────────────────────────────────────── */
+    --bb-gray-charcoal: #3D3D3D;
+    --bb-gray-dim: #696969;
+    --bb-gray-muted: #999999;
+    --bb-gray-silver: #BDBDBD;
+
+    /* ── Semantic ───────────────────────────────────────────────────── */
+    --bb-blue: #0099FF;
+    --bb-error: #EF4444;
+    --bb-warning: #f59e0b;
+    --bb-flare: #ED4609;
+
+    /* ── Borders ────────────────────────────────────────────────────── */
+    --bb-border: rgba(156, 156, 156, 0.15);
+    --bb-border-hover: rgba(156, 156, 156, 0.24);
+
+    /* ── Spacing — Brandbook 14-step numeric scale ──────────────────── */
+    --space-0: 0px;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 15px;
+    --space-5: 20px;
+    --space-6: 30px;
+    --space-7: 40px;
+    --space-8: 60px;
+    --space-9: 80px;
+    --space-10: 90px;
+    --space-11: 120px;
+    --space-12: 150px;
+    --space-13: 180px;
+
+    /* Semantic spacing aliases */
+    --spacing-xs: 0.5rem;   /* 8px */
+    --spacing-sm: 1rem;     /* 16px */
+    --spacing-md: 2rem;     /* 32px */
+    --spacing-lg: 3rem;     /* 48px */
+    --spacing-xl: 4rem;     /* 64px */
+
+    /* ── Z-Index stack ──────────────────────────────────────────────── */
+    --layer-nav: 100;
+    --layer-dropdown: 200;
+    --layer-overlay: 300;
+    --layer-modal: 400;
+    --layer-toast: 500;
+
+    /* ── Easing ─────────────────────────────────────────────────────── */
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-smooth: cubic-bezier(0.25, 0.1, 0.25, 1);
+    --ease-decel: cubic-bezier(0, 0, 0.2, 1);
+    --ease-accel: cubic-bezier(0.4, 0, 1, 1);
+    --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+    /* ── Motion duration ────────────────────────────────────────────── */
+    --dur-fast: 0.2s;
+    --dur-medium: 0.4s;
+    --dur-slow: 0.7s;
+
+    /* ── Breakpoints (reference only) ───────────────────────────────── */
+    --bp-mobile: 767px;
+    --bp-tablet: 768px;
+    --bp-desktop: 1200px;
   }
 
-  /* Selection */
+  /* ── Scrollbar ────────────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--bb-gray-charcoal); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--bb-gray-dim); }
+
+  /* ── Selection ────────────────────────────────────────────────────── */
   ::selection {
-    background: rgba(99, 102, 241, 0.25);
-    color: #eef2ff;
+    background: rgba(255, 68, 0, 0.25);
+    color: var(--bb-cream);
   }
 
-  /* Smooth global transitions */
+  /* ── Base html ────────────────────────────────────────────────────── */
   html {
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+  body { text-rendering: optimizeLegibility; }
+
+  /* ── Focus visible ────────────────────────────────────────────────── */
+  *:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--bb-dark), 0 0 0 4px rgba(255, 68, 0, 0.5);
+    border-radius: 0.5rem;
+  }
 }
 
 @layer components {
-  /* Shimmer skeleton */
+
+  /* ═══ Skeleton / Shimmer ═══════════════════════════════════════════ */
   .shimmer {
-    background: linear-gradient(
-      90deg,
-      #12141c 25%,
-      #1f2330 37%,
-      #12141c 63%
-    );
+    background: linear-gradient(90deg, var(--bb-surface) 25%, var(--bb-surface-alt) 37%, var(--bb-surface) 63%);
     background-size: 200% 100%;
     animation: shimmer 2s infinite linear;
   }
 
-  /* Glass effect for navbar */
+  /* ═══ Glass / Frosted ═════════════════════════════════════════════ */
   .glass {
-    background: rgba(12, 14, 20, 0.8);
+    background: rgba(5, 5, 5, 0.8);
     backdrop-filter: blur(16px) saturate(180%);
     -webkit-backdrop-filter: blur(16px) saturate(180%);
   }
 
-  /* Gradient border bottom */
+  /* ═══ Borders ═════════════════════════════════════════════════════ */
   .border-gradient-b {
     border-bottom: 1px solid transparent;
-    border-image: linear-gradient(
-      90deg,
-      transparent,
-      rgba(99, 102, 241, 0.2) 30%,
-      rgba(139, 92, 246, 0.15) 70%,
-      transparent
-    ) 1;
+    border-image: linear-gradient(90deg, transparent, rgba(255, 68, 0, 0.2) 30%, rgba(255, 68, 0, 0.12) 70%, transparent) 1;
   }
 
-  /* Agent card left accent bar */
-  .accent-bar {
-    position: relative;
-  }
+  /* ═══ Accent bar (left edge) ══════════════════════════════════════ */
+  .accent-bar { position: relative; }
   .accent-bar::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 8px;
-    bottom: 8px;
-    width: 3px;
-    border-radius: 2px;
-    background: var(--agent-color, #6366f1);
+    content: ''; position: absolute; left: 0; top: var(--space-2); bottom: var(--space-2);
+    width: 2px; border-radius: 1px; background: var(--agent-color, var(--brand));
   }
 
-  /* Subtle hover lift */
+  /* ═══ Hover lift ══════════════════════════════════════════════════ */
   .hover-lift {
-    transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
-                box-shadow 150ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform var(--dur-fast) var(--ease-expo), box-shadow var(--dur-fast) var(--ease-expo);
   }
-  .hover-lift:hover {
-    transform: translateY(-1px);
+  .hover-lift:hover { transform: translateY(-1px); }
+
+  /* ═══ Row enter ═══════════════════════════════════════════════════ */
+  .row-enter { animation: slideInDown 300ms var(--ease-expo); }
+
+  /* ═══ Patterns ════════════════════════════════════════════════════ */
+  .pattern-dot-grid {
+    background-image: radial-gradient(rgba(255, 68, 0, 0.06) 1px, transparent 1px);
+    background-size: 16px 16px;
+  }
+  .pattern-scanlines {
+    background-image: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.015) 0px, rgba(255, 255, 255, 0.015) 1px, transparent 1px, transparent 4px);
+  }
+  .pattern-hazard {
+    background: repeating-linear-gradient(-45deg, var(--brand), var(--brand) 10px, var(--bb-dark) 10px, var(--bb-dark) 20px);
   }
 
-  /* Table row new event animation */
-  .row-enter {
-    animation: slideInDown 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* ═══ HUD Frames ══════════════════════════════════════════════════ */
+  .frame-bracket { position: relative; }
+  .frame-bracket::before, .frame-bracket::after {
+    content: ''; position: absolute; width: 10px; height: 10px;
+    border-color: rgba(255, 68, 0, 0.25); border-style: solid; pointer-events: none;
   }
+  .frame-bracket::before { top: 0; left: 0; border-width: 1px 0 0 1px; }
+  .frame-bracket::after { bottom: 0; right: 0; border-width: 0 1px 1px 0; }
+
+  .divider-tech {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 68, 0, 0.2) 50%, transparent);
+  }
+
+  /* ═══ Text effects ════════════════════════════════════════════════ */
+  .text-glow {
+    text-shadow: 0 0 8px rgba(255, 68, 0, 0.25), 0 0 20px rgba(255, 68, 0, 0.08);
+  }
+
+  /* ═══ Mono label — HUD style ══════════════════════════════════════ */
+  .mono-label {
+    font-family: var(--font-roboto-mono), monospace;
+    font-size: 0.65rem; font-weight: 500; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--bb-dim);
+  }
+
+  /* ═══ BUTTONS — Brandbook 4 variants × 3 sizes ═══════════════════ */
+  /* Sizes: sm (min-h 32px), md (min-h 38px), lg (min-h 44px)        */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+    font-family: inherit; font-size: 0.75rem; font-weight: 500;
+    border-radius: 0.5rem; border: 1px solid transparent;
+    transition: all var(--dur-fast) var(--ease-smooth);
+    cursor: pointer; white-space: nowrap;
+  }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-sm { min-height: 32px; padding: var(--space-1) var(--space-3); font-size: 0.6875rem; }
+  .btn-md { min-height: 38px; padding: var(--space-2) var(--space-4); }
+  .btn-lg { min-height: 44px; padding: var(--space-3) var(--space-5); font-size: 0.8125rem; }
+
+  /* Primary */
+  .btn-primary { background: var(--brand); color: #FFFFFF; border-color: var(--brand); }
+  .btn-primary:hover:not(:disabled) { background: var(--brand-light); border-color: var(--brand-light); }
+
+  /* Secondary */
+  .btn-secondary { background: transparent; border-color: var(--bb-border-hover); color: var(--bb-cream); }
+  .btn-secondary:hover:not(:disabled) { border-color: var(--bb-gray-silver); color: #FFFFFF; }
+
+  /* Ghost */
+  .btn-ghost { background: transparent; color: var(--bb-dim); }
+  .btn-ghost:hover:not(:disabled) { background: rgba(244, 244, 232, 0.04); color: var(--bb-cream); }
+
+  /* Destructive / Delete */
+  .btn-danger { background: rgba(239, 68, 68, 0.1); color: var(--bb-error); border-color: rgba(239, 68, 68, 0.2); }
+  .btn-danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.18); }
+
+  /* Loading state */
+  .btn-loading { position: relative; color: transparent !important; pointer-events: none; }
+  .btn-loading::after {
+    content: ''; position: absolute; width: 14px; height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.2); border-top-color: #FFFFFF;
+    border-radius: 50%; animation: bbSpin 0.7s linear infinite;
+  }
+
+  /* ═══ BADGES — Brandbook 5 variants ═══════════════════════════════ */
+  .badge {
+    display: inline-flex; align-items: center; gap: var(--space-1);
+    padding: 2px var(--space-2); font-size: 0.625rem; font-weight: 500;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    border-radius: 2px; line-height: 1.4;
+  }
+  .badge-brand   { background: rgba(255, 68, 0, 0.12); color: #FF6B35; }
+  .badge-success { background: rgba(52, 211, 153, 0.12); color: #34d399; }
+  .badge-warning { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+  .badge-error   { background: rgba(239, 68, 68, 0.12); color: #EF4444; }
+  .badge-neutral { background: rgba(244, 244, 232, 0.06); color: rgba(244, 244, 232, 0.64); }
+
+  /* ═══ INPUTS — Brandbook ══════════════════════════════════════════ */
+  .input {
+    width: 100%; padding: var(--space-2) var(--space-3);
+    font-size: 0.75rem; line-height: 1.5; color: var(--bb-cream);
+    background: rgba(244, 244, 232, 0.03); border: 1px solid var(--bb-border);
+    border-radius: 0.5rem; transition: border-color var(--dur-fast) var(--ease-smooth);
+  }
+  .input::placeholder { color: var(--bb-dim); }
+  .input:focus { outline: none; border-color: rgba(255, 68, 0, 0.5); }
+
+  /* ═══ CARDS — Brandbook 3 variants ════════════════════════════════ */
+  .card {
+    background: var(--bb-surface); border: 1px solid var(--bb-border);
+    border-radius: 0.5rem;
+    transition: border-color var(--dur-fast) var(--ease-smooth), box-shadow var(--dur-fast) var(--ease-smooth);
+  }
+  .card:hover { border-color: rgba(255, 68, 0, 0.15); }
+
+  /* ═══ KPI CARDS ═══════════════════════════════════════════════════ */
+  .kpi {
+    padding: var(--space-5); background: var(--bb-surface); border: 1px solid var(--bb-border);
+    border-radius: 0.5rem;
+  }
+  .kpi-value {
+    font-size: 2rem; font-weight: 700; letter-spacing: -0.025em; line-height: 1.1;
+    color: var(--bb-cream);
+  }
+  .kpi-label {
+    font-size: 0.625rem; font-weight: 500; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--bb-dim); margin-top: var(--space-1);
+  }
+
+  /* ═══ PROGRESS BAR ════════════════════════════════════════════════ */
+  .progress { height: 3px; background: rgba(244, 244, 232, 0.06); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--brand); border-radius: 2px; transition: width var(--dur-slow) var(--ease-decel); }
+
+  /* ═══ SPINNERS — Brandbook 3 sizes ════════════════════════════════ */
+  .spinner {
+    border: 2px solid rgba(244, 244, 232, 0.08); border-top-color: var(--brand);
+    border-radius: 50%; animation: bbSpin 0.8s linear infinite;
+  }
+  .spinner-sm { width: 14px; height: 14px; }
+  .spinner-md { width: 20px; height: 20px; }
+  .spinner-lg { width: 28px; height: 28px; }
+
+  /* ═══ LIST ITEMS — Brandbook ══════════════════════════════════════ */
+  .list-item {
+    display: flex; align-items: center; gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--bb-border);
+    transition: background var(--dur-fast) var(--ease-smooth);
+  }
+  .list-item:hover { background: rgba(244, 244, 232, 0.02); }
+
+  /* ═══ SWITCHES ════════════════════════════════════════════════════ */
+  .switch {
+    width: 36px; height: 20px; border-radius: 10px;
+    background: rgba(244, 244, 232, 0.08); position: relative;
+    cursor: pointer; transition: background var(--dur-fast) var(--ease-smooth);
+  }
+  .switch-active { background: var(--brand); }
+  .switch::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #FFFFFF; transition: transform var(--dur-fast) var(--ease-spring);
+  }
+  .switch-active::after { transform: translateX(16px); }
+
+  /* ═══ WARNING BAR ═════════════════════════════════════════════════ */
+  .bar-warning {
+    background: repeating-linear-gradient(-45deg, rgba(245, 158, 11, 0.08), rgba(245, 158, 11, 0.08) 8px, transparent 8px, transparent 16px);
+    border-left: 2px solid var(--bb-warning);
+  }
+
+  /* ═══ ALERT / TOAST / MODAL — Brandbook feedback components ══════ */
+  .alert {
+    padding: var(--space-3) var(--space-4); border-radius: 0.5rem;
+    border: 1px solid var(--bb-border); background: var(--bb-surface);
+    font-size: 0.8rem;
+  }
+  .toast {
+    padding: var(--space-3) var(--space-5); border-radius: 0.5rem;
+    background: var(--bb-surface-alt); border: 1px solid var(--bb-border-hover);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* ── Keyframes ──────────────────────────────────────────────────────── */
+@keyframes bbSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }

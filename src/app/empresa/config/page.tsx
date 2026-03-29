@@ -11,6 +11,26 @@ import {
 import { PIXELLAB_SPRITES } from '@/game/data/pixellab-sprites';
 import type { CompanyConfig, ThemeName, Project, Agent } from '@/lib/types';
 
+// ─── PTY Process types ────────────────────────────────────────────────────────
+interface PtyProcess {
+  id: string;
+  agentName: string;
+  projectPath: string;
+  pid: number;
+  status: 'spawning' | 'active' | 'idle' | 'error' | 'closed';
+  createdAt: string;
+  cols: number;
+  rows: number;
+}
+
+const PTY_STATUS_MAP = {
+  spawning: { color: '#0099FF', label: 'Iniciando' },
+  active:   { color: '#34d399', label: 'Ativo' },
+  idle:     { color: '#f59e0b', label: 'Idle' },
+  error:    { color: '#EF4444', label: 'Erro' },
+  closed:   { color: '#3D3D3D', label: 'Fechado' },
+};
+
 const THEMES: { value: ThemeName; label: string; description: string }[] = [
   { value: 'moderno', label: 'Moderno', description: 'Clean, minimal, cores neutras' },
   { value: 'espacial', label: 'Espacial', description: 'Azul profundo, estrelas, glow cyan' },
@@ -34,6 +54,46 @@ export default function CompanyConfigPage() {
   const [allAgents, setAllAgents] = useState<Agent[]>([]);
   const { lastMessage, reconnectCount } = useWebSocket();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── PTY processes ─────────────────────────────────────────────────────
+  const [ptyProcesses, setPtyProcesses] = useState<PtyProcess[]>([]);
+  const [ptyLoading, setPtyLoading] = useState(false);
+  const [ptyKillingId, setPtyKillingId] = useState<string | null>(null);
+  const [ptyKillingAll, setPtyKillingAll] = useState(false);
+  const ptyIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const loadPtyProcesses = useCallback(async () => {
+    setPtyLoading(true);
+    try {
+      const res = await fetch('/api/command-room/kill');
+      if (res.ok) {
+        const data = await res.json();
+        setPtyProcesses(data.processes ?? []);
+      }
+    } catch { /* ignore */ } finally {
+      setPtyLoading(false);
+    }
+  }, []);
+
+  const handleKillPty = useCallback(async (id: string) => {
+    setPtyKillingId(id);
+    try {
+      await fetch(`/api/command-room/${id}`, { method: 'DELETE' });
+      await loadPtyProcesses();
+    } catch { /* ignore */ } finally {
+      setPtyKillingId(null);
+    }
+  }, [loadPtyProcesses]);
+
+  const handleKillAllPty = useCallback(async () => {
+    setPtyKillingAll(true);
+    try {
+      await fetch('/api/command-room/kill?all=true', { method: 'DELETE' });
+      await loadPtyProcesses();
+    } catch { /* ignore */ } finally {
+      setPtyKillingAll(false);
+    }
+  }, [loadPtyProcesses]);
 
   const loadAgents = useCallback(() => {
     fetch('/api/agents')
@@ -184,7 +244,7 @@ export default function CompanyConfigPage() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-3 py-1.5 text-[11px] font-medium text-white bg-accent-blue hover:bg-accent-blue/80 rounded-md transition-colors disabled:opacity-40"
+            className="px-3 py-1.5 text-[11px] font-medium text-white bg-accent-orange hover:bg-accent-orange/80 rounded-md transition-colors disabled:opacity-40"
           >
             {saving ? 'Salvando...' : 'Salvar'}
           </button>
@@ -200,7 +260,7 @@ export default function CompanyConfigPage() {
               type="text"
               value={config.name}
               onChange={(e) => setConfig({ ...config, name: e.target.value })}
-              className="w-full bg-surface-1/50 border border-border/50 rounded-md px-3 py-2 text-[13px] text-text-primary focus:border-accent-blue/40 focus:outline-none transition-colors"
+              className="w-full bg-surface-1/50 border border-border/50 rounded-md px-3 py-2 text-[13px] text-text-primary focus:border-accent-orange/40 focus:outline-none transition-colors"
             />
           </SettingBlock>
 
@@ -213,7 +273,7 @@ export default function CompanyConfigPage() {
                   onClick={() => handleThemeChange(t.value)}
                   className={`px-3 py-2.5 rounded-lg border text-left transition-colors ${
                     config.theme === t.value
-                      ? 'border-accent-blue/50 bg-accent-blue/[0.06] text-text-primary'
+                      ? 'border-accent-orange/50 bg-accent-orange/[0.06] text-text-primary'
                       : 'border-border/40 bg-surface-1/30 text-text-secondary hover:border-border hover:bg-white/[0.02]'
                   }`}
                 >
@@ -256,7 +316,7 @@ export default function CompanyConfigPage() {
               onClick={() => setConfig({ ...config, ambient_music: config.ambient_music ? 0 : 1 })}
               className="flex items-center gap-2.5"
             >
-              <div className={`w-9 h-5 rounded-full transition-colors ${config.ambient_music ? 'bg-accent-blue' : 'bg-surface-3'}`}>
+              <div className={`w-9 h-5 rounded-full transition-colors ${config.ambient_music ? 'bg-accent-orange' : 'bg-surface-3'}`}>
                 <div className={`w-4 h-4 mt-0.5 rounded-full bg-white transition-transform ${config.ambient_music ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
               </div>
               <span className="text-[11px] text-text-muted">{config.ambient_music ? 'Ligada' : 'Desligada'}</span>
@@ -303,7 +363,7 @@ export default function CompanyConfigPage() {
                   return (
                     <div key={project.id} className="rounded-lg border border-border/30 bg-surface-1/20 p-3">
                       <div className="flex items-center gap-2 mb-2.5">
-                        <span className="text-[10px] font-semibold text-accent-blue/80 uppercase tracking-widest">{project.name}</span>
+                        <span className="text-[10px] font-semibold text-accent-orange/80 uppercase tracking-widest">{project.name}</span>
                         <div className="h-px flex-1 bg-border/30" />
                         <span className="text-[10px] tabular-nums text-text-muted/50">{projectAgents.length}</span>
                       </div>
@@ -318,7 +378,7 @@ export default function CompanyConfigPage() {
                           <button
                             key={label}
                             onClick={() => applyPresetToTeam(skins)}
-                            className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded border border-border/40 bg-surface-1/40 text-text-secondary hover:border-accent-blue/40 hover:text-text-primary hover:bg-accent-blue/[0.06] transition-colors"
+                            className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded border border-border/40 bg-surface-1/40 text-text-secondary hover:border-accent-orange/40 hover:text-text-primary hover:bg-accent-orange/[0.06] transition-colors"
                           >
                             <span>{icon}</span> {label}
                           </button>
@@ -370,7 +430,7 @@ export default function CompanyConfigPage() {
                               <select
                                 value={currentSkin}
                                 onChange={(e) => handleSkinChange(agentKey, e.target.value)}
-                                className="flex-1 bg-surface-1/50 border border-border/50 rounded-md px-2 py-1.5 text-[11px] text-text-primary focus:border-accent-blue/40 focus:outline-none transition-colors appearance-none cursor-pointer"
+                                className="flex-1 bg-surface-1/50 border border-border/50 rounded-md px-2 py-1.5 text-[11px] text-text-primary focus:border-accent-orange/40 focus:outline-none transition-colors appearance-none cursor-pointer"
                               >
                                 <option value="default">{spriteEntry ? 'Default (AIOX)' : 'Sem skin'}</option>
                                 <optgroup label="Humanos">
@@ -523,7 +583,7 @@ function RangeField({ label, hint, value, min, max, step, display, onChange }: {
         type="range" min={min} max={max} step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-accent-blue h-1"
+        className="w-full accent-accent-orange h-1"
       />
     </div>
   );

@@ -109,7 +109,7 @@ export function EventRow({
               <span className="truncate max-w-[120px]">{terminal.window_title || '—'}</span>
             </span>
             {terminal.current_tool_detail && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-accent-blue truncate max-w-[180px]">
+              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-accent-orange truncate max-w-[180px]">
                 {terminal.waiting_permission === 1 && (
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
                 )}
@@ -137,7 +137,7 @@ export function EventRow({
       <td className="px-4 py-2.5">
         <EventTypeBadge type={event.type} />
       </td>
-      <td className="px-4 py-2.5 text-[13px] text-accent-blue/70 font-mono">
+      <td className="px-4 py-2.5 text-[13px] text-accent-orange/70 font-mono">
         {event.tool ?? <span className="text-text-muted">—</span>}
       </td>
       <td className="px-4 py-2.5 text-[13px] truncate">

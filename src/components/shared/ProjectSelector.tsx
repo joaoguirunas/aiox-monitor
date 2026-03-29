@@ -16,7 +16,7 @@ export function ProjectSelector() {
           const val = e.target.value;
           setSelectedProjectId(val === '' ? null : parseInt(val, 10));
         }}
-        className="appearance-none bg-white/[0.04] text-text-muted text-[11px] font-medium rounded-md pl-2.5 pr-6 py-1 border border-border/40 hover:border-border/60 focus:outline-none focus:border-accent-blue/30 transition-colors cursor-pointer"
+        className="appearance-none bg-white/[0.04] text-text-muted text-[11px] font-medium rounded-md pl-2.5 pr-6 py-1 border border-border/40 hover:border-border/60 focus:outline-none focus:border-accent-orange/30 transition-colors cursor-pointer"
       >
         <option value="">Todos os projetos</option>
         {projects.map(p => (

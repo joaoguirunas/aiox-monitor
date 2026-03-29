@@ -13,7 +13,7 @@ const PhaserGame = dynamic(
     ssr: false,
     loading: () => (
       <div
-        className="flex items-center justify-center bg-[#1a1a2e]"
+        className="flex items-center justify-center bg-surface-0"
         style={{ height: `calc(100vh - ${NAVBAR_HEIGHT}px)` }}
       >
         <p className="text-gray-500 font-mono text-sm">Inicializando Phaser...</p>
@@ -70,7 +70,7 @@ export default function RealTimePage() {
             <path d="M15 18l-6-6 6-6" />
           </svg>
           <span className="text-[9px] font-semibold tracking-wider uppercase [writing-mode:vertical-lr] rotate-180">Feed</span>
-          <div className="w-1.5 h-1.5 rounded-full bg-accent-blue animate-pulse" />
+          <div className="w-1.5 h-1.5 rounded-full bg-accent-orange animate-pulse" />
         </button>
       )}
     </div>

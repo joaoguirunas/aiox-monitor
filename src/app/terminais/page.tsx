@@ -66,7 +66,7 @@ export default function TerminaisPage() {
                 onClick={() => toggleProject(p.id)}
                 className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
                   isSelected
-                    ? 'bg-accent-blue/15 text-accent-blue border-accent-blue/30'
+                    ? 'bg-accent-orange/15 text-accent-orange border-accent-orange/30'
                     : 'bg-surface-2/40 text-text-muted border-border/30 hover:border-border/60'
                 }`}
               >

@@ -85,7 +85,7 @@ export function ProjectRow({ project, agents, lastEventMessage, onAgentClick }: 
         {/* Ativos */}
         <StatusColumn
           label="Ativos"
-          dot="bg-accent-blue"
+          dot="bg-accent-orange"
           count={active.length}
         >
           {active.length > 0 && (

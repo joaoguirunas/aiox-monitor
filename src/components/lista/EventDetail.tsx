@@ -56,7 +56,7 @@ export function EventDetail({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent-blue" />
+            <span className="w-1.5 h-1.5 rounded-full bg-accent-orange" />
             <h2 className="text-[13px] font-semibold text-text-primary font-display">Detalhes do Evento</h2>
           </div>
           <button
@@ -80,7 +80,7 @@ export function EventDetail({
             </Field>
             <Field label="Projeto">{projectName ?? '—'}</Field>
             <Field label="Tool">
-              <span className="font-mono text-accent-blue/70">{event.tool ?? '—'}</span>
+              <span className="font-mono text-accent-orange/70">{event.tool ?? '—'}</span>
             </Field>
           </div>
 
@@ -122,7 +122,7 @@ export function EventDetail({
                     ? 'bg-accent-violet/30'
                     : isStopEvent(event.type)
                       ? 'bg-accent-emerald/30'
-                      : 'bg-accent-blue/20'
+                      : 'bg-accent-orange/20'
                 }`} />
                 <pre className={`text-2xs p-3 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed ${
                   event.type === 'UserPromptSubmit' || isStopEvent(event.type)

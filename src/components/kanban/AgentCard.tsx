@@ -22,14 +22,14 @@ export function AgentCard({ agent, flashTrigger = 0, variant = 'chip', onClick }
     return () => clearTimeout(t);
   }, [flashTrigger]);
 
-  const agentColor = AGENT_COLORS[agent.name] ?? '#6366f1';
+  const agentColor = AGENT_COLORS[agent.name] ?? '#FF4400';
   const displayName = agent.display_name ?? agent.name;
   const initial = displayName.charAt(0).toUpperCase();
 
   if (variant === 'card') {
     return (
       <div
-        className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-surface-2/50 border border-border/40 transition-colors duration-150 ${flash ? 'border-accent-blue/30' : ''} ${onClick ? 'cursor-pointer hover:border-border/60' : ''}`}
+        className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-surface-2/50 border border-border/40 transition-colors duration-150 ${flash ? 'border-accent-orange/30' : ''} ${onClick ? 'cursor-pointer hover:border-border/60' : ''}`}
         onClick={onClick ? () => onClick(agent) : undefined}
       >
         {/* Avatar */}
@@ -79,7 +79,7 @@ export function AgentCard({ agent, flashTrigger = 0, variant = 'chip', onClick }
   // Chip variant — compact horizontal pill
   return (
     <span
-      className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-surface-2/40 border border-border/30 transition-colors duration-150 hover:bg-surface-2/60 ${flash ? 'border-accent-blue/30' : ''} ${onClick ? 'cursor-pointer' : ''}`}
+      className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-surface-2/40 border border-border/30 transition-colors duration-150 hover:bg-surface-2/60 ${flash ? 'border-accent-orange/30' : ''} ${onClick ? 'cursor-pointer' : ''}`}
       onClick={onClick ? () => onClick(agent) : undefined}
     >
       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[agent.status]}`} />

@@ -1,25 +1,20 @@
 import type { Metadata } from 'next';
-import { Inter, Space_Grotesk, JetBrains_Mono } from 'next/font/google';
+import { Geist, Roboto_Mono } from 'next/font/google';
 import './globals.css';
 import { Navbar } from '@/components/layout/Navbar';
 import { ProjectProvider } from '@/contexts/ProjectContext';
 import { WebSocketProvider } from '@/contexts/WebSocketContext';
 
-const inter = Inter({
+const geist = Geist({
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-geist',
   display: 'swap',
 });
 
-const spaceGrotesk = Space_Grotesk({
+const robotoMono = Roboto_Mono({
   subsets: ['latin'],
-  variable: '--font-space-grotesk',
-  display: 'swap',
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-jetbrains',
+  variable: '--font-roboto-mono',
+  weight: ['400', '500'],
   display: 'swap',
 });
 
@@ -35,7 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="pt-BR" className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}>
+    <html lang="pt-BR" className={`${geist.variable} ${robotoMono.variable}`}>
       <body className="bg-surface-0 text-text-primary font-sans min-h-screen flex flex-col antialiased">
         <WebSocketProvider>
           <ProjectProvider>

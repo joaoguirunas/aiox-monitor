@@ -77,7 +77,7 @@ export function TerminalKanban({ terminals }: TerminalKanbanProps) {
       </StatusColumn>
 
       {/* Ativos */}
-      <StatusColumn label="Ativos" dot="bg-accent-blue" count={active.length}>
+      <StatusColumn label="Ativos" dot="bg-accent-orange" count={active.length}>
         {active.length > 0 && (
           <div className="flex flex-col gap-1.5">
             {active.map(t => <TerminalCardWrapper key={t.id} terminal={t} />)}

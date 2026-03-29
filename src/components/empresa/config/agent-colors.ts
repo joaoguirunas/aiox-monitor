@@ -1,5 +1,5 @@
 export const AGENT_BG_COLORS: Record<string, string> = {
-  '@dev': 'bg-[#6366f1]',
+  '@dev': 'bg-[#FF4400]',
   '@qa': 'bg-[#34d399]',
   '@architect': 'bg-[#a78bfa]',
   '@pm': 'bg-[#fb923c]',
@@ -13,7 +13,7 @@ export const AGENT_BG_COLORS: Record<string, string> = {
 };
 
 export const AGENT_TEXT_COLORS: Record<string, string> = {
-  '@dev': 'text-[#6366f1]',
+  '@dev': 'text-[#FF4400]',
   '@qa': 'text-[#34d399]',
   '@architect': 'text-[#a78bfa]',
   '@pm': 'text-[#fb923c]',
@@ -27,11 +27,11 @@ export const AGENT_TEXT_COLORS: Record<string, string> = {
 };
 
 export function getAgentBgColor(agentName: string | null | undefined): string {
-  if (!agentName) return 'bg-[#4a5272]';
-  return AGENT_BG_COLORS[agentName] ?? 'bg-[#4a5272]';
+  if (!agentName) return 'bg-[rgba(244,244,232,0.4)]';
+  return AGENT_BG_COLORS[agentName] ?? 'bg-[rgba(244,244,232,0.4)]';
 }
 
 export function getAgentTextColor(agentName: string | null | undefined): string {
-  if (!agentName) return 'text-[#4a5272]';
-  return AGENT_TEXT_COLORS[agentName] ?? 'text-[#4a5272]';
+  if (!agentName) return 'text-[rgba(244,244,232,0.4)]';
+  return AGENT_TEXT_COLORS[agentName] ?? 'text-[rgba(244,244,232,0.4)]';
 }

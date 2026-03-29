@@ -88,7 +88,7 @@ export function FilterBar({ filters, onFiltersChange, projects, agents, terminal
     viewMode !== 'summary';
 
   const selectClass =
-    'appearance-none bg-surface-1/50 border border-border/50 text-text-secondary text-[11px] font-medium rounded-md pl-3 pr-7 py-1.5 hover:border-border focus:outline-none focus:border-accent-blue/30 transition-colors cursor-pointer';
+    'appearance-none bg-surface-1/50 border border-border/50 text-text-secondary text-[11px] font-medium rounded-md pl-3 pr-7 py-1.5 hover:border-border focus:outline-none focus:border-accent-orange/30 transition-colors cursor-pointer';
 
   // Only keep terminals with real project titles (not "Claude Code", "Terminal", etc.)
   // Exception: processing terminals always show regardless of title
@@ -119,7 +119,7 @@ export function FilterBar({ filters, onFiltersChange, projects, agents, terminal
             value={searchInput}
             onChange={(e) => handleSearchChange(e.target.value)}
             placeholder={compact ? 'Pesquisar...' : 'Pesquisar prompts, respostas, tools...'}
-            className={`bg-surface-1/50 border border-border/50 text-text-secondary text-[11px] font-medium rounded-md pl-7 pr-7 py-1.5 hover:border-border focus:outline-none focus:border-accent-blue/30 transition-colors placeholder:text-text-muted/40 ${compact ? 'w-[140px]' : 'w-[220px]'}`}
+            className={`bg-surface-1/50 border border-border/50 text-text-secondary text-[11px] font-medium rounded-md pl-7 pr-7 py-1.5 hover:border-border focus:outline-none focus:border-accent-orange/30 transition-colors placeholder:text-text-muted/40 ${compact ? 'w-[140px]' : 'w-[220px]'}`}
           />
           <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-text-muted/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -228,7 +228,7 @@ export function FilterBar({ filters, onFiltersChange, projects, agents, terminal
 
         {hasFilters && (
           <button
-            className="text-[10px] text-text-muted hover:text-accent-blue transition-colors font-medium"
+            className="text-[10px] text-text-muted hover:text-accent-orange transition-colors font-medium"
             onClick={() => { onFiltersChange({}); onViewModeChange('summary'); }}
           >
             Limpar

@@ -47,7 +47,7 @@ function formatTime(iso: string): string {
 }
 
 const STATUS_DOT: Record<TerminalStatus, string> = {
-  processing: 'bg-accent-blue',
+  processing: 'bg-accent-orange',
   active: 'bg-emerald-400',
   inactive: 'bg-zinc-500',
 };
@@ -94,7 +94,7 @@ export function TrackedTerminalCard({
   const displayTitle = windowTitle ? cleanWindowTitle(windowTitle) : null;
 
   const borderClass = status === 'processing'
-    ? 'border-accent-blue/20'
+    ? 'border-accent-orange/20'
     : 'border-border/40';
 
   return (
@@ -146,11 +146,11 @@ export function TrackedTerminalCard({
 
         {/* Tool Detail (JSONL-enriched) */}
         {currentToolDetail && (
-          <div className="mb-1 px-2 py-1 rounded-md bg-accent-blue/10 border border-accent-blue/20 flex items-center gap-1.5">
+          <div className="mb-1 px-2 py-1 rounded-md bg-accent-orange/10 border border-accent-orange/20 flex items-center gap-1.5">
             {waitingPermission === 1 && (
               <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" title="Waiting for permission" />
             )}
-            <p className="text-[10px] font-mono text-accent-blue truncate">{currentToolDetail}</p>
+            <p className="text-[10px] font-mono text-accent-orange truncate">{currentToolDetail}</p>
           </div>
         )}
 

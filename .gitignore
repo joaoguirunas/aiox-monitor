@@ -43,3 +43,10 @@ __pycache__/
 .next/
 *.tsbuildinfo
 next-env.d.ts
+
+
+# SQLite databases
+*.db
+*.db-*
+aiox-monitor.db
+data/

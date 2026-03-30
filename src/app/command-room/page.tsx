@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { LinkedTerminalEntry } from '@/components/command-room/TerminalPanel';
 import dynamic from 'next/dynamic';
 
@@ -18,6 +18,11 @@ const TerminalPanel = dynamic(
 
 const FolderPicker = dynamic(
   () => import('@/components/command-room/FolderPicker').then((mod) => mod.FolderPicker),
+  { ssr: false }
+);
+
+const TeamBuilder = dynamic(
+  () => import('@/components/command-room/TeamBuilder').then((mod) => mod.TeamBuilder),
   { ssr: false }
 );
 
@@ -40,6 +45,12 @@ interface TeamPreset {
   terminals: TeamTerminal[];
 }
 
+interface TerminalCategory {
+  id: string;
+  name: string;
+  color: string | null;
+}
+
 interface ActiveTerminal {
   id: string;
   agentName: string;
@@ -48,6 +59,12 @@ interface ActiveTerminal {
   projectPath?: string;
   linkedTerminalIds: string[];   // 1-to-many broadcast targets
   aiox_agent?: string;           // e.g. '@dev', '@aiox-master'
+  pty_status?: string;           // from DB: 'active' | 'idle' | 'crashed' | 'closed'
+  isRestored?: boolean;          // true when loaded from DB (not freshly spawned)
+  category_id?: string | null;
+  category?: TerminalCategory | null;
+  description?: string | null;
+  is_chief?: boolean;
 }
 
 interface Project {
@@ -92,47 +109,18 @@ const MODE_OPTIONS: { value: TerminalMode; label: string; desc: string; color: s
   { value: 'clean',  label: 'Limpo',   desc: 'Shell sem Claude', color: '#94a3b8' },
 ];
 
-const LS_KEY = 'aiox-command-room-projects';
-const LS_LAYOUTS_KEY = 'aiox-command-room-layouts';
-
-// ─── Terminal layout config (persisted per project) ──────────────────────────
-interface TerminalConfig {
-  agentName: string;
-  mode: TerminalMode;
-  linkedTerminalIds: string[];
-  aiox_agent?: string;
-}
-
-function loadLayouts(): Record<string, TerminalConfig[]> {
-  if (typeof window === 'undefined') return {};
-  try {
-    const raw = localStorage.getItem(LS_LAYOUTS_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
-}
-
-function saveLayouts(layouts: Record<string, TerminalConfig[]>) {
-  localStorage.setItem(LS_LAYOUTS_KEY, JSON.stringify(layouts));
-}
 
 // ─── SVG link lines ──────────────────────────────────────────────────────────
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default function CommandRoomPage() {
   // ── Projects state ───────────────────────────────────────────────────────
-  const [projects, setProjects] = useState<Project[]>(() => {
-    if (typeof window === 'undefined') return [];
-    try {
-      const raw = localStorage.getItem(LS_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [projects, setProjects] = useState<Project[]>([]);
   const [activeProject, setActiveProject] = useState<string | null>(null);
 
   // ── Terminals state ──────────────────────────────────────────────────────
   const [terminals, setTerminals] = useState<ActiveTerminal[]>([]);
+  const [categories, setCategories] = useState<TerminalCategory[]>([]);
   const [isSpawning, setIsSpawning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addDropdownOpen, setAddDropdownOpen] = useState(false);
@@ -143,16 +131,11 @@ export default function CommandRoomPage() {
   const [teamProgress, setTeamProgress] = useState({ current: 0, total: 0 });
   const [teamModeOverride, setTeamModeOverride] = useState<TerminalMode | 'default'>('default');
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
-  const layoutsRef = useRef<Record<string, TerminalConfig[]>>(loadLayouts());
-  const restoringRef = useRef(false);
+  const [teamBuilderOpen, setTeamBuilderOpen] = useState(false);
+  const [autopilotIds, setAutopilotIds] = useState<Set<string>>(new Set());
 
   // ── Card refs (drag reorder) ──────────────────────────────────────────────
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-
-  // ── Persist projects ───────────────────────────────────────────────────
-  useEffect(() => {
-    localStorage.setItem(LS_KEY, JSON.stringify(projects));
-  }, [projects]);
 
   // ── Auto-select first project if none active ──────────────────────────
   useEffect(() => {
@@ -161,68 +144,61 @@ export default function CommandRoomPage() {
     }
   }, [activeProject, projects]);
 
-  // ── Persist layout whenever terminals change ───────────────────────────
+  // ── Load terminals from DB on mount ──────────────────────────────────
   useEffect(() => {
-    if (!activeProject || restoringRef.current) return;
-    const configs: TerminalConfig[] = terminals
-      .filter((t) => t.projectPath === activeProject)
-      .map((t) => ({ agentName: t.agentName, mode: t.mode ?? 'clean', linkedTerminalIds: t.linkedTerminalIds, aiox_agent: t.aiox_agent }));
-    layoutsRef.current = { ...layoutsRef.current, [activeProject]: configs };
-    saveLayouts(layoutsRef.current);
-  }, [terminals, activeProject]);
-
-  // ── Restore layout when project is selected ───────────────────────────
-  const restoreLayout = useCallback(async (projectPath: string) => {
-    const saved = layoutsRef.current[projectPath];
-    if (!saved || saved.length === 0) return;
-
-    restoringRef.current = true;
-    setError(null);
-
-    for (let i = 0; i < saved.length; i++) {
-      const cfg = saved[i];
-      const initialPrompt = cfg.mode === 'bypass'
-        ? 'claude --dangerously-skip-permissions'
-        : cfg.mode === 'claude' ? 'claude' : undefined;
-
+    const loadFromDb = async () => {
       try {
-        const res = await fetch('/api/command-room/spawn', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            agentName: cfg.agentName,
-            projectPath,
-            ...(initialPrompt && { initialPrompt }),
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setTerminals((prev) => [...prev, {
-            id: data.id,
-            agentName: cfg.agentName,
-            createdAt: data.createdAt,
-            mode: cfg.mode,
-            projectPath,
-            linkedTerminalIds: cfg.linkedTerminalIds ?? [],
-            aiox_agent: cfg.aiox_agent,
-          }]);
+        const res = await fetch('/api/command-room/list');
+        if (!res.ok) return;
+        const data = await res.json();
+        const dbTerminals: Array<{
+          id: string;
+          agentName: string;
+          projectPath?: string;
+          pty_status?: string;
+          createdAt?: string;
+          category_id?: string | null;
+          category?: TerminalCategory | null;
+          description?: string | null;
+          is_chief?: boolean;
+        }> = data.terminals ?? [];
+        const active = dbTerminals.filter((t) => (t.pty_status ?? 'active') !== 'closed');
+        if (active.length === 0) return;
+        const uniquePaths = [...new Set(
+          active.map((t) => t.projectPath).filter((p): p is string => !!p)
+        )];
+        if (uniquePaths.length > 0) {
+          setProjects(uniquePaths.map((path) => ({
+            path,
+            label: path.split('/').filter(Boolean).pop() ?? path,
+          })));
+          setActiveProject(uniquePaths[0]);
         }
-      } catch { /* skip failed terminals */ }
+        setTerminals(
+          active.map((t) => ({
+            id: t.id,
+            agentName: t.agentName,
+            createdAt: t.createdAt ?? new Date().toISOString(),
+            mode: 'bypass' as TerminalMode,
+            projectPath: t.projectPath,
+            linkedTerminalIds: [],
+            pty_status: t.pty_status ?? 'active',
+            isRestored: true,
+            category_id: t.category_id,
+            category: t.category,
+            description: t.description,
+            is_chief: t.is_chief ?? false,
+          }))
+        );
 
-      if (i < saved.length - 1) {
-        await new Promise((r) => setTimeout(r, 400));
-      }
-    }
-
-    restoringRef.current = false;
-  }, []);
-
-  // Restore layout when activeProject changes (and terminals are empty)
-  useEffect(() => {
-    if (!activeProject || terminals.length > 0) return;
-    restoreLayout(activeProject);
+        // Load categories
+        const categoriesData = data.categories ?? [];
+        setCategories(categoriesData);
+      } catch { /* ignore */ }
+    };
+    loadFromDb();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProject]);
+  }, []);
 
 
   const handlePickerSelect = useCallback((path: string) => {
@@ -237,20 +213,15 @@ export default function CommandRoomPage() {
 
   const handleRemoveProject = useCallback((path: string) => {
     setProjects((prev) => prev.filter((p) => p.path !== path));
-    const updated = { ...layoutsRef.current };
-    delete updated[path];
-    layoutsRef.current = updated;
-    saveLayouts(updated);
+    setTerminals((prev) => prev.filter((t) => t.projectPath !== path));
     if (activeProject === path) {
       setActiveProject(null);
-      setTerminals([]);
     }
   }, [activeProject]);
 
   // ── Switch project ─────────────────────────────────────────────────────
   const handleSelectProject = useCallback((path: string) => {
     if (path === activeProject) return;
-    setTerminals([]);
     setActiveProject(path);
   }, [activeProject]);
 
@@ -315,10 +286,8 @@ export default function CommandRoomPage() {
   // ── Kill all processes for active project (clear + server cleanup) ────
   const handleClearProject = useCallback(async () => {
     if (!activeProject) return;
-    setTerminals([]);
+    setTerminals((prev) => prev.filter((t) => t.projectPath !== activeProject));
     cardRefs.current.clear();
-    layoutsRef.current = { ...layoutsRef.current, [activeProject]: [] };
-    saveLayouts(layoutsRef.current);
     try {
       await fetch(`/api/command-room/kill?project=${encodeURIComponent(activeProject)}`, { method: 'DELETE' });
     } catch { /* ignore */ }
@@ -392,6 +361,81 @@ export default function CommandRoomPage() {
     setTeamProgress({ current: 0, total: 0 });
   }, [activeProject, isSpawning, teamSpawning, teamModeOverride]);
 
+  // ── Spawn custom squad (from TeamBuilder) ────────────────────────────
+  const handleCustomSquadSpawn = useCallback(async (composition: Record<string, number>) => {
+    if (!activeProject || isSpawning || teamSpawning) return;
+
+    type SquadComposition = Record<string, number>;
+    const squadComposition = composition as SquadComposition;
+
+    // Convert composition to array of terminals to spawn
+    const terminalsToSpawn: Array<{ agentId: string; label: string; index: number }> = [];
+
+    for (const [agentId, count] of Object.entries(squadComposition)) {
+      for (let i = 1; i <= count; i++) {
+        const agentName = agentId.replace('@', '').replace(/-/g, ' ').toUpperCase();
+        const baseLabel = agentName.split(' ')[0]; // Get first word (DEV, QA, etc.)
+        terminalsToSpawn.push({
+          agentId,
+          label: count > 1 ? `${baseLabel} ${i}` : baseLabel,
+          index: i,
+        });
+      }
+    }
+
+    setTeamSpawning('Custom Squad');
+    setTeamProgress({ current: 0, total: terminalsToSpawn.length });
+    setError(null);
+
+    for (let i = 0; i < terminalsToSpawn.length; i++) {
+      const t = terminalsToSpawn[i];
+      setTeamProgress({ current: i + 1, total: terminalsToSpawn.length });
+
+      // Build initialPrompt with AIOX agent auto-activation
+      const agentCommand = `/AIOX:agents:${t.agentId.replace('@', '')}`;
+      const initialPrompt = `claude --dangerously-skip-permissions\n${agentCommand}`;
+
+      try {
+        const res = await fetch('/api/command-room/spawn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agentName: t.label,
+            projectPath: activeProject,
+            initialPrompt,
+            aiox_agent: t.agentId,
+          }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        setTerminals((prev) => [...prev, {
+          id: data.id,
+          agentName: t.label,
+          createdAt: data.createdAt,
+          mode: 'bypass',
+          projectPath: activeProject,
+          linkedTerminalIds: [],
+          aiox_agent: t.agentId,
+        }]);
+      } catch (err) {
+        setError(`Squad: falha ao criar ${t.label} — ${err instanceof Error ? err.message : 'erro'}`);
+        break;
+      }
+
+      if (i < terminalsToSpawn.length - 1) {
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    }
+
+    setTeamSpawning(null);
+    setTeamProgress({ current: 0, total: 0 });
+  }, [activeProject, isSpawning, teamSpawning]);
+
   // ── Rename terminal ────────────────────────────────────────────────────
   const handleRename = useCallback((id: string, newName: string) => {
     setTerminals((prev) =>
@@ -414,6 +458,34 @@ export default function CommandRoomPage() {
       })
     );
   }, []);
+
+  // ── Autopilot ──────────────────────────────────────────────────────────
+  const handleAutopilotToggle = useCallback((id: string) => {
+    setAutopilotIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleTaskDone = useCallback((id: string) => {
+    const terminal = terminals.find((t) => t.id === id);
+    if (!terminal) return;
+
+    // Find terminals that have this terminal linked (they sent commands to it)
+    const masters = terminals.filter((t) => t.linkedTerminalIds.includes(id));
+    if (masters.length > 0) {
+      const notification = `[${terminal.agentName}] tarefa concluída ✓`;
+      masters.forEach((master) => {
+        fetch(`/api/command-room/${master.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: notification }),
+        }).catch(() => {});
+      });
+    }
+  }, [terminals]);
 
   // ── Drag-and-drop reorder ─────────────────────────────────────────────
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -461,8 +533,32 @@ export default function CommandRoomPage() {
   }, [terminals]);
 
   // ── Derived ────────────────────────────────────────────────────────────
-  const projectTerminals = terminals;
+  const projectTerminals = terminals.filter((t) => t.projectPath === activeProject);
   const activeProjectLabel = projects.find((p) => p.path === activeProject)?.label ?? '';
+
+  // ── Category grouping ──────────────────────────────────────────────────
+  const chiefTerminal = useMemo(
+    () => projectTerminals.find((t) => t.is_chief),
+    [projectTerminals]
+  );
+
+  const regularTerminals = useMemo(
+    () => projectTerminals.filter((t) => !t.is_chief),
+    [projectTerminals]
+  );
+
+  const terminalsByCategory = useMemo(() => {
+    const grouped: Record<string, ActiveTerminal[]> = {};
+    categories.forEach((cat) => {
+      grouped[cat.id] = regularTerminals.filter((t) => t.category_id === cat.id);
+    });
+    return grouped;
+  }, [categories, regularTerminals]);
+
+  const uncategorized = useMemo(
+    () => regularTerminals.filter((t) => !t.category_id),
+    [regularTerminals]
+  );
 
   return (
     <main className="flex flex-col h-[calc(100vh-44px)] bg-surface-0">
@@ -617,6 +713,19 @@ export default function CommandRoomPage() {
                     </svg>
                   </button>
                 )}
+
+                {/* Custom Squad button */}
+                <button
+                  onClick={() => setTeamBuilderOpen(true)}
+                  disabled={!!teamSpawning || isSpawning || terminals.length >= 20}
+                  className="btn btn-primary btn-sm font-mono"
+                  title="Montar Squad Customizado"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Squad
+                </button>
 
                 {/* Team button */}
                 <div className="relative">
@@ -843,38 +952,147 @@ export default function CommandRoomPage() {
                   </p>
                 </div>
               ) : (
-                <div className="flex flex-wrap gap-5 content-start h-full overflow-y-auto">
-                  {projectTerminals.map((terminal, idx) => {
-                    const others: LinkedTerminalEntry[] = projectTerminals
-                      .filter((t) => t.id !== terminal.id)
-                      .map((t) => ({ id: t.id, agentName: t.agentName }));
-
-                    return (
-                      <div
-                        key={terminal.id}
-                        onDragOver={(e) => handleDragOver(e, idx)}
-                        className={`overflow-hidden transition-opacity ${dragIdx === idx ? 'opacity-50' : ''}`}
-                        style={{ width: 780, height: 570 }}
-                      >
+                <div className="command-room-layout h-full overflow-y-auto p-3">
+                  {/* Chief Terminal Row */}
+                  {chiefTerminal && (
+                    <div className="chief-row mb-5 flex justify-center">
+                      <div className="overflow-hidden" style={{ width: '100%', maxWidth: 880, height: 680 }}>
                         <TerminalPanel
-                          terminalId={terminal.id}
-                          agentName={terminal.agentName}
-                          projectPath={terminal.projectPath}
-                          aiox_agent={terminal.aiox_agent}
-                          linkedTerminalIds={terminal.linkedTerminalIds}
-                          otherTerminals={others}
+                          terminalId={chiefTerminal.id}
+                          agentName={chiefTerminal.agentName}
+                          projectPath={chiefTerminal.projectPath}
+                          aiox_agent={chiefTerminal.aiox_agent}
+                          linkedTerminalIds={chiefTerminal.linkedTerminalIds}
+                          otherTerminals={projectTerminals.filter((t) => t.id !== chiefTerminal.id).map((t) => ({ id: t.id, agentName: t.agentName }))}
+                          autopilot={autopilotIds.has(chiefTerminal.id)}
+                          isCrashed={chiefTerminal.pty_status === 'crashed'}
+                          isRestored={chiefTerminal.isRestored}
+                          description={chiefTerminal.description ?? undefined}
                           onClose={handleClose}
                           onRename={handleRename}
                           onLink={handleLink}
-                          dragHandleProps={{
-                            draggable: true,
-                            onDragStart: () => handleDragStart(idx),
-                            onDragEnd: handleDragEnd,
-                          }}
+                          onAutopilotToggle={handleAutopilotToggle}
+                          onTaskDone={handleTaskDone}
                         />
                       </div>
-                    );
-                  })}
+                    </div>
+                  )}
+
+                  {/* Category Grid */}
+                  {categories.length > 0 && (
+                    <div className="category-grid grid grid-cols-3 gap-5 2xl:grid-cols-3 xl:grid-cols-2">
+                      {categories.map((category) => {
+                        const categoryTerminals = terminalsByCategory[category.id] || [];
+                        if (categoryTerminals.length === 0) return null;
+
+                        return (
+                          <div key={category.id} className="category-column">
+                            <div className="category-header mb-3 border-l-4 pl-3 py-1" style={{ borderColor: category.color ?? '#FF4400' }}>
+                              <h3 className="font-semibold text-sm font-mono" style={{ color: category.color ?? '#FF4400' }}>
+                                {category.name}
+                              </h3>
+                            </div>
+                            <div className="terminals-stack space-y-3">
+                              {categoryTerminals.map((terminal) => (
+                                <div key={terminal.id} className="overflow-hidden" style={{ width: '100%', height: 570 }}>
+                                  <TerminalPanel
+                                    terminalId={terminal.id}
+                                    agentName={terminal.agentName}
+                                    projectPath={terminal.projectPath}
+                                    aiox_agent={terminal.aiox_agent}
+                                    linkedTerminalIds={terminal.linkedTerminalIds}
+                                    otherTerminals={projectTerminals.filter((t) => t.id !== terminal.id).map((t) => ({ id: t.id, agentName: t.agentName }))}
+                                    autopilot={autopilotIds.has(terminal.id)}
+                                    isCrashed={terminal.pty_status === 'crashed'}
+                                    isRestored={terminal.isRestored}
+                                    description={terminal.description ?? undefined}
+                                    onClose={handleClose}
+                                    onRename={handleRename}
+                                    onLink={handleLink}
+                                    onAutopilotToggle={handleAutopilotToggle}
+                                    onTaskDone={handleTaskDone}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Uncategorized Section */}
+                  {uncategorized.length > 0 && (
+                    <div className="uncategorized-section mt-8">
+                      <h3 className="text-text-muted mb-3 text-sm font-mono">Sem Categoria</h3>
+                      <div className="grid grid-cols-3 gap-5 2xl:grid-cols-3 xl:grid-cols-2">
+                        {uncategorized.map((terminal) => (
+                          <div key={terminal.id} className="overflow-hidden" style={{ width: '100%', height: 570 }}>
+                            <TerminalPanel
+                              terminalId={terminal.id}
+                              agentName={terminal.agentName}
+                              projectPath={terminal.projectPath}
+                              aiox_agent={terminal.aiox_agent}
+                              linkedTerminalIds={terminal.linkedTerminalIds}
+                              otherTerminals={projectTerminals.filter((t) => t.id !== terminal.id).map((t) => ({ id: t.id, agentName: t.agentName }))}
+                              autopilot={autopilotIds.has(terminal.id)}
+                              isCrashed={terminal.pty_status === 'crashed'}
+                              isRestored={terminal.isRestored}
+                              description={terminal.description ?? undefined}
+                              onClose={handleClose}
+                              onRename={handleRename}
+                              onLink={handleLink}
+                              onAutopilotToggle={handleAutopilotToggle}
+                              onTaskDone={handleTaskDone}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fallback to old layout if no categories */}
+                  {categories.length === 0 && !chiefTerminal && (
+                    <div className="flex flex-wrap gap-5 content-start">
+                      {projectTerminals.map((terminal, idx) => {
+                        const others: LinkedTerminalEntry[] = projectTerminals
+                          .filter((t) => t.id !== terminal.id)
+                          .map((t) => ({ id: t.id, agentName: t.agentName }));
+
+                        return (
+                          <div
+                            key={terminal.id}
+                            onDragOver={(e) => handleDragOver(e, idx)}
+                            className={`overflow-hidden transition-opacity ${dragIdx === idx ? 'opacity-50' : ''}`}
+                            style={{ width: 780, height: 570 }}
+                          >
+                            <TerminalPanel
+                              terminalId={terminal.id}
+                              agentName={terminal.agentName}
+                              projectPath={terminal.projectPath}
+                              aiox_agent={terminal.aiox_agent}
+                              linkedTerminalIds={terminal.linkedTerminalIds}
+                              otherTerminals={others}
+                              autopilot={autopilotIds.has(terminal.id)}
+                              isCrashed={terminal.pty_status === 'crashed'}
+                              isRestored={terminal.isRestored}
+                              description={terminal.description ?? undefined}
+                              onClose={handleClose}
+                              onRename={handleRename}
+                              onLink={handleLink}
+                              onAutopilotToggle={handleAutopilotToggle}
+                              onTaskDone={handleTaskDone}
+                              dragHandleProps={{
+                                draggable: true,
+                                onDragStart: () => handleDragStart(idx),
+                                onDragEnd: handleDragEnd,
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -887,6 +1105,14 @@ export default function CommandRoomPage() {
         isOpen={folderPickerOpen}
         onClose={() => setFolderPickerOpen(false)}
         onSelect={handlePickerSelect}
+      />
+
+      {/* ═══ TEAM BUILDER MODAL ═════════════════════════════════════════ */}
+      <TeamBuilder
+        isOpen={teamBuilderOpen}
+        onClose={() => setTeamBuilderOpen(false)}
+        onConfirm={handleCustomSquadSpawn}
+        maxTerminals={20}
       />
       </div>
 

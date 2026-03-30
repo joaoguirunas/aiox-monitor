@@ -1,4 +1,5 @@
 import { ProcessManager } from '@/server/command-room/process-manager';
+import { updateTerminalStatus } from '@/lib/command-room-repository';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,7 +48,9 @@ export async function POST(
   }
 
   const pm = ProcessManager.getInstance();
-  const written = pm.write(id, data.endsWith('\n') ? data : data + '\n');
+  // Debug: log exact bytes being sent
+  console.log('[API POST] Sending to PTY:', JSON.stringify(data), 'bytes:', Buffer.from(data).toString('hex'));
+  const written = pm.write(id, data);
 
   if (!written) {
     return Response.json({ error: 'Terminal not found or not writable' }, { status: 404 });
@@ -67,6 +70,8 @@ export async function DELETE(
   if (!killed) {
     return Response.json({ error: 'Terminal not found' }, { status: 404 });
   }
+
+  try { updateTerminalStatus(id, 'closed'); } catch { /* ignore */ }
 
   return Response.json({ id, killed: true });
 }

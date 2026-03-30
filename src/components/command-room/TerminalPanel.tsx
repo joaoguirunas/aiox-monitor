@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
-import { usePtySocket, type PtyStatus } from '@/hooks/usePtySocket';
+import { usePtySocket } from '@/hooks/usePtySocket';
+import { AvatarImage, AvatarPicker, AIOX_AGENT_TO_AVATAR, type AvatarId } from './AvatarPicker';
 import '@xterm/xterm/css/xterm.css';
 
 // ─── AIOX Brandbook Terminal Theme ───────────────────────────────────────────
@@ -15,22 +16,11 @@ const AIOX_TERMINAL_THEME = {
   cursorAccent: '#0A0A0A',
   selectionBackground: 'rgba(255,68,0,0.25)',
   selectionForeground: '#FFFFFF',
-  black: '#161618',
-  red: '#EF4444',
-  green: '#34d399',
-  yellow: '#f59e0b',
-  blue: '#0099FF',
-  magenta: '#8B5CF6',
-  cyan: '#06B6D4',
-  white: '#F4F4E8',
-  brightBlack: 'rgba(244,244,232,0.4)',
-  brightRed: '#fca5a5',
-  brightGreen: '#6ee7b7',
-  brightYellow: '#fde68a',
-  brightBlue: '#79c0ff',
-  brightMagenta: '#c4b5fd',
-  brightCyan: '#67e8f9',
-  brightWhite: '#FFFFFF',
+  black: '#161618', red: '#EF4444', green: '#34d399', yellow: '#f59e0b',
+  blue: '#0099FF', magenta: '#8B5CF6', cyan: '#06B6D4', white: '#F4F4E8',
+  brightBlack: 'rgba(244,244,232,0.4)', brightRed: '#fca5a5',
+  brightGreen: '#6ee7b7', brightYellow: '#fde68a', brightBlue: '#79c0ff',
+  brightMagenta: '#c4b5fd', brightCyan: '#67e8f9', brightWhite: '#FFFFFF',
 };
 
 const STATUS_MAP: Record<string, { color: string; label: string }> = {
@@ -42,7 +32,6 @@ const STATUS_MAP: Record<string, { color: string; label: string }> = {
   closed:     { color: '#3D3D3D', label: 'Fechado' },
 };
 
-// Map agent slug → activation command
 const AGENT_COMMANDS: Record<string, string> = {
   '@dev':              '/AIOX:agents:dev',
   '@qa':               '/AIOX:agents:qa',
@@ -67,12 +56,23 @@ interface TerminalPanelProps {
   agentName: string;
   projectPath?: string;
   aiox_agent?: string;
+  avatar?: AvatarId;
   linkedTerminalIds: string[];
   otherTerminals?: LinkedTerminalEntry[];
   onClose: (id: string) => void;
   onRename?: (id: string, name: string) => void;
-  onLink?: (id: string, targetId: string) => void;   // toggle
+  onLink?: (id: string, targetId: string) => void;
+  onAvatarChange?: (id: string, avatar: AvatarId) => void;
+  autopilot?: boolean;
+  onAutopilotToggle?: (id: string) => void;
+  onTaskDone?: (id: string) => void;
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
+  /** True when terminal was restored from DB after server restart */
+  isCrashed?: boolean;
+  /** True when terminal was loaded from DB (not freshly spawned) */
+  isRestored?: boolean;
+  /** Optional description displayed in info panel */
+  description?: string;
 }
 
 export function TerminalPanel({
@@ -85,7 +85,13 @@ export function TerminalPanel({
   onClose,
   onRename,
   onLink,
+  autopilot = false,
+  onAutopilotToggle,
+  onTaskDone,
   dragHandleProps,
+  isCrashed = false,
+  isRestored = false,
+  description,
 }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -93,58 +99,49 @@ export function TerminalPanel({
   const disposedRef = useRef(false);
   const [isTerminalReady, setIsTerminalReady] = useState(false);
   const [exitCode, setExitCode] = useState<number | null>(null);
+
+  // Header name editing
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(agentName);
-  const [linkPickerOpen, setLinkPickerOpen] = useState(false);
-  const [configOpen, setConfigOpen] = useState(false);
-  const [broadcastValue, setBroadcastValue] = useState('');
-  const [broadcasting, setBroadcasting] = useState(false);
-  const [trainingState, setTrainingState] = useState<'idle'|'sending'|'sent'>('idle');
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const broadcastRef = useRef<HTMLInputElement>(null);
-  const mountedAtRef = useRef(Date.now());
 
-  // Derived
-  const shortPath = projectPath
-    ? projectPath.split('/').filter(Boolean).slice(-2).join('/')
-    : '';
+  // Info panel
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [actionState, setActionState] = useState<'idle'|'sending'|'sent'>('idle');
+  const [showResponseBadge, setShowResponseBadge] = useState(false);
+
+  // Broadcast input
+  const [broadcastInput, setBroadcastInput] = useState('');
+  const broadcastInputRef = useRef<HTMLInputElement>(null);
+
+  const mountedAtRef = useRef(Date.now());
 
   const linkedTerminals = otherTerminals.filter((t) => linkedTerminalIds.includes(t.id));
   const isLinked = linkedTerminals.length > 0;
 
-  // Initialize xterm.js
+  const shortPath = projectPath
+    ? projectPath.split('/').filter(Boolean).slice(-2).join('/')
+    : '';
+
+  // ── xterm init ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current || terminalRef.current) return;
-
     disposedRef.current = false;
 
     const term = new Terminal({
-      cursorBlink: true,
-      cursorStyle: 'bar',
-      fontSize: 13,
-      fontFamily: '"Roboto Mono", "SF Mono", Menlo, Monaco, monospace',
-      fontWeight: '400',
-      fontWeightBold: '600',
-      lineHeight: 1.3,
-      letterSpacing: 0,
-      theme: AIOX_TERMINAL_THEME,
-      allowProposedApi: true,
-      scrollback: 5000,
-      tabStopWidth: 4,
+      cursorBlink: true, cursorStyle: 'bar',
+      fontSize: 13, fontFamily: '"Roboto Mono", "SF Mono", Menlo, Monaco, monospace',
+      fontWeight: '400', fontWeightBold: '600', lineHeight: 1.3, letterSpacing: 0,
+      theme: AIOX_TERMINAL_THEME, allowProposedApi: true, scrollback: 5000, tabStopWidth: 4,
     });
 
     const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
-
     term.loadAddon(fitAddon);
-    term.loadAddon(webLinksAddon);
+    term.loadAddon(new WebLinksAddon());
 
-    try {
-      term.open(containerRef.current);
-    } catch (err) {
+    try { term.open(containerRef.current); } catch (err) {
       console.error('[TerminalPanel] term.open() failed:', err);
-      term.dispose();
-      return;
+      term.dispose(); return;
     }
 
     terminalRef.current = term;
@@ -168,10 +165,15 @@ export function TerminalPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // WebSocket connection
-  const { status, sendResize } = usePtySocket({
+  // ── Refs estáveis para callbacks (evita recrear o hook) ──────────────────
+  const onTaskDoneRef = useRef(onTaskDone);
+  onTaskDoneRef.current = onTaskDone;
+
+  // ── WebSocket ─────────────────────────────────────────────────────────────
+  const { status, sendResize, startIdleWatch } = usePtySocket({
     terminalId: isTerminalReady ? terminalId : null,
     terminal: terminalRef.current,
+    isRestored,
     onStatusChange: () => {},
     onExit: (code, signal) => {
       setExitCode(code);
@@ -184,24 +186,22 @@ export function TerminalPanel({
     },
     onError: (message) => {
       if (message.includes('Terminal not found')) {
-        const ageMs = Date.now() - mountedAtRef.current;
-        if (ageMs > 5000) {
-          onClose(terminalId);
-        }
+        if (Date.now() - mountedAtRef.current > 5000) onClose(terminalId);
         return;
       }
-      const term = terminalRef.current;
-      if (term) {
-        term.writeln(`\x1b[31mError: ${message}\x1b[0m`);
-      }
+      terminalRef.current?.writeln(`\x1b[31mError: ${message}\x1b[0m`);
+    },
+    onIdle: () => {
+      onTaskDoneRef.current?.(terminalId);
+      setShowResponseBadge(true);
+      setTimeout(() => setShowResponseBadge(false), 4000);
     },
   });
 
-  // Auto-fit on resize
+  // ── Auto-fit ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const container = containerRef.current;
     if (!container || !isTerminalReady) return;
-
     const observer = new ResizeObserver(() => {
       const fit = fitAddonRef.current;
       const term = terminalRef.current;
@@ -209,80 +209,59 @@ export function TerminalPanel({
         try {
           fit.fit();
           sendResize(term.cols, term.rows);
+          // Persist dimensions to DB (Task 5.4)
+          fetch('/api/command-room/resize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: terminalId, cols: term.cols, rows: term.rows }),
+          }).catch((err) => console.error('[TerminalPanel] Failed to persist resize:', err));
         } catch { /* ignore */ }
       }
     });
-
     observer.observe(container);
     return () => observer.disconnect();
-  }, [sendResize, isTerminalReady]);
+  }, [sendResize, isTerminalReady, terminalId]);
 
-  const handleClose = useCallback(() => {
-    onClose(terminalId);
-  }, [onClose, terminalId]);
-
-  // Name editing
-  const startEditing = useCallback(() => {
-    if (!onRename) return;
-    setEditingName(true);
-    setNameValue(agentName);
-    setTimeout(() => nameInputRef.current?.select(), 0);
-  }, [onRename, agentName]);
-
+  // ── Name editing ──────────────────────────────────────────────────────────
   const commitName = useCallback(() => {
     setEditingName(false);
     const trimmed = nameValue.trim();
-    if (trimmed && trimmed !== agentName && onRename) {
-      onRename(terminalId, trimmed);
-    }
+    if (trimmed && trimmed !== agentName && onRename) onRename(terminalId, trimmed);
   }, [nameValue, agentName, onRename, terminalId]);
 
-  const handleLinkToggle = useCallback((targetId: string) => {
-    if (onLink) onLink(terminalId, targetId);
-  }, [onLink, terminalId]);
-
-  const statusInfo = STATUS_MAP[status] ?? STATUS_MAP.connecting;
-
-  // ── Send command to this terminal (self-write) ────────────────────────────
+  // ── Write to self ─────────────────────────────────────────────────────────
   const sendToSelf = useCallback(async (cmd: string) => {
     await fetch(`/api/command-room/${terminalId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: cmd }),
+      body: JSON.stringify({ data: cmd.endsWith('\n') ? cmd : cmd + '\n' }),
     }).catch(() => {});
   }, [terminalId]);
 
-  // ── Activate agent persona ────────────────────────────────────────────────
-  const handleActivateAgent = useCallback(async () => {
+  // ── Activate agent ────────────────────────────────────────────────────────
+  const handleActivate = useCallback(async () => {
     if (!aiox_agent) return;
     const cmd = AGENT_COMMANDS[aiox_agent] ?? `/AIOX:agents:${aiox_agent.replace('@', '')}`;
-    setTrainingState('sending');
+    setActionState('sending');
     await sendToSelf(cmd);
-    setTrainingState('sent');
-    setTimeout(() => setTrainingState('idle'), 3000);
-  }, [aiox_agent, sendToSelf]);
+    startIdleWatch();
+    setActionState('sent');
+    setTimeout(() => setActionState('idle'), 2500);
+  }, [aiox_agent, sendToSelf, startIdleWatch]);
 
-  // ── Send context (project path + agent role + live terminal list) ────────
+  // ── Send context ──────────────────────────────────────────────────────────
   const handleSendContext = useCallback(async () => {
     if (!projectPath) return;
-    setTrainingState('sending');
+    setActionState('sending');
 
-    // Fetch live terminal list from AIOX Monitor API
+    // Use client-side names from otherTerminals prop (reflects renames)
     let terminalList = '';
-    try {
-      const res = await fetch('/api/command-room/list');
-      if (res.ok) {
-        const data = await res.json();
-        const procs: { id: string; agentName: string; status: string }[] = data.terminals ?? [];
-        const active = procs.filter((p) => p.id !== terminalId && p.status !== 'closed');
-        if (active.length > 0) {
-          terminalList = '\n\nTerminais ativos no AIOX Monitor:\n' +
-            active.map((p) => `  • ${p.agentName} (id: ${p.id})`).join('\n') +
-            '\n\nPara enviar um comando a outro terminal use curl:' +
-            `\n  curl -s -X POST http://localhost:8888/api/command-room/<ID> -H "Content-Type: application/json" -d '{"data":"seu comando"}'`;
-        }
-      }
-    } catch { /* ignore */ }
+    if (otherTerminals.length > 0) {
+      terminalList = '\n\nTerminais ativos no AIOX Monitor:\n' +
+        otherTerminals.map((p) => `  • ${p.agentName} (id: ${p.id})`).join('\n') +
+        '\n\nPara enviar comando a outro terminal:\n' +
+        `  curl -s -X POST http://localhost:8888/api/command-room/<ID> -H "Content-Type: application/json" -d \'{"data":"comando"}\'`;
+    }
 
     const activationCmd = aiox_agent
       ? (AGENT_COMMANDS[aiox_agent] ?? `/AIOX:agents:${aiox_agent.replace('@', '')}`)
@@ -292,349 +271,320 @@ export function TerminalPanel({
       `# Contexto AIOX Monitor`,
       `Projeto: ${projectPath}`,
       `Você é: ${agentName}${aiox_agent ? ` (${aiox_agent})` : ''}`,
-      ...(activationCmd ? [`Para ativar seu persona: ${activationCmd}`] : []),
+      activationCmd ? `Ativar persona: ${activationCmd}` : null,
       `Diretório: cd ${projectPath}`,
       terminalList,
     ].filter(Boolean).join('\n');
 
     await sendToSelf(msg);
-    setTrainingState('sent');
-    setTimeout(() => setTrainingState('idle'), 3000);
-  }, [projectPath, agentName, aiox_agent, terminalId, sendToSelf]);
+    startIdleWatch();
+    setActionState('sent');
+    setTimeout(() => setActionState('idle'), 2500);
+  }, [projectPath, agentName, aiox_agent, otherTerminals, sendToSelf, startIdleWatch]);
 
-  // ── Broadcast to ALL linked terminals ─────────────────────────────────────
-  const handleBroadcast = useCallback(async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'Enter' || !broadcastValue.trim() || linkedTerminalIds.length === 0) return;
-    e.preventDefault();
-    const cmd = broadcastValue.trim();
-    setBroadcastValue('');
-    setBroadcasting(true);
-    try {
-      await Promise.all(
-        linkedTerminalIds.map((tid) =>
-          fetch(`/api/command-room/${tid}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data: cmd }),
-          }).catch(() => {})
-        )
-      );
-    } finally {
-      setBroadcasting(false);
-      broadcastRef.current?.focus();
-    }
-  }, [broadcastValue, linkedTerminalIds]);
+  // ── Broadcast to linked terminals ─────────────────────────────────────────
+  const handleBroadcast = useCallback(async () => {
+    const cmd = broadcastInput.trim();
+    if (!cmd || linkedTerminalIds.length === 0) return;
+    setBroadcastInput('');
+    // Start idle watch so we get notified when they finish
+    startIdleWatch();
+    await Promise.all(
+      linkedTerminalIds.map((id) =>
+        fetch(`/api/command-room/${id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: cmd }),
+        }).catch(() => {})
+      )
+    );
+  }, [broadcastInput, linkedTerminalIds, startIdleWatch]);
+
+  const statusInfo = STATUS_MAP[status] ?? STATUS_MAP.connecting;
 
   return (
     <div
-      className="flex flex-col h-full rounded-lg overflow-hidden border bg-surface-1"
-      style={{ borderColor: isLinked ? 'rgba(255,68,0,0.35)' : 'rgba(156,156,156,0.15)' }}
+      className="flex flex-col h-full rounded-lg overflow-hidden border"
+      style={{
+        borderColor: isLinked ? 'rgba(255,68,0,0.4)' : 'rgba(156,156,156,0.15)',
+        background: '#0A0A0A',
+      }}
     >
-      {/* ── Header ── */}
-      <div className="flex items-center gap-1.5 px-2 h-9 shrink-0 bg-surface-2 border-b border-border select-none">
-
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <div
+        className="flex items-center gap-1.5 px-2 h-9 shrink-0 border-b select-none"
+        style={{ background: '#0F0F11', borderColor: 'rgba(156,156,156,0.1)' }}
+      >
         {/* Drag handle */}
         <div
           {...dragHandleProps}
-          className="flex items-center justify-center w-5 h-5 cursor-grab active:cursor-grabbing text-text-muted hover:text-text-secondary rounded transition-colors shrink-0"
-          title="Arrastar"
+          className="flex items-center justify-center w-4 h-4 cursor-grab active:cursor-grabbing shrink-0"
+          style={{ color: 'rgba(244,244,232,0.2)' }}
         >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
-            <circle cx="3" cy="2" r="1" /><circle cx="7" cy="2" r="1" />
-            <circle cx="3" cy="5" r="1" /><circle cx="7" cy="5" r="1" />
-            <circle cx="3" cy="8" r="1" /><circle cx="7" cy="8" r="1" />
+          <svg width="8" height="10" viewBox="0 0 8 10" fill="currentColor">
+            <circle cx="2" cy="2" r="1" /><circle cx="6" cy="2" r="1" />
+            <circle cx="2" cy="5" r="1" /><circle cx="6" cy="5" r="1" />
+            <circle cx="2" cy="8" r="1" /><circle cx="6" cy="8" r="1" />
           </svg>
         </div>
 
         {/* Status dot */}
-        <div
-          className="w-[6px] h-[6px] rounded-full shrink-0"
-          style={{ backgroundColor: statusInfo.color }}
-        />
+        <div className="w-[5px] h-[5px] rounded-full shrink-0" style={{ background: statusInfo.color }} />
 
-        {/* Linked count badge */}
+        {/* Linked badge */}
         {isLinked && (
           <span
-            className="font-mono text-[0.45rem] font-medium uppercase tracking-[0.06em] px-1.5 py-0.5 rounded shrink-0"
-            style={{ background: 'rgba(255,68,0,0.15)', color: '#FF6B35' }}
+            className="font-mono text-[0.45rem] font-medium uppercase tracking-[0.06em] px-1 py-0.5 rounded shrink-0"
+            style={{ background: 'rgba(255,68,0,0.12)', color: '#FF6B35' }}
           >
-            ↔ {linkedTerminals.length}
+            ↔{linkedTerminals.length}
           </span>
         )}
 
-        {/* Name — double click opens config */}
+        {/* Crashed badge */}
+        {isCrashed && (
+          <span
+            className="font-mono text-[0.45rem] font-medium uppercase tracking-[0.06em] px-1 py-0.5 rounded shrink-0"
+            style={{ background: 'rgba(239,68,68,0.12)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.25)' }}
+          >
+            Reconectando...
+          </span>
+        )}
+
+        {/* AIOX Agent badge */}
+        {aiox_agent && (
+          <span
+            className="font-mono text-[0.45rem] font-medium uppercase tracking-[0.06em] px-1 py-0.5 rounded shrink-0"
+            style={{ background: 'rgba(0,153,255,0.12)', color: '#0099FF', border: '1px solid rgba(0,153,255,0.25)' }}
+            title={`Agente AIOX: ${aiox_agent}`}
+          >
+            {aiox_agent}
+          </span>
+        )}
+
+        {/* Name — click to edit */}
         {editingName ? (
           <input
             ref={nameInputRef}
             value={nameValue}
             onChange={(e) => setNameValue(e.target.value)}
             onBlur={commitName}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitName();
-              if (e.key === 'Escape') setEditingName(false);
-            }}
-            className="flex-1 min-w-0 bg-transparent border-b border-accent-orange/50 text-text-primary font-mono text-[0.65rem] font-medium outline-none px-0 py-0"
+            onKeyDown={(e) => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') setEditingName(false); }}
+            className="flex-1 min-w-0 bg-transparent border-b text-[#F4F4E8] font-mono text-[0.65rem] font-semibold outline-none px-0"
+            style={{ borderColor: '#FF4400' }}
             autoFocus
           />
         ) : (
           <span
-            onDoubleClick={() => setConfigOpen((v) => !v)}
-            className="font-mono text-[0.65rem] font-medium text-text-primary truncate cursor-default flex-1 min-w-0"
-            title="Duplo clique para configurar"
+            onClick={() => onRename && setEditingName(true)}
+            className="font-mono text-[0.65rem] font-semibold truncate flex-1 min-w-0"
+            style={{
+              color: '#F4F4E8',
+              cursor: onRename ? 'text' : 'default',
+            }}
+            title={onRename ? 'Clique para renomear' : agentName}
           >
             {agentName}
           </span>
         )}
 
-        {/* Status label */}
-        <span className="font-mono text-[0.5rem] text-text-muted uppercase tracking-[0.08em] shrink-0">
+        {/* Status */}
+        <span className="font-mono text-[0.45rem] uppercase tracking-[0.08em] shrink-0" style={{ color: 'rgba(244,244,232,0.3)' }}>
           {statusInfo.label}
         </span>
 
-        {/* Exit code */}
         {exitCode !== null && (
-          <span className={`font-mono text-[0.5rem] shrink-0 ${exitCode === 0 ? 'text-accent-emerald' : 'text-error'}`}>
-            exit {exitCode}
+          <span className={`font-mono text-[0.45rem] shrink-0 ${exitCode === 0 ? 'text-accent-emerald' : 'text-error'}`}>
+            :{exitCode}
           </span>
         )}
 
-        {/* CWD badge */}
         {shortPath && (
-          <span className="font-mono text-[0.5rem] text-text-muted truncate max-w-[100px] shrink-0" title={projectPath}>
+          <span className="font-mono text-[0.45rem] truncate max-w-[80px] shrink-0" style={{ color: 'rgba(244,244,232,0.2)' }} title={projectPath}>
             {shortPath}
           </span>
         )}
 
-        {/* Config toggle */}
+        {showResponseBadge && (
+          <span
+            className="font-mono text-[0.45rem] font-medium shrink-0 px-1.5 py-0.5 rounded"
+            style={{ background: 'rgba(34,197,94,0.2)', color: '#22c55e' }}
+          >
+            ✓ respondeu
+          </span>
+        )}
+
+        {/* Expand info panel */}
         <button
-          onClick={() => setConfigOpen((v) => !v)}
-          className={`w-5 h-5 flex items-center justify-center rounded transition-colors shrink-0 ${
-            configOpen ? 'text-[#FF4400] bg-[rgba(255,68,0,0.12)]' : 'text-text-muted hover:text-text-secondary hover:bg-white/5'
-          }`}
-          title="Configurar terminal"
+          onClick={() => setInfoOpen((v) => !v)}
+          className="w-5 h-5 flex items-center justify-center rounded transition-colors shrink-0"
+          style={{
+            color: infoOpen ? '#FF4400' : 'rgba(244,244,232,0.25)',
+            background: infoOpen ? 'rgba(255,68,0,0.1)' : 'transparent',
+          }}
+          title="Info / vínculos / contexto"
         >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <polyline points={infoOpen ? '18 15 12 9 6 15' : '6 9 12 15 18 9'} />
           </svg>
         </button>
 
         {/* Close */}
         <button
-          onClick={handleClose}
-          className="w-5 h-5 flex items-center justify-center rounded text-text-muted hover:text-error hover:bg-error/10 transition-colors shrink-0"
-          title="Fechar terminal"
+          onClick={() => onClose(terminalId)}
+          className="w-5 h-5 flex items-center justify-center rounded transition-colors shrink-0"
+          style={{ color: 'rgba(244,244,232,0.25)' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#EF4444'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'rgba(244,244,232,0.25)'; }}
+          title="Fechar"
         >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
       </div>
 
-      {/* ── Config Panel (double-click) ── */}
-      {configOpen && (
+      {/* ── Info Panel ─────────────────────────────────────────────────── */}
+      {infoOpen && (
         <div
-          className="shrink-0 border-b overflow-y-auto"
-          style={{
-            background: '#0C0C0E',
-            borderColor: 'rgba(255,68,0,0.2)',
-            maxHeight: '240px',
-          }}
+          className="shrink-0 border-b px-3 py-2.5 space-y-2.5"
+          style={{ background: '#0C0C0E', borderColor: 'rgba(255,68,0,0.15)' }}
         >
-          <div className="p-3 space-y-3">
-
-            {/* Agent identity */}
-            <div className="flex items-center gap-2">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  {onRename && (
-                    <button
-                      onClick={startEditing}
-                      className="font-mono text-[0.7rem] font-semibold text-[#F4F4E8] hover:text-[#FF6B35] transition-colors"
-                    >
-                      {agentName}
-                    </button>
-                  )}
-                  {aiox_agent && (
-                    <span className="font-mono text-[0.5rem] px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,68,0,0.12)', color: '#FF6B35' }}>
-                      {aiox_agent}
-                    </span>
-                  )}
-                </div>
-                {shortPath && (
-                  <span className="font-mono text-[0.5rem]" style={{ color: 'rgba(244,244,232,0.3)' }}>
-                    /{shortPath}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Training buttons */}
-            <div className="flex gap-1.5">
-              {aiox_agent && (
-                <button
-                  onClick={handleActivateAgent}
-                  disabled={trainingState === 'sending'}
-                  className="flex items-center gap-1 px-2 py-1 rounded text-[0.55rem] font-mono font-medium transition-colors"
-                  style={{
-                    background: trainingState === 'sent' ? 'rgba(52,211,153,0.12)' : 'rgba(255,68,0,0.12)',
-                    color: trainingState === 'sent' ? '#34d399' : '#FF6B35',
-                    border: `1px solid ${trainingState === 'sent' ? 'rgba(52,211,153,0.3)' : 'rgba(255,68,0,0.25)'}`,
-                  }}
-                >
-                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="5 3 19 12 5 21 5 3" />
-                  </svg>
-                  {trainingState === 'sent' ? 'Ativado!' : trainingState === 'sending' ? '...' : 'Ativar Agente'}
-                </button>
-              )}
-              {projectPath && (
-                <button
-                  onClick={handleSendContext}
-                  disabled={trainingState === 'sending'}
-                  className="flex items-center gap-1 px-2 py-1 rounded text-[0.55rem] font-mono font-medium transition-colors"
-                  style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    color: 'rgba(244,244,232,0.6)',
-                    border: '1px solid rgba(156,156,156,0.15)',
-                  }}
-                >
-                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" />
-                  </svg>
-                  Enviar Contexto
-                </button>
-              )}
-            </div>
-
-            {/* Links — multi-select */}
-            {onLink && otherTerminals.length > 0 && (
-              <div>
-                <span className="font-mono text-[0.45rem] uppercase tracking-[0.1em] block mb-1.5" style={{ color: 'rgba(244,244,232,0.3)' }}>
-                  Terminais vinculados (broadcast)
-                </span>
-                <div className="flex flex-wrap gap-1">
-                  {otherTerminals.map((t) => {
-                    const active = linkedTerminalIds.includes(t.id);
-                    return (
-                      <button
-                        key={t.id}
-                        onClick={() => handleLinkToggle(t.id)}
-                        className="flex items-center gap-1 px-2 py-0.5 rounded text-[0.55rem] font-mono transition-all"
-                        style={{
-                          background: active ? 'rgba(255,68,0,0.15)' : 'rgba(255,255,255,0.03)',
-                          color: active ? '#FF6B35' : 'rgba(244,244,232,0.45)',
-                          border: `1px solid ${active ? 'rgba(255,68,0,0.35)' : 'rgba(156,156,156,0.12)'}`,
-                        }}
-                      >
-                        <span
-                          className="w-[5px] h-[5px] rounded-full"
-                          style={{ background: active ? '#FF4400' : 'rgba(156,156,156,0.35)' }}
-                        />
-                        {t.agentName}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            {aiox_agent && (
+              <button
+                onClick={handleActivate}
+                disabled={actionState === 'sending'}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[0.55rem] font-mono font-medium transition-all"
+                style={{
+                  background: actionState === 'sent' ? 'rgba(52,211,153,0.1)' : 'rgba(255,68,0,0.1)',
+                  color: actionState === 'sent' ? '#34d399' : '#FF6B35',
+                  border: `1px solid ${actionState === 'sent' ? 'rgba(52,211,153,0.3)' : 'rgba(255,68,0,0.2)'}`,
+                }}
+              >
+                <svg width="7" height="7" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                {actionState === 'sent' ? 'Enviado!' : actionState === 'sending' ? '...' : 'Ativar Agente'}
+              </button>
+            )}
+            {projectPath && (
+              <button
+                onClick={handleSendContext}
+                disabled={actionState === 'sending'}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[0.55rem] font-mono font-medium transition-all"
+                style={{
+                  background: actionState === 'sent' ? 'rgba(52,211,153,0.1)' : 'rgba(255,255,255,0.04)',
+                  color: actionState === 'sent' ? '#34d399' : 'rgba(244,244,232,0.55)',
+                  border: '1px solid rgba(156,156,156,0.12)',
+                }}
+              >
+                <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                Enviar Contexto
+              </button>
             )}
           </div>
+
+          {/* Links */}
+          {onLink && otherTerminals.length > 0 && (
+            <div>
+              <span className="font-mono text-[0.44rem] uppercase tracking-[0.1em] block mb-1.5" style={{ color: 'rgba(244,244,232,0.25)' }}>
+                Vincular com
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {otherTerminals.map((t) => {
+                  const active = linkedTerminalIds.includes(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => onLink(terminalId, t.id)}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded text-[0.55rem] font-mono transition-all"
+                      style={{
+                        background: active ? 'rgba(255,68,0,0.12)' : 'rgba(255,255,255,0.03)',
+                        color: active ? '#FF6B35' : 'rgba(244,244,232,0.4)',
+                        border: `1px solid ${active ? 'rgba(255,68,0,0.3)' : 'rgba(156,156,156,0.1)'}`,
+                      }}
+                    >
+                      <span className="w-[4px] h-[4px] rounded-full" style={{ background: active ? '#FF4400' : 'rgba(156,156,156,0.3)' }} />
+                      {t.agentName}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Description */}
+          {description && (
+            <div className="terminal-description pt-1">
+              <p
+                className="text-[0.6rem] leading-snug line-clamp-2 font-mono"
+                style={{ color: 'rgba(244,244,232,0.45)' }}
+              >
+                {description}
+              </p>
+            </div>
+          )}
+
+          {/* Broadcast input — only when linked */}
+          {isLinked && (
+            <div className="flex gap-1.5">
+              <input
+                ref={broadcastInputRef}
+                value={broadcastInput}
+                onChange={(e) => setBroadcastInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleBroadcast(); }}
+                placeholder={`Enviar para ${linkedTerminals.map((t) => t.agentName).join(', ')}...`}
+                className="flex-1 min-w-0 px-2 py-1 rounded text-[0.6rem] font-mono outline-none"
+                style={{
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(156,156,156,0.15)',
+                  color: '#F4F4E8',
+                }}
+              />
+              <button
+                onClick={handleBroadcast}
+                disabled={!broadcastInput.trim()}
+                className="px-2 py-1 rounded text-[0.55rem] font-mono font-medium transition-all"
+                style={{
+                  background: broadcastInput.trim() ? 'rgba(255,68,0,0.15)' : 'rgba(255,255,255,0.03)',
+                  color: broadcastInput.trim() ? '#FF6B35' : 'rgba(244,244,232,0.2)',
+                  border: `1px solid ${broadcastInput.trim() ? 'rgba(255,68,0,0.3)' : 'rgba(156,156,156,0.1)'}`,
+                }}
+              >
+                ↗
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── Terminal ── */}
+      {/* ── Terminal ───────────────────────────────────────────────────── */}
       <div
-        ref={containerRef}
-        className="flex-1 min-h-0 px-1 py-1"
+        className="flex-1 min-h-0 overflow-hidden"
         style={{ backgroundColor: AIOX_TERMINAL_THEME.background }}
-      />
-
-      {/* ── Connection Footer ── */}
-      <div
-        className="shrink-0 flex items-center gap-1.5 px-2 h-8 border-t relative"
-        style={{
-          borderColor: isLinked ? 'rgba(255,68,0,0.3)' : 'rgba(156,156,156,0.12)',
-          background: '#080808',
-        }}
       >
-        {/* Link toggle button */}
-        {onLink && (
-          <button
-            onClick={() => setLinkPickerOpen((v) => !v)}
-            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.5rem] font-mono uppercase tracking-[0.06em] transition-colors shrink-0"
-            style={isLinked
-              ? { color: '#FF6B35', background: 'rgba(255,68,0,0.15)' }
-              : { color: 'rgba(244,244,232,0.35)', background: 'transparent' }
-            }
-            title="Gerenciar vínculos"
-          >
-            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
-              <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
-            </svg>
-            {isLinked ? `→ ${linkedTerminals.map(t => t.agentName).join(', ')}` : 'Vincular'}
-          </button>
-        )}
-
-        {/* Broadcast input — only when linked */}
-        {isLinked && (
-          <>
-            <span style={{ color: 'rgba(244,244,232,0.2)', fontSize: '0.5rem' }}>|</span>
-            <input
-              ref={broadcastRef}
-              type="text"
-              value={broadcastValue}
-              onChange={(e) => setBroadcastValue(e.target.value)}
-              onKeyDown={handleBroadcast}
-              placeholder={`Enviar para ${linkedTerminals.length === 1 ? linkedTerminals[0].agentName : `${linkedTerminals.length} terminais`}...`}
-              disabled={broadcasting}
-              className="flex-1 min-w-0 bg-transparent text-[0.6rem] font-mono placeholder:opacity-30 outline-none disabled:opacity-50"
-              style={{ color: '#F4F4E8' }}
-            />
-            {broadcasting && (
-              <span className="text-[0.45rem] font-mono shrink-0 animate-pulse" style={{ color: '#FF6B35' }}>enviando</span>
-            )}
-          </>
-        )}
-
-        {/* Link picker dropdown */}
-        {linkPickerOpen && onLink && (
-          <div
-            className="absolute bottom-full left-0 mb-1 z-50 rounded-lg border shadow-xl overflow-hidden min-w-[160px]"
-            style={{ background: '#111', borderColor: 'rgba(255,68,0,0.25)' }}
-          >
-            <div className="px-2 py-1.5 border-b" style={{ borderColor: 'rgba(255,68,0,0.15)' }}>
-              <span className="font-mono text-[0.45rem] uppercase tracking-[0.1em]" style={{ color: 'rgba(244,244,232,0.3)' }}>
-                Toggle vínculos
-              </span>
-            </div>
-            {otherTerminals.length === 0 ? (
-              <div className="px-3 py-2 text-[0.6rem] font-mono" style={{ color: 'rgba(244,244,232,0.3)' }}>
-                Nenhum outro terminal
-              </div>
-            ) : (
-              otherTerminals.map((t) => {
-                const active = linkedTerminalIds.includes(t.id);
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => handleLinkToggle(t.id)}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[0.6rem] font-mono transition-colors hover:bg-white/5"
-                    style={{ color: active ? '#FF6B35' : 'rgba(244,244,232,0.55)' }}
-                  >
-                    <span
-                      className="w-[5px] h-[5px] rounded-full shrink-0"
-                      style={{ background: active ? '#FF4400' : 'rgba(156,156,156,0.4)' }}
-                    />
-                    {t.agentName}
-                    {active && <span className="ml-auto text-[0.45rem]" style={{ color: '#FF4400' }}>✓</span>}
-                  </button>
-                );
-              })
-            )}
-          </div>
-        )}
+        <div
+          ref={containerRef}
+          style={{ width: '100%', height: '100%', overflow: 'hidden' }}
+        />
       </div>
+
+      {/* ── Footer — vínculo apenas ────────────────────────────────────── */}
+      {isLinked && (
+        <div
+          className="shrink-0 flex items-center gap-1.5 px-2 h-6 border-t"
+          style={{ background: '#080808', borderColor: 'rgba(255,68,0,0.2)' }}
+        >
+          <span className="w-[4px] h-[4px] rounded-full shrink-0" style={{ background: '#FF4400' }} />
+          <span className="font-mono text-[0.45rem] truncate" style={{ color: 'rgba(244,244,232,0.3)' }}>
+            → {linkedTerminals.map((t) => t.agentName).join(', ')}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

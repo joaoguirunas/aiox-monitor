@@ -182,4 +182,57 @@ export function initSchema(db: DatabaseSync): void {
     );
     CREATE INDEX IF NOT EXISTS idx_ganga_log_created ON ganga_log(created_at);
   `);
+
+  // ─── Command Room Terminals: migration ────────────────────────────────────
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS command_room_terminals (
+        id           TEXT PRIMARY KEY,
+        agent_name   TEXT NOT NULL,
+        agent_display_name TEXT,
+        project_path TEXT NOT NULL,
+        cols         INTEGER NOT NULL DEFAULT 220,
+        rows         INTEGER NOT NULL DEFAULT 50,
+        pty_status   TEXT NOT NULL DEFAULT 'active'
+                     CHECK(pty_status IN ('active','idle','closed','crashed')),
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        last_active  TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_crt_status ON command_room_terminals(pty_status);
+    `);
+  } catch { /* Table already exists */ }
+
+  // ─── Terminal Categories: migration ───────────────────────────────────────
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS terminal_categories (
+        id            TEXT PRIMARY KEY,
+        name          TEXT NOT NULL UNIQUE,
+        description   TEXT,
+        display_order INTEGER NOT NULL DEFAULT 0,
+        color         TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_category_display_order ON terminal_categories(display_order);
+    `);
+  } catch { /* Table already exists */ }
+
+  // Add category-related columns to command_room_terminals
+  const categoryMigrations = [
+    `ALTER TABLE command_room_terminals ADD COLUMN category_id TEXT REFERENCES terminal_categories(id) ON DELETE SET NULL`,
+    `ALTER TABLE command_room_terminals ADD COLUMN description TEXT`,
+    `ALTER TABLE command_room_terminals ADD COLUMN is_chief INTEGER NOT NULL DEFAULT 0`,
+  ];
+  for (const sql of categoryMigrations) {
+    try { db.exec(sql); } catch { /* Column already exists */ }
+  }
+
+  // Create indexes for category-related columns
+  try {
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_crt_category ON command_room_terminals(category_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_crt_is_chief ON command_room_terminals(is_chief)`);
+    // Partial unique index for chief terminal per project
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_crt_unique_chief
+             ON command_room_terminals(project_path, is_chief)
+             WHERE is_chief = 1`);
+  } catch { /* Index already exists */ }
 }

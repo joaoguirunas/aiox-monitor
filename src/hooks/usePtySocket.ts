@@ -20,12 +20,16 @@ interface UsePtySocketOptions {
   onStatusChange?: (status: PtyStatus) => void;
   onExit?: (code: number, signal?: string) => void;
   onError?: (message: string) => void;
+  onIdle?: () => void;
+  /** True when the terminal was restored from DB (not freshly spawned) */
+  isRestored?: boolean;
 }
 
 interface UsePtySocketReturn {
   status: PtyStatus;
   sendResize: (cols: number, rows: number) => void;
   isConnected: boolean;
+  startIdleWatch: () => void;
 }
 
 export function usePtySocket({
@@ -34,6 +38,8 @@ export function usePtySocket({
   onStatusChange,
   onExit,
   onError,
+  onIdle,
+  isRestored = false,
 }: UsePtySocketOptions): UsePtySocketReturn {
   const wsRef = useRef<WebSocket | null>(null);
   const [status, setStatus] = useState<PtyStatus>('connecting');
@@ -47,14 +53,25 @@ export function usePtySocket({
   const onStatusChangeRef = useRef(onStatusChange);
   const onExitRef = useRef(onExit);
   const onErrorRef = useRef(onError);
+  const onIdleRef = useRef(onIdle);
   onStatusChangeRef.current = onStatusChange;
   onExitRef.current = onExit;
   onErrorRef.current = onError;
+  onIdleRef.current = onIdle;
+
+  // ── Idle watch refs ─────────────────────────────────────────────────
+  const idleWatchActiveRef = useRef(false);
+  const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Update status and notify via ref
   const updateStatus = useCallback((newStatus: PtyStatus) => {
     setStatus(newStatus);
     onStatusChangeRef.current?.(newStatus);
+  }, []);
+
+  // Start idle watch: fires onIdle after 2s of no stdout activity
+  const startIdleWatch = useCallback(() => {
+    idleWatchActiveRef.current = true;
   }, []);
 
   // Send resize message to server
@@ -91,12 +108,26 @@ export function usePtySocket({
         setIsConnected(true);
         reconnectAttemptsRef.current = 0;
         updateStatus('active');
+        // If restoring a terminal from DB, ask server to reconnect to existing process
+        if (isRestored && terminalId) {
+          ws.send(JSON.stringify({ type: 'reconnect', terminalId }));
+        }
       };
 
       ws.onmessage = (event) => {
         if (event.data instanceof ArrayBuffer) {
           const data = new Uint8Array(event.data);
           terminal.write(data);
+          // Reset idle timer on each stdout chunk
+          if (idleWatchActiveRef.current) {
+            if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+            idleTimerRef.current = setTimeout(() => {
+              if (idleWatchActiveRef.current) {
+                idleWatchActiveRef.current = false;
+                onIdleRef.current?.();
+              }
+            }, 2000);
+          }
         } else {
           try {
             const msg: PtyMessage = JSON.parse(event.data);
@@ -191,12 +222,18 @@ export function usePtySocket({
         reconnectTimeoutRef.current = null;
       }
 
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
+      idleWatchActiveRef.current = false;
+
       if (wsRef.current) {
         wsRef.current.close(1000, 'Component unmounting');
         wsRef.current = null;
       }
     };
-  }, [terminal, terminalId, updateStatus]);
+  }, [terminal, terminalId, updateStatus, isRestored]);
   // ^^^ NO callbacks in deps — they use stable refs
 
   // Ping keep-alive every 30 seconds
@@ -217,5 +254,6 @@ export function usePtySocket({
     status,
     sendResize,
     isConnected,
+    startIdleWatch,
   };
 }

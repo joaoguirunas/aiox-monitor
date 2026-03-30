@@ -1,6 +1,7 @@
 import { existsSync, statSync } from 'node:fs';
 import { ProcessManager } from '@/server/command-room/process-manager';
 import { MAX_PROCESSES } from '@/server/command-room/types';
+import { insertTerminal } from '@/lib/command-room-repository';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,12 +13,17 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { agentName, projectPath, cols, rows, initialPrompt } = body as {
+  const { agentName, agentDisplayName, projectPath, cols, rows, initialPrompt, aiox_agent, category_id, description, is_chief } = body as {
     agentName?: string;
+    agentDisplayName?: string;
     projectPath?: string;
     cols?: number;
     rows?: number;
     initialPrompt?: string;
+    aiox_agent?: string;
+    category_id?: string;
+    description?: string;
+    is_chief?: boolean;
   };
 
   // ── Validate agentName ──────────────────────────────────────────────────
@@ -69,7 +75,24 @@ export async function POST(request: Request): Promise<Response> {
       cols,
       rows,
       initialPrompt: typeof initialPrompt === 'string' ? initialPrompt : undefined,
+      aiox_agent: typeof aiox_agent === 'string' ? aiox_agent : undefined,
     });
+
+    try {
+      insertTerminal(
+        proc.id,
+        proc.agentName,
+        typeof agentDisplayName === 'string' ? agentDisplayName : null,
+        resolvedPath,
+        proc.cols,
+        proc.rows,
+        typeof category_id === 'string' ? category_id : null,
+        typeof description === 'string' ? description : null,
+        typeof is_chief === 'boolean' ? is_chief : false,
+      );
+    } catch (dbErr) {
+      console.error('[spawn] Failed to persist terminal to DB:', dbErr);
+    }
 
     return Response.json(
       {

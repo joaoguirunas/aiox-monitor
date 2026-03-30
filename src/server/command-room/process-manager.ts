@@ -36,6 +36,15 @@ export class ProcessManager extends EventEmitter {
   static getInstance(): ProcessManager {
     if (!global.__aiox_process_manager__) {
       global.__aiox_process_manager__ = new ProcessManager();
+      // Startup reconciliation: Map is empty — mark any 'active' DB terminals as 'crashed'
+      void (async () => {
+        try {
+          const { markCrashedTerminals } = await import('@/lib/command-room-repository');
+          await markCrashedTerminals([]);
+        } catch {
+          // DB table may not exist yet — safe to ignore
+        }
+      })();
     }
     return global.__aiox_process_manager__;
   }
@@ -81,9 +90,24 @@ export class ProcessManager extends EventEmitter {
 
     const id = randomUUID();
 
-    console.log('[ProcessManager] Spawning PTY:', { shell, args, cwd: projectPath });
+    console.log('[ProcessManager] Spawning PTY:', {
+      shell,
+      args,
+      cwd: projectPath,
+      platform: process.platform,
+      shellExists: existsSync(shell),
+      cwdExists: existsSync(projectPath),
+    });
 
-    const ptyProcess = pty.spawn(shell, args, {
+    // Additional validation before spawn
+    if (!existsSync(shell)) {
+      throw new Error(`Shell not found: ${shell}`);
+    }
+
+    let ptyProcess: pty.IPty;
+
+    // Log full spawn configuration
+    const spawnConfig = {
       name: 'xterm-256color',
       cols,
       rows,
@@ -94,7 +118,36 @@ export class ProcessManager extends EventEmitter {
         COLORTERM: 'truecolor',
         ...options.env,
       } as Record<string, string>,
+    };
+
+    console.log('[ProcessManager] About to spawn with config:', {
+      shell,
+      args,
+      cols,
+      rows,
+      cwd: projectPath,
+      hasEnv: !!spawnConfig.env,
+      envKeys: Object.keys(spawnConfig.env || {}).length,
     });
+
+    try {
+      ptyProcess = pty.spawn(shell, args, spawnConfig);
+      console.log('[ProcessManager] ✓ PTY spawn SUCCESS - PID:', ptyProcess.pid);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const errStack = err instanceof Error ? err.stack : undefined;
+      console.error('[ProcessManager] ✗ PTY spawn FAILED:', {
+        error: errMsg,
+        stack: errStack,
+        shell,
+        args,
+        cwd: projectPath,
+        shellExists: existsSync(shell),
+        cwdExists: existsSync(projectPath),
+        cwdIsDir: existsSync(projectPath) && statSync(projectPath).isDirectory(),
+      });
+      throw new Error(`Failed to spawn terminal: ${errMsg}. Shell: ${shell}, CWD: ${projectPath}`);
+    }
 
     const proc: PtyProcess = {
       id,
@@ -161,9 +214,27 @@ export class ProcessManager extends EventEmitter {
 
     // Send initial prompt after a short delay (let shell fully boot)
     if (options.initialPrompt) {
-      setTimeout(() => {
-        this.write(id, options.initialPrompt + '\n');
-      }, 1000);
+      // Split multi-line prompts and send each line with proper timing
+      const lines = options.initialPrompt.split('\n').filter((line) => line.trim());
+
+      if (lines.length === 1) {
+        // Single command: send after 1.5s
+        setTimeout(() => {
+          this.write(id, lines[0] + '\n');
+        }, 1500);
+      } else {
+        // Multiple commands: send first, wait for it to complete, then send subsequent commands
+        setTimeout(() => {
+          this.write(id, lines[0] + '\n');
+
+          // Send subsequent commands with delays
+          lines.slice(1).forEach((line, index) => {
+            setTimeout(() => {
+              this.write(id, line + '\n');
+            }, 3000 + (index * 1000)); // First subsequent: 3s, next: 4s, etc.
+          });
+        }, 1500);
+      }
     }
 
     console.log(
@@ -356,10 +427,34 @@ export class ProcessManager extends EventEmitter {
         args: ['-NoLogo'],
       };
     }
-    const userShell = process.env.SHELL ?? '/bin/bash';
-    return {
-      shell: userShell,
-      args: ['-l'],
-    };
+
+    // For macOS/Linux, try to find a valid shell in order of preference
+    const shellCandidates = [
+      process.env.SHELL,
+      '/bin/zsh',
+      '/bin/bash',
+      '/bin/sh',
+    ].filter((s): s is string => !!s);
+
+    for (const shellPath of shellCandidates) {
+      if (existsSync(shellPath)) {
+        try {
+          const stat = statSync(shellPath);
+          // Check if executable (at least one execute bit set)
+          if (stat.mode & 0o111) {
+            console.log(`[ProcessManager] Using shell: ${shellPath}`);
+            // Use empty args array - let shell initialize naturally
+            return { shell: shellPath, args: [] };
+          }
+        } catch (err) {
+          console.warn(`[ProcessManager] Failed to stat shell ${shellPath}:`, err);
+          continue;
+        }
+      }
+    }
+
+    throw new Error(
+      `No valid executable shell found. Tried: ${shellCandidates.join(', ')}`,
+    );
   }
 }

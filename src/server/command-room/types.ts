@@ -20,6 +20,7 @@ export interface SpawnOptions {
   rows?: number;
   initialPrompt?: string;
   env?: Record<string, string>;
+  aiox_agent?: string; // AIOX agent identifier (e.g., '@dev', '@qa')
 }
 
 export interface PtyProcess {

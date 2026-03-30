@@ -1,4 +1,5 @@
 import { ProcessManager } from '@/server/command-room/process-manager';
+import { listActiveTerminals, updateTerminalStatus } from '@/lib/command-room-repository';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,12 +13,20 @@ export async function DELETE(request: Request): Promise<Response> {
   const pm = ProcessManager.getInstance();
 
   if (all === 'true') {
+    const active = listActiveTerminals();
     pm.killAll();
+    for (const t of active) {
+      try { updateTerminalStatus(t.id, 'closed'); } catch { /* ignore */ }
+    }
     return Response.json({ ok: true, message: 'All processes killed' });
   }
 
   if (project) {
+    const active = listActiveTerminals().filter((t) => t.project_path === project);
     const killed = pm.killByProject(project);
+    for (const t of active) {
+      try { updateTerminalStatus(t.id, 'closed'); } catch { /* ignore */ }
+    }
     return Response.json({ ok: true, killed, project });
   }
 

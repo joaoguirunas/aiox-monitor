@@ -26,6 +26,16 @@ const TeamBuilder = dynamic(
   { ssr: false }
 );
 
+const CategoryRow = dynamic(
+  () => import('@/components/command-room/CategoryRow').then((mod) => mod.CategoryRow),
+  { ssr: false }
+);
+
+const CategoryCreator = dynamic(
+  () => import('@/components/command-room/CategoryCreator').then((mod) => mod.CategoryCreator),
+  { ssr: false }
+);
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type TerminalMode = 'claude' | 'bypass' | 'clean';
@@ -132,6 +142,7 @@ export default function CommandRoomPage() {
   const [teamModeOverride, setTeamModeOverride] = useState<TerminalMode | 'default'>('default');
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [teamBuilderOpen, setTeamBuilderOpen] = useState(false);
+  const [categoryCreatorOpen, setCategoryCreatorOpen] = useState(false);
   const [autopilotIds, setAutopilotIds] = useState<Set<string>>(new Set());
 
   // ── Card refs (drag reorder) ──────────────────────────────────────────────
@@ -255,14 +266,33 @@ export default function CommandRoomPage() {
       }
 
       const data = await res.json();
-      setTerminals((prev) => [...prev, {
-        id: data.id,
-        agentName: label,
-        createdAt: data.createdAt,
-        mode,
-        projectPath: activeProject,
-        linkedTerminalIds: [],
-      }]);
+      const newTerminalId = data.id;
+
+      setTerminals((prev) => {
+        // Find chief terminal
+        const chief = prev.find((t) => t.is_chief && t.projectPath === activeProject);
+
+        // Create new terminal
+        const newTerminal = {
+          id: newTerminalId,
+          agentName: label,
+          createdAt: data.createdAt,
+          mode,
+          projectPath: activeProject,
+          linkedTerminalIds: [],
+        };
+
+        // Auto-link with chief if exists
+        if (chief) {
+          return prev.map((t) =>
+            t.id === chief.id
+              ? { ...t, linkedTerminalIds: [...t.linkedTerminalIds, newTerminalId] }
+              : t
+          ).concat(newTerminal);
+        }
+
+        return [...prev, newTerminal];
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao criar terminal');
     } finally {
@@ -727,6 +757,18 @@ export default function CommandRoomPage() {
                   Squad
                 </button>
 
+                {/* Category button */}
+                <button
+                  onClick={() => setCategoryCreatorOpen(true)}
+                  className="btn btn-ghost btn-sm font-mono"
+                  title="Criar Categoria"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                  </svg>
+                  Categoria
+                </button>
+
                 {/* Team button */}
                 <div className="relative">
                   <button
@@ -978,48 +1020,50 @@ export default function CommandRoomPage() {
                     </div>
                   )}
 
-                  {/* Category Grid */}
-                  {categories.length > 0 && (
-                    <div className="category-grid grid grid-cols-3 gap-5 2xl:grid-cols-3 xl:grid-cols-2">
-                      {categories.map((category) => {
-                        const categoryTerminals = terminalsByCategory[category.id] || [];
-                        if (categoryTerminals.length === 0) return null;
+                  {/* Category Rows (Horizontal Scroll) */}
+                  {categories.length > 0 && categories.map((category) => {
+                    const categoryTerminals = terminalsByCategory[category.id] || [];
+                    if (categoryTerminals.length === 0) return null;
 
-                        return (
-                          <div key={category.id} className="category-column">
-                            <div className="category-header mb-3 border-l-4 pl-3 py-1" style={{ borderColor: category.color ?? '#FF4400' }}>
-                              <h3 className="font-semibold text-sm font-mono" style={{ color: category.color ?? '#FF4400' }}>
-                                {category.name}
-                              </h3>
-                            </div>
-                            <div className="terminals-stack space-y-3">
-                              {categoryTerminals.map((terminal) => (
-                                <div key={terminal.id} className="overflow-hidden" style={{ width: '100%', height: 570 }}>
-                                  <TerminalPanel
-                                    terminalId={terminal.id}
-                                    agentName={terminal.agentName}
-                                    projectPath={terminal.projectPath}
-                                    aiox_agent={terminal.aiox_agent}
-                                    linkedTerminalIds={terminal.linkedTerminalIds}
-                                    otherTerminals={projectTerminals.filter((t) => t.id !== terminal.id).map((t) => ({ id: t.id, agentName: t.agentName }))}
-                                    autopilot={autopilotIds.has(terminal.id)}
-                                    isCrashed={terminal.pty_status === 'crashed'}
-                                    isRestored={terminal.isRestored}
-                                    description={terminal.description ?? undefined}
-                                    onClose={handleClose}
-                                    onRename={handleRename}
-                                    onLink={handleLink}
-                                    onAutopilotToggle={handleAutopilotToggle}
-                                    onTaskDone={handleTaskDone}
-                                  />
-                                </div>
-                              ))}
-                            </div>
+                    return (
+                      <CategoryRow
+                        key={category.id}
+                        categoryId={category.id}
+                        categoryName={category.name}
+                        categoryColor={category.color}
+                        onAddTerminal={() => {
+                          // TODO: Spawn terminal in this category
+                          console.log('Add terminal to category:', category.id);
+                        }}
+                      >
+                        {categoryTerminals.map((terminal) => (
+                          <div
+                            key={terminal.id}
+                            className="flex-shrink-0 overflow-hidden rounded-lg"
+                            style={{ width: 780, height: 570 }}
+                          >
+                            <TerminalPanel
+                              terminalId={terminal.id}
+                              agentName={terminal.agentName}
+                              projectPath={terminal.projectPath}
+                              aiox_agent={terminal.aiox_agent}
+                              linkedTerminalIds={terminal.linkedTerminalIds}
+                              otherTerminals={projectTerminals.filter((t) => t.id !== terminal.id).map((t) => ({ id: t.id, agentName: t.agentName }))}
+                              autopilot={autopilotIds.has(terminal.id)}
+                              isCrashed={terminal.pty_status === 'crashed'}
+                              isRestored={terminal.isRestored}
+                              description={terminal.description ?? undefined}
+                              onClose={handleClose}
+                              onRename={handleRename}
+                              onLink={handleLink}
+                              onAutopilotToggle={handleAutopilotToggle}
+                              onTaskDone={handleTaskDone}
+                            />
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                        ))}
+                      </CategoryRow>
+                    );
+                  })}
 
                   {/* Uncategorized Section */}
                   {uncategorized.length > 0 && (
@@ -1114,6 +1158,17 @@ export default function CommandRoomPage() {
         onConfirm={handleCustomSquadSpawn}
         maxTerminals={20}
       />
+
+      {/* ═══ CATEGORY CREATOR MODAL ═════════════════════════════════════ */}
+      {categoryCreatorOpen && (
+        <CategoryCreator
+          onClose={() => setCategoryCreatorOpen(false)}
+          onCreated={(newCategory) => {
+            setCategories((prev) => [...prev, newCategory]);
+            setCategoryCreatorOpen(false);
+          }}
+        />
+      )}
       </div>
 
       {/* ═══ EXTERNAL TERMINALS BAR ══════════════════════════════════════ */}

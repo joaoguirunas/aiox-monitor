@@ -49,7 +49,7 @@ export function CategoryRow({
       {/* Horizontal scroll container */}
       <div className="relative">
         <div
-          className="horizontal-terminals flex gap-4 overflow-x-auto pb-3 px-2"
+          className="flex gap-4 overflow-x-auto pb-3 px-2"
           style={{
             scrollbarWidth: 'thin',
             scrollbarColor: 'rgba(255,68,0,0.3) transparent',
@@ -61,23 +61,26 @@ export function CategoryRow({
         {/* Scroll gradient hints */}
         <div className="pointer-events-none absolute top-0 left-0 bottom-3 w-8 bg-gradient-to-r from-surface-0 to-transparent" />
         <div className="pointer-events-none absolute top-0 right-0 bottom-3 w-8 bg-gradient-to-l from-surface-0 to-transparent" />
-      </div>
 
-      <style jsx>{`
-        .horizontal-terminals::-webkit-scrollbar {
-          height: 8px;
-        }
-        .horizontal-terminals::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .horizontal-terminals::-webkit-scrollbar-thumb {
-          background: rgba(255, 68, 0, 0.3);
-          border-radius: 4px;
-        }
-        .horizontal-terminals::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 68, 0, 0.5);
-        }
-      `}</style>
+        {/* Inline styles for scrollbar */}
+        <style dangerouslySetInnerHTML={{
+          __html: `
+            .category-row > div > div::-webkit-scrollbar {
+              height: 8px;
+            }
+            .category-row > div > div::-webkit-scrollbar-track {
+              background: transparent;
+            }
+            .category-row > div > div::-webkit-scrollbar-thumb {
+              background: rgba(255, 68, 0, 0.3);
+              border-radius: 4px;
+            }
+            .category-row > div > div::-webkit-scrollbar-thumb:hover {
+              background: rgba(255, 68, 0, 0.5);
+            }
+          `
+        }} />
+      </div>
     </div>
   );
 }

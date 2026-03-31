@@ -57,7 +57,7 @@ export function CategoryRow({
         >
           {children || (
             <div className="flex items-center justify-center w-full py-8 text-text-muted text-sm">
-              Nenhum terminal nesta categoria. Clique em "+ Terminal" para adicionar.
+              Nenhum terminal nesta categoria. Clique em &quot;+ Terminal&quot; para adicionar.
             </div>
           )}
         </div>

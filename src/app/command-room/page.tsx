@@ -237,7 +237,7 @@ export default function CommandRoomPage() {
   }, [activeProject]);
 
   // ── Spawn terminal ─────────────────────────────────────────────────────
-  const handleSpawn = useCallback(async (label: string, mode: TerminalMode) => {
+  const handleSpawn = useCallback(async (label: string, mode: TerminalMode, categoryId?: string | null) => {
     if (!activeProject || isSpawning) return;
     setIsSpawning(true);
     setError(null);
@@ -249,6 +249,9 @@ export default function CommandRoomPage() {
         ? 'claude'
         : undefined;
 
+    // Check if this is the first terminal for this project
+    const isFirstTerminal = terminals.filter((t) => t.projectPath === activeProject).length === 0;
+
     try {
       const res = await fetch('/api/command-room/spawn', {
         method: 'POST',
@@ -257,6 +260,8 @@ export default function CommandRoomPage() {
           agentName: label,
           projectPath: activeProject,
           ...(initialPrompt && { initialPrompt }),
+          is_chief: isFirstTerminal, // Primeiro terminal é sempre Chief
+          category_id: isFirstTerminal ? null : categoryId, // Chief não tem categoria
         }),
       });
 
@@ -280,10 +285,12 @@ export default function CommandRoomPage() {
           mode,
           projectPath: activeProject,
           linkedTerminalIds: [],
+          is_chief: isFirstTerminal, // Marcar como chief se for o primeiro
+          category_id: isFirstTerminal ? null : categoryId,
         };
 
-        // Auto-link with chief if exists
-        if (chief) {
+        // Auto-link with chief if exists AND this is not the chief itself
+        if (chief && !isFirstTerminal) {
           return prev.map((t) =>
             t.id === chief.id
               ? { ...t, linkedTerminalIds: [...t.linkedTerminalIds, newTerminalId] }
@@ -995,10 +1002,11 @@ export default function CommandRoomPage() {
                 </div>
               ) : (
                 <div className="command-room-layout h-full overflow-y-auto p-3">
-                  {/* Chief Terminal Row */}
+                  {/* Chief Terminal Row - DESTACADO E CENTRALIZADO */}
                   {chiefTerminal && (
-                    <div className="chief-row mb-5 flex justify-center">
-                      <div className="overflow-hidden" style={{ width: '100%', maxWidth: 880, height: 680 }}>
+                    <div className="chief-row mb-8 flex justify-center">
+                      <div className="overflow-hidden rounded-xl border-2 border-accent-orange/30 shadow-2xl"
+                           style={{ width: '100%', maxWidth: 1400, height: 800 }}>
                         <TerminalPanel
                           terminalId={chiefTerminal.id}
                           agentName={chiefTerminal.agentName}
@@ -1032,8 +1040,9 @@ export default function CommandRoomPage() {
                         categoryName={category.name}
                         categoryColor={category.color}
                         onAddTerminal={() => {
-                          // TODO: Spawn terminal in this category
-                          console.log('Add terminal to category:', category.id);
+                          // Spawn terminal in this category
+                          const defaultName = `Terminal ${projectTerminals.length + 1}`;
+                          handleSpawn(defaultName, 'bypass', category.id);
                         }}
                       >
                         {categoryTerminals.map((terminal) => (
@@ -1065,35 +1074,7 @@ export default function CommandRoomPage() {
                     );
                   })}
 
-                  {/* Uncategorized Section */}
-                  {uncategorized.length > 0 && (
-                    <div className="uncategorized-section mt-8">
-                      <h3 className="text-text-muted mb-3 text-sm font-mono">Sem Categoria</h3>
-                      <div className="grid grid-cols-3 gap-5 2xl:grid-cols-3 xl:grid-cols-2">
-                        {uncategorized.map((terminal) => (
-                          <div key={terminal.id} className="overflow-hidden" style={{ width: '100%', height: 570 }}>
-                            <TerminalPanel
-                              terminalId={terminal.id}
-                              agentName={terminal.agentName}
-                              projectPath={terminal.projectPath}
-                              aiox_agent={terminal.aiox_agent}
-                              linkedTerminalIds={terminal.linkedTerminalIds}
-                              otherTerminals={projectTerminals.filter((t) => t.id !== terminal.id).map((t) => ({ id: t.id, agentName: t.agentName }))}
-                              autopilot={autopilotIds.has(terminal.id)}
-                              isCrashed={terminal.pty_status === 'crashed'}
-                              isRestored={terminal.isRestored}
-                              description={terminal.description ?? undefined}
-                              onClose={handleClose}
-                              onRename={handleRename}
-                              onLink={handleLink}
-                              onAutopilotToggle={handleAutopilotToggle}
-                              onTaskDone={handleTaskDone}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {/* REMOVIDO: Seção "Sem Categoria" - todos terminais devem estar em categorias ou ser Chief */}
 
                   {/* Fallback to old layout if no categories */}
                   {categories.length === 0 && !chiefTerminal && (

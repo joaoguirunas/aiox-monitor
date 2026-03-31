@@ -49,13 +49,17 @@ export function CategoryRow({
       {/* Horizontal scroll container */}
       <div className="relative">
         <div
-          className="flex gap-4 overflow-x-auto pb-3 px-2"
+          className="flex gap-4 overflow-x-auto pb-3 px-2 min-h-[100px]"
           style={{
             scrollbarWidth: 'thin',
             scrollbarColor: 'rgba(255,68,0,0.3) transparent',
           }}
         >
-          {children}
+          {children || (
+            <div className="flex items-center justify-center w-full py-8 text-text-muted text-sm">
+              Nenhum terminal nesta categoria. Clique em "+ Terminal" para adicionar.
+            </div>
+          )}
         </div>
 
         {/* Scroll gradient hints */}

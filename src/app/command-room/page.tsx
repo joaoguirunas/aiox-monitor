@@ -1005,8 +1005,8 @@ export default function CommandRoomPage() {
                   {/* Chief Terminal Row - DESTACADO E CENTRALIZADO */}
                   {chiefTerminal && (
                     <div className="chief-row mb-8 flex justify-center">
-                      <div className="overflow-hidden rounded-xl border-2 border-accent-orange/30 shadow-2xl"
-                           style={{ width: '100%', maxWidth: 1400, height: 800 }}>
+                      <div className="overflow-hidden rounded-lg border-2 border-accent-orange/30 shadow-lg"
+                           style={{ width: '100%', maxWidth: 1000, height: 650 }}>
                         <TerminalPanel
                           terminalId={chiefTerminal.id}
                           agentName={chiefTerminal.agentName}
@@ -1031,7 +1031,7 @@ export default function CommandRoomPage() {
                   {/* Category Rows (Horizontal Scroll) */}
                   {categories.length > 0 && categories.map((category) => {
                     const categoryTerminals = terminalsByCategory[category.id] || [];
-                    if (categoryTerminals.length === 0) return null;
+                    // MUDANÇA: Mostrar categoria SEMPRE, mesmo vazia (para poder adicionar terminais)
 
                     return (
                       <CategoryRow

@@ -221,6 +221,7 @@ export function initSchema(db: DatabaseSync): void {
     `ALTER TABLE command_room_terminals ADD COLUMN category_id TEXT REFERENCES terminal_categories(id) ON DELETE SET NULL`,
     `ALTER TABLE command_room_terminals ADD COLUMN description TEXT`,
     `ALTER TABLE command_room_terminals ADD COLUMN is_chief INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE command_room_terminals ADD COLUMN linked_terminal_ids TEXT DEFAULT '[]'`,
   ];
   for (const sql of categoryMigrations) {
     try { db.exec(sql); } catch { /* Column already exists */ }

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getGangaLogs, getGangaStats, getCompanyConfig } from '@/lib/queries';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const config = getCompanyConfig();

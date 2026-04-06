@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { SessionWithSummary, SessionFilters, WsEventNew } from '@/lib/types';
+import type { SessionWithSummary, SessionFilters, WsEventNew, WsTerminalRemoved } from '@/lib/types';
 import { useWebSocketContext } from '@/contexts/WebSocketContext';
 
 function buildQueryString(filters: SessionFilters): string {
@@ -73,6 +73,26 @@ export function useSessions(filters: SessionFilters = {}) {
         setLoadingMore(false);
       });
   }, [filtersKey, sessions.length, loadingMore, hasMore]);
+
+  // Close sessions when their terminal is removed (Stop event or dead PID)
+  useEffect(() => {
+    const unsub = subscribe((msg) => {
+      if (msg.type !== 'terminal:removed') return;
+      const wsMsg = msg as WsTerminalRemoved;
+      setSessions((prev) => {
+        let changed = false;
+        const updated = prev.map((s) => {
+          if (s.terminal_id === wsMsg.terminalId && s.status === 'active') {
+            changed = true;
+            return { ...s, status: 'completed' as const, ended_at: new Date().toISOString() };
+          }
+          return s;
+        });
+        return changed ? updated : prev;
+      });
+    });
+    return unsub;
+  }, [subscribe]);
 
   // Real-time updates via WebSocket subscribe — no message loss
   useEffect(() => {

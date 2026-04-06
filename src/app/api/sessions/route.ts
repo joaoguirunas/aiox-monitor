@@ -2,6 +2,8 @@ import { getSessions } from '@/lib/queries';
 import { parseIntParam, apiErrorResponse } from '@/lib/api-utils';
 import type { SessionFilters } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 const VALID_STATUSES = new Set(['active', 'completed', 'interrupted']);
 
 export async function GET(request: Request): Promise<Response> {

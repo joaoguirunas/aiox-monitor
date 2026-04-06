@@ -352,6 +352,26 @@ export class ProcessManager extends EventEmitter {
     return this.processes.get(id);
   }
 
+  // ─── Find Chief for a project ─────────────────────────────────────────────
+
+  findChiefForProject(projectPath: string): PtyListEntry | undefined {
+    for (const proc of this.processes.values()) {
+      if (proc.projectPath === projectPath && proc.status !== 'closed' && proc.agentName === 'CHIEF') {
+        return { id: proc.id, agentName: proc.agentName, projectPath: proc.projectPath, pid: proc.pid, status: proc.status, cols: proc.cols, rows: proc.rows, createdAt: proc.createdAt };
+      }
+    }
+    return undefined;
+  }
+
+  // ─── Check if a PID is a child of any managed process ───────────────────
+
+  isCommandRoomProject(projectPath: string): boolean {
+    for (const proc of this.processes.values()) {
+      if (proc.projectPath === projectPath && proc.status !== 'closed') return true;
+    }
+    return false;
+  }
+
   // ─── Kill By Project ─────────────────────────────────────────────────────
 
   killByProject(projectPath: string): number {

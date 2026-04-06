@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getCompanyConfig, updateCompanyConfig, isValidTheme } from '@/lib/queries';
 import { broadcast } from '@/server/ws-broadcaster';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const config = getCompanyConfig();

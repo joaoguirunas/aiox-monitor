@@ -30,7 +30,7 @@ export function Navbar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const isConfig = pathname === '/empresa/config';
+  const isConfig = pathname === '/config';
 
   return (
     <nav className="sticky top-0 z-nav bg-black/95 backdrop-blur-xl border-b border-[rgba(255,68,0,0.18)]">
@@ -76,7 +76,7 @@ export function Navbar() {
         {/* ── Right: Settings + Hamburger ──────────────────────────── */}
         <div className="flex items-center gap-1">
           <Link
-            href="/empresa/config"
+            href="/config"
             className={`
               w-7 h-7 flex items-center justify-center rounded transition-colors
               ${isConfig
@@ -133,7 +133,7 @@ export function Navbar() {
             );
           })}
           <Link
-            href="/empresa/config"
+            href="/config"
             onClick={() => setMobileOpen(false)}
             className={`
               flex items-center gap-2 px-3 py-2.5 rounded-sm border-l-2

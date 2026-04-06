@@ -12,6 +12,7 @@ import { startJsonlWatcher } from './src/server/jsonl-watcher';
 import { startAutopilotEngine, stopAutopilotEngine } from './src/server/autopilot-engine';
 import { createPtyWebSocketServer } from './src/server/command-room/pty-websocket-server';
 import { ProcessManager } from './src/server/command-room/process-manager';
+import { db } from './src/lib/db';
 
 // Process-level safety net — prevent crashes from unhandled errors
 process.on('uncaughtException', (err) => {
@@ -81,6 +82,12 @@ app.prepare().then(() => {
 
   setBroadcaster(wss);
   startIdleDetector();
+
+  // WAL checkpoint: flush pending writes on startup and every 5 minutes
+  try { db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); console.log('[server] WAL checkpoint completed on startup'); } catch { /* ignore */ }
+  setInterval(() => {
+    try { db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch { /* ignore */ }
+  }, 5 * 60 * 1000);
 
   // Terminal tracking: cleanup stale every 15s, sync system terminals every 30s
   setInterval(cleanupStaleTerminals, 15_000);

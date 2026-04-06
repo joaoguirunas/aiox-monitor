@@ -11,6 +11,7 @@ import {
   setTerminalActive,
   getProjects,
   purgeOldInactiveTerminals,
+  closeSessionsByTerminal,
 } from '../lib/queries';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -112,6 +113,8 @@ export function deactivateTerminal(projectId: number, pid: number): void {
   windowTitleCache.delete(pid);
   try {
     if (terminalBefore) {
+      // Close any orphaned active sessions tied to this terminal
+      closeSessionsByTerminal(terminalBefore.id);
       broadcast({ type: 'terminal:removed', terminalId: terminalBefore.id, projectId });
     }
   } catch { /* fire-and-forget */ }
@@ -124,8 +127,9 @@ export function cleanupStaleTerminals(): void {
   const staleTerminals = getStaleTerminals(900);
   deactivateStaleTerminals(900);  // no activity for 15min → inactive
 
-  // Broadcast removal for each deactivated terminal
+  // Close orphaned sessions + broadcast removal for each deactivated terminal
   for (const t of staleTerminals) {
+    try { closeSessionsByTerminal(t.id); } catch { /* ignore */ }
     try { broadcast({ type: 'terminal:removed', terminalId: t.id, projectId: t.project_id }); } catch { /* ignore */ }
   }
 
@@ -187,10 +191,16 @@ export async function syncSystemTerminals(): Promise<void> {
         }
       }
 
-      // Only reactivate if it's a confirmed claude process (not a fallback PID like esbuild)
+      // Only reactivate if it's a confirmed claude process AND it wasn't recently
+      // deactivated by a Stop event. deactivateTerminal() sets last_active = now,
+      // so a recent last_active on an inactive terminal means it was intentionally stopped.
       if (dbTerm.status === 'inactive' && match.isClaudeProcess) {
-        setTerminalActive(dbTerm.id);
-        changed = true;
+        const lastActiveMs = new Date(dbTerm.last_active.replace(' ', 'T') + 'Z').getTime();
+        const inactiveDuration = Date.now() - lastActiveMs;
+        if (inactiveDuration > 120_000) { // only reactivate if inactive > 2 min
+          setTerminalActive(dbTerm.id);
+          changed = true;
+        }
       }
 
       if (changed) {

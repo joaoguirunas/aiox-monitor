@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { LinkedTerminalEntry } from '@/components/command-room/TerminalPanel';
+import { useWebSocket } from '@/hooks/useWebSocket';
 import dynamic from 'next/dynamic';
 
 const TerminalPanel = dynamic(
@@ -34,6 +35,18 @@ const CategoryRow = dynamic(
 const CategoryCreator = dynamic(
   () => import('@/components/command-room/CategoryCreator').then((mod) => mod.CategoryCreator),
   { ssr: false }
+);
+
+const CanvasView = dynamic(
+  () => import('@/components/command-room/canvas/CanvasView').then((mod) => mod.CanvasView),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center h-full" style={{ background: '#070709' }}>
+        <span className="font-mono text-xs" style={{ color: 'rgba(244,244,232,0.3)' }}>Carregando canvas...</span>
+      </div>
+    ),
+  }
 );
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -144,6 +157,31 @@ export default function CommandRoomPage() {
   const [teamBuilderOpen, setTeamBuilderOpen] = useState(false);
   const [categoryCreatorOpen, setCategoryCreatorOpen] = useState(false);
   const [autopilotIds, setAutopilotIds] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<'grid' | 'canvas'>('grid');
+
+  // ── Agent completion notifications ────────────────────────────────────────
+  const [notifications, setNotifications] = useState<{ id: string; agentName: string; agentDisplayName?: string; projectName?: string; summary?: string; timestamp: number }[]>([]);
+  const { lastMessage } = useWebSocket();
+
+  useEffect(() => {
+    if (!lastMessage || lastMessage.type !== 'agent-completed') return;
+    const msg = lastMessage;
+    // Only show notifications for the active project
+    if (activeProject && msg.projectPath !== activeProject) return;
+    const notif = {
+      id: `notif-${Date.now()}`,
+      agentName: msg.agentName || 'Agente',
+      agentDisplayName: msg.agentDisplayName,
+      projectName: msg.projectName,
+      summary: msg.summary,
+      timestamp: Date.now(),
+    };
+    setNotifications((prev) => [notif, ...prev].slice(0, 10));
+    // Auto-dismiss after 8 seconds
+    setTimeout(() => {
+      setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
+    }, 8000);
+  }, [lastMessage, activeProject]);
 
   // ── Card refs (drag reorder) ──────────────────────────────────────────────
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -154,6 +192,57 @@ export default function CommandRoomPage() {
       setActiveProject(projects[0].path);
     }
   }, [activeProject, projects]);
+
+  // ── Auto-ensure Chief terminal when project becomes active ────────────
+  const ensuredProjectsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!activeProject) return;
+    // Skip if already ensured this project or if Chief already exists in state
+    if (ensuredProjectsRef.current.has(activeProject)) return;
+    const hasChief = terminals.some((t) => t.projectPath === activeProject && t.is_chief);
+    if (hasChief) {
+      ensuredProjectsRef.current.add(activeProject);
+      return;
+    }
+    ensuredProjectsRef.current.add(activeProject);
+
+    const controller = new AbortController();
+    const projectForThisEffect = activeProject;
+
+    (async () => {
+      try {
+        const res = await fetch('/api/command-room/ensure-chief', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectPath: projectForThisEffect }),
+          signal: controller.signal,
+        });
+        if (!res.ok || controller.signal.aborted) return;
+        const data = await res.json();
+        const term = data.terminal;
+        if (!term || controller.signal.aborted) return;
+        // Add Chief to terminals state (avoid duplicates by id AND by chief flag)
+        setTerminals((prev) => {
+          if (prev.some((t) => t.id === term.id)) return prev;
+          // Prevent ghost: if a chief already exists for this project, don't add another
+          if (prev.some((t) => t.projectPath === projectForThisEffect && t.is_chief)) return prev;
+          return [{
+            id: term.id,
+            agentName: term.agentName ?? 'CHIEF',
+            createdAt: term.createdAt ?? new Date().toISOString(),
+            mode: 'bypass' as TerminalMode,
+            projectPath: projectForThisEffect,
+            linkedTerminalIds: [],
+            is_chief: true,
+            isRestored: !data.created,
+          }, ...prev];
+        });
+      } catch { /* silent — Chief auto-creation is best-effort */ }
+    })();
+
+    return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProject]);
 
   // ── Load terminals from DB on mount ──────────────────────────────────
   useEffect(() => {
@@ -172,6 +261,7 @@ export default function CommandRoomPage() {
           category?: TerminalCategory | null;
           description?: string | null;
           is_chief?: boolean;
+          linked_terminal_ids?: string[];
         }> = data.terminals ?? [];
         const active = dbTerminals.filter((t) => (t.pty_status ?? 'active') !== 'closed');
         if (active.length === 0) return;
@@ -192,7 +282,7 @@ export default function CommandRoomPage() {
             createdAt: t.createdAt ?? new Date().toISOString(),
             mode: 'bypass' as TerminalMode,
             projectPath: t.projectPath,
-            linkedTerminalIds: [],
+            linkedTerminalIds: Array.isArray(t.linked_terminal_ids) ? t.linked_terminal_ids : [],
             pty_status: t.pty_status ?? 'active',
             isRestored: true,
             category_id: t.category_id,
@@ -213,21 +303,27 @@ export default function CommandRoomPage() {
 
 
   const handlePickerSelect = useCallback((path: string) => {
-    if (projects.some((p) => p.path === path)) {
-      setActiveProject(path);
-      return;
-    }
-    const label = path.split('/').filter(Boolean).pop() ?? path;
-    setProjects((prev) => [...prev, { path, label }]);
+    setProjects((prev) => {
+      if (prev.some((p) => p.path === path)) return prev;
+      const label = path.split('/').filter(Boolean).pop() ?? path;
+      return [...prev, { path, label }];
+    });
     setActiveProject(path);
-  }, [projects]);
+  }, []);
 
-  const handleRemoveProject = useCallback((path: string) => {
+  const handleRemoveProject = useCallback(async (path: string) => {
+    // 1. Limpar state imediatamente (UI responsiva)
     setProjects((prev) => prev.filter((p) => p.path !== path));
     setTerminals((prev) => prev.filter((t) => t.projectPath !== path));
     if (activeProject === path) {
       setActiveProject(null);
     }
+    // 2. Persistir: matar processos + marcar terminais como 'closed' no banco
+    try {
+      await fetch(`/api/command-room/kill?project=${encodeURIComponent(path)}`, { method: 'DELETE' });
+    } catch { /* UI already updated — server cleanup is best-effort */ }
+    // 3. Limpar ref de ensure-chief para este projeto
+    ensuredProjectsRef.current.delete(path);
   }, [activeProject]);
 
   // ── Switch project ─────────────────────────────────────────────────────
@@ -249,9 +345,6 @@ export default function CommandRoomPage() {
         ? 'claude'
         : undefined;
 
-    // Check if this is the first terminal for this project
-    const isFirstTerminal = terminals.filter((t) => t.projectPath === activeProject).length === 0;
-
     try {
       const res = await fetch('/api/command-room/spawn', {
         method: 'POST',
@@ -260,8 +353,7 @@ export default function CommandRoomPage() {
           agentName: label,
           projectPath: activeProject,
           ...(initialPrompt && { initialPrompt }),
-          is_chief: isFirstTerminal, // Primeiro terminal é sempre Chief
-          category_id: isFirstTerminal ? null : categoryId, // Chief não tem categoria
+          category_id: categoryId,
         }),
       });
 
@@ -272,12 +364,14 @@ export default function CommandRoomPage() {
 
       const data = await res.json();
       const newTerminalId = data.id;
+      const isChief = data.is_chief ?? false;
 
       setTerminals((prev) => {
-        // Find chief terminal
+        // Prevent duplicate
+        if (prev.some((t) => t.id === newTerminalId)) return prev;
+
         const chief = prev.find((t) => t.is_chief && t.projectPath === activeProject);
 
-        // Create new terminal
         const newTerminal = {
           id: newTerminalId,
           agentName: label,
@@ -285,15 +379,22 @@ export default function CommandRoomPage() {
           mode,
           projectPath: activeProject,
           linkedTerminalIds: [],
-          is_chief: isFirstTerminal, // Marcar como chief se for o primeiro
-          category_id: isFirstTerminal ? null : categoryId,
+          is_chief: isChief,
+          category_id: isChief ? null : categoryId,
         };
 
         // Auto-link with chief if exists AND this is not the chief itself
-        if (chief && !isFirstTerminal) {
+        if (chief && !isChief) {
+          const updatedLinks = [...chief.linkedTerminalIds, newTerminalId];
+          // Persist chief's updated links to DB
+          fetch(`/api/command-room/${chief.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ linked_terminal_ids: updatedLinks }),
+          }).catch(() => {});
           return prev.map((t) =>
             t.id === chief.id
-              ? { ...t, linkedTerminalIds: [...t.linkedTerminalIds, newTerminalId] }
+              ? { ...t, linkedTerminalIds: updatedLinks }
               : t
           ).concat(newTerminal);
         }
@@ -344,8 +445,44 @@ export default function CommandRoomPage() {
     if (!activeProject || isSpawning || teamSpawning) return;
     setTeamDropdownOpen(false);
     setTeamSpawning(preset.name);
-    setTeamProgress({ current: 0, total: preset.terminals.length });
+    setTeamProgress({ current: 0, total: preset.terminals.length + 1 });
     setError(null);
+
+    // Step 0: Ensure Chief exists BEFORE spawning team members
+    const hasChief = terminals.some((t) => t.projectPath === activeProject && t.is_chief);
+    if (!hasChief) {
+      try {
+        const chiefRes = await fetch('/api/command-room/ensure-chief', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectPath: activeProject }),
+        });
+        if (chiefRes.ok) {
+          const chiefData = await chiefRes.json();
+          const term = chiefData.terminal;
+          if (term) {
+            ensuredProjectsRef.current.add(activeProject);
+            setTerminals((prev) => {
+              if (prev.some((t) => t.id === term.id)) return prev;
+              if (prev.some((t) => t.projectPath === activeProject && t.is_chief)) return prev;
+              return [{
+                id: term.id,
+                agentName: term.agentName ?? 'CHIEF',
+                createdAt: term.createdAt ?? new Date().toISOString(),
+                mode: 'bypass' as TerminalMode,
+                projectPath: activeProject,
+                linkedTerminalIds: [],
+                is_chief: true,
+                isRestored: !chiefData.created,
+              }, ...prev];
+            });
+          }
+        }
+      } catch {
+        // Chief creation failed — continue with team spawn anyway
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
 
     for (let i = 0; i < preset.terminals.length; i++) {
       const t = preset.terminals[i];
@@ -421,8 +558,44 @@ export default function CommandRoomPage() {
     }
 
     setTeamSpawning('Custom Squad');
-    setTeamProgress({ current: 0, total: terminalsToSpawn.length });
+    setTeamProgress({ current: 0, total: terminalsToSpawn.length + 1 });
     setError(null);
+
+    // Step 0: Ensure Chief exists BEFORE spawning squad members
+    const hasChief = terminals.some((t) => t.projectPath === activeProject && t.is_chief);
+    if (!hasChief) {
+      try {
+        const chiefRes = await fetch('/api/command-room/ensure-chief', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectPath: activeProject }),
+        });
+        if (chiefRes.ok) {
+          const chiefData = await chiefRes.json();
+          const term = chiefData.terminal;
+          if (term) {
+            ensuredProjectsRef.current.add(activeProject);
+            setTerminals((prev) => {
+              if (prev.some((t) => t.id === term.id)) return prev;
+              if (prev.some((t) => t.projectPath === activeProject && t.is_chief)) return prev;
+              return [{
+                id: term.id,
+                agentName: term.agentName ?? 'CHIEF',
+                createdAt: term.createdAt ?? new Date().toISOString(),
+                mode: 'bypass' as TerminalMode,
+                projectPath: activeProject,
+                linkedTerminalIds: [],
+                is_chief: true,
+                isRestored: !chiefData.created,
+              }, ...prev];
+            });
+          }
+        }
+      } catch {
+        // Chief creation failed — continue with squad spawn anyway
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
 
     for (let i = 0; i < terminalsToSpawn.length; i++) {
       const t = terminalsToSpawn[i];
@@ -480,20 +653,39 @@ export default function CommandRoomPage() {
     );
   }, []);
 
+  // ── Rename category ────────────────────────────────────────────────────
+  const handleRenameCategory = useCallback(async (id: string, newName: string) => {
+    setCategories((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, name: newName } : c))
+    );
+    try {
+      await fetch('/api/command-room/categories', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name: newName }),
+      });
+    } catch { /* optimistic update — ignore network errors */ }
+  }, []);
+
   // ── Link terminals (toggle — 1-to-many) ───────────────────────────────
   const handleLink = useCallback((id: string, targetId: string) => {
-    setTerminals((prev) =>
-      prev.map((t) => {
+    setTerminals((prev) => {
+      const updated = prev.map((t) => {
         if (t.id !== id) return t;
         const already = t.linkedTerminalIds.includes(targetId);
-        return {
-          ...t,
-          linkedTerminalIds: already
-            ? t.linkedTerminalIds.filter((x) => x !== targetId)
-            : [...t.linkedTerminalIds, targetId],
-        };
-      })
-    );
+        const newLinks = already
+          ? t.linkedTerminalIds.filter((x) => x !== targetId)
+          : [...t.linkedTerminalIds, targetId];
+        // Persist links to DB (fire-and-forget)
+        fetch(`/api/command-room/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ linked_terminal_ids: newLinks }),
+        }).catch(() => {});
+        return { ...t, linkedTerminalIds: newLinks };
+      });
+      return updated;
+    });
   }, []);
 
   // ── Autopilot ──────────────────────────────────────────────────────────
@@ -552,6 +744,9 @@ export default function CommandRoomPage() {
     id: string; agentName: string; projectPath?: string; status: string;
   }[]>([]);
 
+  const terminalsRef = useRef(terminals);
+  terminalsRef.current = terminals;
+
   useEffect(() => {
     const poll = async () => {
       try {
@@ -559,15 +754,14 @@ export default function CommandRoomPage() {
         if (!res.ok) return;
         const data = await res.json();
         const all: { id: string; agentName: string; projectPath?: string; status: string }[] = data.terminals ?? [];
-        // Show only terminals NOT in the current project's terminal list
-        const activeIds = new Set(terminals.map((t) => t.id));
+        const activeIds = new Set(terminalsRef.current.map((t) => t.id));
         setExternalTerminals(all.filter((p) => !activeIds.has(p.id) && p.status !== 'closed'));
       } catch { /* ignore */ }
     };
     poll();
     const iv = setInterval(poll, 5000);
     return () => clearInterval(iv);
-  }, [terminals]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Derived ────────────────────────────────────────────────────────────
   const projectTerminals = terminals.filter((t) => t.projectPath === activeProject);
@@ -598,7 +792,38 @@ export default function CommandRoomPage() {
   );
 
   return (
-    <main className="flex flex-col h-[calc(100vh-44px)] bg-surface-0">
+    <main className="flex flex-col h-[calc(100vh-44px)] bg-surface-0 relative">
+      {/* ═══ NOTIFICATION TOASTS ═════════════════════════════════════════ */}
+      {notifications.length > 0 && (
+        <div className="absolute top-3 right-3 z-50 flex flex-col gap-2 pointer-events-none" style={{ maxWidth: 340 }}>
+          {notifications.map((n) => (
+            <div
+              key={n.id}
+              className="pointer-events-auto rounded-lg px-3 py-2 shadow-lg border animate-in slide-in-from-right"
+              style={{
+                background: 'rgba(10,10,10,0.95)',
+                borderColor: 'rgba(34,197,94,0.4)',
+                backdropFilter: 'blur(8px)',
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <span style={{ color: '#22c55e' }}>●</span>
+                <span className="font-mono text-xs font-medium" style={{ color: '#F4F4E8' }}>
+                  {n.agentDisplayName || n.agentName}
+                </span>
+                <span className="font-mono text-[10px]" style={{ color: 'rgba(244,244,232,0.4)' }}>
+                  concluiu
+                </span>
+              </div>
+              {n.summary && (
+                <p className="font-mono text-[10px] mt-1 leading-relaxed" style={{ color: 'rgba(244,244,232,0.5)' }}>
+                  {n.summary.slice(0, 120)}{n.summary.length > 120 ? '...' : ''}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="flex flex-1 min-h-0">
       {/* ═══ SIDEBAR — only projects ═════════════════════════════════════ */}
       <aside className="w-[250px] shrink-0 flex flex-col border-r bg-[#050505]" style={{ borderColor: 'rgba(156,156,156,0.1)' }}>
@@ -656,17 +881,15 @@ export default function CommandRoomPage() {
         </div>
 
         {/* Add project */}
-        <div className="px-2 pb-2 pt-1 border-t border-border/30 space-y-1.5">
-          <button
-            onClick={() => setFolderPickerOpen(true)}
-            className="btn btn-secondary btn-sm w-full font-mono"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-            </svg>
-            Abrir Projeto
-          </button>
-        </div>
+        <button
+          onClick={() => setFolderPickerOpen(true)}
+          className="flex items-center justify-center gap-2 w-full px-2 py-2.5 text-[11px] font-medium font-mono text-text-muted hover:text-text-primary hover:bg-white/[0.04] border-t border-border/30 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+          </svg>
+          Abrir Projeto
+        </button>
       </aside>
 
       {/* ═══ MAIN AREA ═════════════════════════════════════════════════════ */}
@@ -727,6 +950,43 @@ export default function CommandRoomPage() {
 
               {/* Right: Team + Add buttons */}
               <div className="flex items-center gap-1.5">
+                {/* View toggle: grid / canvas */}
+                <div
+                  className="flex items-center rounded overflow-hidden border shrink-0"
+                  style={{ borderColor: 'rgba(156,156,156,0.2)' }}
+                >
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono transition-colors"
+                    style={{
+                      background: viewMode === 'grid' ? 'rgba(255,68,0,0.15)' : 'transparent',
+                      color: viewMode === 'grid' ? '#FF6B35' : 'rgba(244,244,232,0.35)',
+                    }}
+                    title="Modo Grid"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
+                      <rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+                    </svg>
+                    Grid
+                  </button>
+                  <div style={{ width: 1, height: 16, background: 'rgba(156,156,156,0.2)' }} />
+                  <button
+                    onClick={() => setViewMode('canvas')}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono transition-colors"
+                    style={{
+                      background: viewMode === 'canvas' ? 'rgba(255,68,0,0.15)' : 'transparent',
+                      color: viewMode === 'canvas' ? '#FF6B35' : 'rgba(244,244,232,0.35)',
+                    }}
+                    title="Modo Canvas"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="3" /><line x1="3" y1="12" x2="9" y2="12" /><line x1="15" y1="12" x2="21" y2="12" />
+                      <line x1="12" y1="3" x2="12" y2="9" /><line x1="12" y1="15" x2="12" y2="21" />
+                    </svg>
+                    Canvas
+                  </button>
+                </div>
                 {/* Kill all server processes (emergency reset) */}
                 <button
                   onClick={handleKillAll}
@@ -986,8 +1246,23 @@ export default function CommandRoomPage() {
               </div>
             </div>
 
+            {/* ── Canvas view ─────────────────────────────────────────── */}
+            {viewMode === 'canvas' && (
+              <div className="flex-1 min-h-0">
+                <CanvasView
+                  terminals={projectTerminals}
+                  autopilotIds={autopilotIds}
+                  onClose={handleClose}
+                  onRename={handleRename}
+                  onLink={handleLink}
+                  onAutopilotToggle={handleAutopilotToggle}
+                  onTaskDone={handleTaskDone}
+                />
+              </div>
+            )}
+
             {/* ── Grid area ────────────────────────────────────────────── */}
-            <div className="flex-1 p-3 min-h-0">
+            <div className="flex-1 p-3 min-h-0" style={{ display: viewMode === 'grid' ? undefined : 'none' }}>
               {projectTerminals.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="w-16 h-16 rounded-full bg-surface-2/30 flex items-center justify-center mb-4">
@@ -1039,8 +1314,8 @@ export default function CommandRoomPage() {
                         categoryId={category.id}
                         categoryName={category.name}
                         categoryColor={category.color}
+                        onRename={handleRenameCategory}
                         onAddTerminal={() => {
-                          // Spawn terminal in this category
                           const defaultName = `Terminal ${projectTerminals.length + 1}`;
                           handleSpawn(defaultName, 'bypass', category.id);
                         }}
@@ -1074,48 +1349,92 @@ export default function CommandRoomPage() {
                     );
                   })}
 
-                  {/* REMOVIDO: Seção "Sem Categoria" - todos terminais devem estar em categorias ou ser Chief */}
-
-                  {/* Fallback to old layout if no categories */}
-                  {categories.length === 0 && !chiefTerminal && (
-                    <div className="flex flex-wrap gap-5 content-start">
-                      {projectTerminals.map((terminal, idx) => {
-                        const others: LinkedTerminalEntry[] = projectTerminals
-                          .filter((t) => t.id !== terminal.id)
-                          .map((t) => ({ id: t.id, agentName: t.agentName }));
-
-                        return (
-                          <div
-                            key={terminal.id}
-                            onDragOver={(e) => handleDragOver(e, idx)}
-                            className={`overflow-hidden transition-opacity ${dragIdx === idx ? 'opacity-50' : ''}`}
-                            style={{ width: 780, height: 570 }}
+                  {/* Uncategorized non-chief terminals — seção "Geral" */}
+                  {uncategorized.length > 0 && (
+                    <div className="category-row mb-6">
+                      {/* Header */}
+                      <div className="flex items-center justify-between mb-3 px-2">
+                        <div
+                          className="flex items-center gap-2 border-l-4 pl-3 py-1"
+                          style={{ borderColor: '#94a3b8' }}
+                        >
+                          <h3
+                            className="font-semibold text-sm font-mono uppercase tracking-wide"
+                            style={{ color: '#94a3b8' }}
                           >
-                            <TerminalPanel
-                              terminalId={terminal.id}
-                              agentName={terminal.agentName}
-                              projectPath={terminal.projectPath}
-                              aiox_agent={terminal.aiox_agent}
-                              linkedTerminalIds={terminal.linkedTerminalIds}
-                              otherTerminals={others}
-                              autopilot={autopilotIds.has(terminal.id)}
-                              isCrashed={terminal.pty_status === 'crashed'}
-                              isRestored={terminal.isRestored}
-                              description={terminal.description ?? undefined}
-                              onClose={handleClose}
-                              onRename={handleRename}
-                              onLink={handleLink}
-                              onAutopilotToggle={handleAutopilotToggle}
-                              onTaskDone={handleTaskDone}
-                              dragHandleProps={{
-                                draggable: true,
-                                onDragStart: () => handleDragStart(idx),
-                                onDragEnd: handleDragEnd,
-                              }}
-                            />
-                          </div>
-                        );
-                      })}
+                            Geral
+                          </h3>
+                          <span className="text-[10px] text-text-muted">
+                            {uncategorized.length} terminal{uncategorized.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const defaultName = `Terminal ${projectTerminals.length + 1}`;
+                            handleSpawn(defaultName, 'bypass');
+                          }}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-2/50 hover:bg-surface-2 border border-border/40 hover:border-border/60 transition-colors"
+                          title="Adicionar terminal sem categoria"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          <span className="text-[11px] font-medium">Terminal</span>
+                        </button>
+                      </div>
+
+                      {/* Horizontal scroll container */}
+                      <div className="relative">
+                        <div
+                          className="flex gap-4 overflow-x-auto pb-3 px-2"
+                          style={{
+                            scrollbarWidth: 'thin',
+                            scrollbarColor: 'rgba(148,163,184,0.3) transparent',
+                          }}
+                        >
+                          {uncategorized.map((terminal, idx) => {
+                            const others: LinkedTerminalEntry[] = projectTerminals
+                              .filter((t) => t.id !== terminal.id)
+                              .map((t) => ({ id: t.id, agentName: t.agentName }));
+
+                            return (
+                              <div
+                                key={terminal.id}
+                                onDragOver={(e) => handleDragOver(e, idx)}
+                                className={`flex-shrink-0 overflow-hidden rounded-lg transition-opacity ${dragIdx === idx ? 'opacity-50' : ''}`}
+                                style={{ width: 780, height: 570 }}
+                              >
+                                <TerminalPanel
+                                  terminalId={terminal.id}
+                                  agentName={terminal.agentName}
+                                  projectPath={terminal.projectPath}
+                                  aiox_agent={terminal.aiox_agent}
+                                  linkedTerminalIds={terminal.linkedTerminalIds}
+                                  otherTerminals={others}
+                                  autopilot={autopilotIds.has(terminal.id)}
+                                  isCrashed={terminal.pty_status === 'crashed'}
+                                  isRestored={terminal.isRestored}
+                                  description={terminal.description ?? undefined}
+                                  onClose={handleClose}
+                                  onRename={handleRename}
+                                  onLink={handleLink}
+                                  onAutopilotToggle={handleAutopilotToggle}
+                                  onTaskDone={handleTaskDone}
+                                  dragHandleProps={{
+                                    draggable: true,
+                                    onDragStart: () => handleDragStart(idx),
+                                    onDragEnd: handleDragEnd,
+                                  }}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Scroll gradient hints */}
+                        <div className="pointer-events-none absolute top-0 left-0 bottom-3 w-8 bg-gradient-to-r from-surface-0 to-transparent" />
+                        <div className="pointer-events-none absolute top-0 right-0 bottom-3 w-8 bg-gradient-to-l from-surface-0 to-transparent" />
+                      </div>
                     </div>
                   )}
                 </div>

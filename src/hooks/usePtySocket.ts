@@ -21,6 +21,8 @@ interface UsePtySocketOptions {
   onExit?: (code: number, signal?: string) => void;
   onError?: (message: string) => void;
   onIdle?: () => void;
+  /** Called with decoded text for every stdout chunk from the PTY */
+  onOutput?: (text: string) => void;
   /** True when the terminal was restored from DB (not freshly spawned) */
   isRestored?: boolean;
 }
@@ -39,6 +41,7 @@ export function usePtySocket({
   onExit,
   onError,
   onIdle,
+  onOutput,
   isRestored = false,
 }: UsePtySocketOptions): UsePtySocketReturn {
   const wsRef = useRef<WebSocket | null>(null);
@@ -54,10 +57,12 @@ export function usePtySocket({
   const onExitRef = useRef(onExit);
   const onErrorRef = useRef(onError);
   const onIdleRef = useRef(onIdle);
+  const onOutputRef = useRef(onOutput);
   onStatusChangeRef.current = onStatusChange;
   onExitRef.current = onExit;
   onErrorRef.current = onError;
   onIdleRef.current = onIdle;
+  onOutputRef.current = onOutput;
 
   // ── Idle watch refs ─────────────────────────────────────────────────
   const idleWatchActiveRef = useRef(false);
@@ -118,6 +123,8 @@ export function usePtySocket({
         if (event.data instanceof ArrayBuffer) {
           const data = new Uint8Array(event.data);
           terminal.write(data);
+          // Notify output listener (for chat mode)
+          try { onOutputRef.current?.(new TextDecoder().decode(data)); } catch { /* ignore */ }
           // Reset idle timer on each stdout chunk
           if (idleWatchActiveRef.current) {
             if (idleTimerRef.current) clearTimeout(idleTimerRef.current);

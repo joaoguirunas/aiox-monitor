@@ -1,6 +1,8 @@
 import { getAgents, getAgentInstances, updateAgentFields } from '@/lib/queries';
 import { parseIntParam, apiErrorResponse } from '@/lib/api-utils';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request): Promise<Response> {
   try {
     const { searchParams } = new URL(request.url);

@@ -6,6 +6,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { usePtySocket } from '@/hooks/usePtySocket';
 import { AvatarImage, AvatarPicker, AIOX_AGENT_TO_AVATAR, type AvatarId } from './AvatarPicker';
+import { ChatView, stripAnsi, extractArtifacts, type ChatMessage } from './ChatView';
 import '@xterm/xterm/css/xterm.css';
 
 // ─── AIOX Brandbook Terminal Theme ───────────────────────────────────────────
@@ -114,6 +115,14 @@ export function TerminalPanel({
   const [broadcastInput, setBroadcastInput] = useState('');
   const broadcastInputRef = useRef<HTMLInputElement>(null);
 
+  // View mode: terminal (xterm) or chat (messenger)
+  const [viewMode, setViewMode] = useState<'terminal' | 'chat'>('terminal');
+
+  // Chat messages
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const outputBufRef = useRef('');
+  const chatIdCounterRef = useRef(0);
+
   const mountedAtRef = useRef(Date.now());
 
   const linkedTerminals = otherTerminals.filter((t) => linkedTerminalIds.includes(t.id));
@@ -169,6 +178,32 @@ export function TerminalPanel({
   const onTaskDoneRef = useRef(onTaskDone);
   onTaskDoneRef.current = onTaskDone;
 
+  // ── Chat helpers ──────────────────────────────────────────────────────────
+  const addChatMessage = useCallback((role: 'chief' | 'agent', content: string) => {
+    const stripped = stripAnsi(content).trim();
+    if (!stripped) return;
+
+    let finalContent = stripped;
+    let artifacts: ChatMessage['artifacts'];
+
+    if (role === 'agent') {
+      const result = extractArtifacts(stripped);
+      finalContent = result.clean;
+      artifacts = result.artifacts.length > 0 ? result.artifacts : undefined;
+    }
+
+    if (!finalContent && (!artifacts || artifacts.length === 0)) return;
+
+    const id = `msg-${++chatIdCounterRef.current}-${Date.now()}`;
+    setChatMessages((prev) => [...prev, {
+      id,
+      role,
+      content: finalContent,
+      timestamp: new Date(),
+      artifacts,
+    }]);
+  }, []);
+
   // ── WebSocket ─────────────────────────────────────────────────────────────
   const { status, sendResize, startIdleWatch } = usePtySocket({
     terminalId: isTerminalReady ? terminalId : null,
@@ -191,7 +226,15 @@ export function TerminalPanel({
       }
       terminalRef.current?.writeln(`\x1b[31mError: ${message}\x1b[0m`);
     },
+    onOutput: (text) => {
+      outputBufRef.current += text;
+    },
     onIdle: () => {
+      // Flush accumulated output as an agent chat message
+      if (outputBufRef.current.trim()) {
+        addChatMessage('agent', outputBufRef.current);
+        outputBufRef.current = '';
+      }
       onTaskDoneRef.current?.(terminalId);
       setShowResponseBadge(true);
       setTimeout(() => setShowResponseBadge(false), 4000);
@@ -222,6 +265,19 @@ export function TerminalPanel({
     return () => observer.disconnect();
   }, [sendResize, isTerminalReady, terminalId]);
 
+  // ── Re-fit when switching back to terminal mode ───────────────────────────
+  useEffect(() => {
+    if (viewMode !== 'terminal') return;
+    const fit = fitAddonRef.current;
+    const term = terminalRef.current;
+    if (fit && term) {
+      // Schedule fit after display:block takes effect
+      requestAnimationFrame(() => {
+        try { fit.fit(); sendResize(term.cols, term.rows); } catch { /* ignore */ }
+      });
+    }
+  }, [viewMode, sendResize]);
+
   // ── Name editing ──────────────────────────────────────────────────────────
   const commitName = useCallback(() => {
     setEditingName(false);
@@ -231,10 +287,11 @@ export function TerminalPanel({
 
   // ── Write to self ─────────────────────────────────────────────────────────
   const sendToSelf = useCallback(async (cmd: string) => {
+    // Don't append \n — the API auto-appends \r (PTY Enter) when submit !== false
     await fetch(`/api/command-room/${terminalId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: cmd.endsWith('\n') ? cmd : cmd + '\n' }),
+      body: JSON.stringify({ data: cmd }),
     }).catch(() => {});
   }, [terminalId]);
 
@@ -259,8 +316,13 @@ export function TerminalPanel({
     if (otherTerminals.length > 0) {
       terminalList = '\n\nTerminais ativos no AIOX Monitor:\n' +
         otherTerminals.map((p) => `  • ${p.agentName} (id: ${p.id})`).join('\n') +
-        '\n\nPara enviar comando a outro terminal:\n' +
-        `  curl -s -X POST http://localhost:8888/api/command-room/<ID> -H "Content-Type: application/json" -d \'{"data":"comando"}\'`;
+        '\n\nPara enviar comando a outro terminal (auto-submete por padrão):\n' +
+        `  curl -s -X POST http://localhost:8888/api/command-room/<ID> -H "Content-Type: application/json" -d '{"data":"comando"}'` +
+        '\n  Para enviar SEM submeter (só digitar): adicione "submit": false' +
+        '\n\nPara verificar status de um terminal:\n' +
+        `  curl -s http://localhost:8888/api/command-room/<ID>` +
+        '\n\nPara listar todos os terminais:\n' +
+        `  curl -s http://localhost:8888/api/command-room/list`;
     }
 
     const activationCmd = aiox_agent
@@ -282,11 +344,22 @@ export function TerminalPanel({
     setTimeout(() => setActionState('idle'), 2500);
   }, [projectPath, agentName, aiox_agent, otherTerminals, sendToSelf, startIdleWatch]);
 
+  // ── Chat send (uses same API as terminal) ──────────────────────────────────
+  const handleChatSend = useCallback(async (text: string) => {
+    addChatMessage('chief', text);
+    outputBufRef.current = ''; // reset buffer before new response
+    startIdleWatch();
+    await sendToSelf(text);
+  }, [addChatMessage, startIdleWatch, sendToSelf]);
+
   // ── Broadcast to linked terminals ─────────────────────────────────────────
   const handleBroadcast = useCallback(async () => {
     const cmd = broadcastInput.trim();
     if (!cmd || linkedTerminalIds.length === 0) return;
     setBroadcastInput('');
+    // Register chief message in chat
+    addChatMessage('chief', cmd);
+    outputBufRef.current = '';
     // Start idle watch so we get notified when they finish
     startIdleWatch();
     await Promise.all(
@@ -294,11 +367,11 @@ export function TerminalPanel({
         fetch(`/api/command-room/${id}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: cmd }),
+          body: JSON.stringify({ data: cmd, submit: true }),
         }).catch(() => {})
       )
     );
-  }, [broadcastInput, linkedTerminalIds, startIdleWatch]);
+  }, [broadcastInput, linkedTerminalIds, startIdleWatch, addChatMessage]);
 
   const statusInfo = STATUS_MAP[status] ?? STATUS_MAP.connecting;
 
@@ -413,6 +486,27 @@ export function TerminalPanel({
             ✓ respondeu
           </span>
         )}
+
+        {/* Toggle terminal/chat mode */}
+        <button
+          onClick={() => setViewMode((v) => v === 'terminal' ? 'chat' : 'terminal')}
+          className="w-5 h-5 flex items-center justify-center rounded transition-colors shrink-0"
+          style={{
+            color: viewMode === 'chat' ? '#FF4400' : 'rgba(244,244,232,0.25)',
+            background: viewMode === 'chat' ? 'rgba(255,68,0,0.1)' : 'transparent',
+          }}
+          title={viewMode === 'terminal' ? 'Modo Chat' : 'Modo Terminal'}
+        >
+          {viewMode === 'terminal' ? (
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          ) : (
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
+            </svg>
+          )}
+        </button>
 
         {/* Expand info panel */}
         <button
@@ -562,16 +656,31 @@ export function TerminalPanel({
         </div>
       )}
 
-      {/* ── Terminal ───────────────────────────────────────────────────── */}
+      {/* ── Terminal (always mounted to preserve xterm DOM) ────────── */}
       <div
         className="flex-1 min-h-0 overflow-hidden"
-        style={{ backgroundColor: AIOX_TERMINAL_THEME.background }}
+        style={{
+          backgroundColor: AIOX_TERMINAL_THEME.background,
+          display: viewMode === 'terminal' ? 'block' : 'none',
+        }}
       >
         <div
           ref={containerRef}
           style={{ width: '100%', height: '100%', overflow: 'hidden' }}
         />
       </div>
+
+      {/* ── Chat (only rendered when active) ──────────────────────── */}
+      {viewMode === 'chat' && (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <ChatView
+            messages={chatMessages}
+            agentName={agentName}
+            onSend={handleChatSend}
+            disabled={status === 'closed' || status === 'error'}
+          />
+        </div>
+      )}
 
       {/* ── Footer — vínculo apenas ────────────────────────────────────── */}
       {isLinked && (

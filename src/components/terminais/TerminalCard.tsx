@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { getAgentTextColor } from '@/components/empresa/config/agent-colors';
+import { getAgentTextColor } from '@/components/config/agent-colors';
 import type { TerminalStatus } from '@/lib/types';
 
 interface TerminalCardProps {

@@ -4,6 +4,7 @@ import { trackTerminal, deactivateTerminal } from './terminal-tracker';
 import { trackAgent, detectAgentFromPayload } from './agent-tracker';
 import { resolveMaestriName } from './maestri-resolver';
 import { broadcast } from './ws-broadcaster';
+import { ProcessManager } from './command-room/process-manager';
 import type { EventPayload, EventType } from '../lib/types';
 
 const VALID_TYPES = new Set<string>([
@@ -60,10 +61,12 @@ export function processEvent(payload: EventPayload): ProcessedEvent {
   const eventType = toEventType(payload.hook_type);
 
   // 1. Detect / upsert project
-  const project = detectProject(payload.project_path, payload.project_name);
+  const { project, isNew } = detectProject(payload.project_path, payload.project_name);
 
-  // 1b. Broadcast project update (new or refreshed last_active)
-  try { broadcast({ type: 'project:update', project }); } catch { /* fire-and-forget */ }
+  // 1b. Broadcast project update ONLY on real INSERT (new project), not last_active updates
+  if (isNew) {
+    try { broadcast({ type: 'project:update', project }); } catch { /* fire-and-forget */ }
+  }
 
   // 2. Detect agent name — trust hook detection first, then server-side Skill/Agent
   //    detection, then terminal cache, then fallback.
@@ -192,6 +195,23 @@ export function processEvent(payload: EventPayload): ProcessedEvent {
     if (sessionId !== undefined) {
       closeSession(sessionId);
     }
+
+    // 8b. Notify Command Room: if this terminal belongs to a project managed
+    //     in the Sala de Comando, broadcast agent-completed so the Chief gets notified.
+    try {
+      const pm = ProcessManager.getInstance();
+      if (pm.isCommandRoomProject(payload.project_path)) {
+        broadcast({
+          type: 'agent-completed',
+          agentName,
+          agentDisplayName: agent.display_name,
+          projectPath: payload.project_path,
+          projectName: project.name,
+          summary: inputSummary?.slice(0, 200) || undefined,
+          terminalPid: terminal.pid,
+        });
+      }
+    } catch { /* ProcessManager may not be available in all contexts */ }
   }
 
   return {

@@ -1,4 +1,5 @@
 import { db } from './db';
+import { deleteTerminalsByProject, deleteOrphanedCategories } from './command-room-repository';
 import type {
   Project,
   Agent,
@@ -30,7 +31,10 @@ function rows<T>(value: Row[]): T[] {
 
 // ─── Projects ────────────────────────────────────────────────────────────────
 
-export function upsertProject(projectPath: string, name: string): Project {
+export function upsertProject(projectPath: string, name: string): { project: Project; isNew: boolean } {
+  // Check if project already exists before upsert
+  const existing = db.prepare(`SELECT id FROM projects WHERE path = ?`).get(projectPath) as Row | undefined;
+
   db.prepare(`
     INSERT INTO projects (name, path)
     VALUES (?, ?)
@@ -39,9 +43,11 @@ export function upsertProject(projectPath: string, name: string): Project {
       last_active = datetime('now')
   `).run(name, projectPath);
 
-  return row<Project>(
+  const project = row<Project>(
     db.prepare(`SELECT * FROM projects WHERE path = ?`).get(projectPath) as Row,
   );
+
+  return { project, isNew: !existing };
 }
 
 export function getProjects(): Project[] {
@@ -63,9 +69,22 @@ export function getProjectWithDetails(id: number): ProjectWithDetails | null {
   return { ...project, agents, terminals };
 }
 
-export function deleteProject(id: number): { deleted: boolean } {
+export function deleteProject(id: number): { deleted: boolean; commandRoomTerminals: number; orphanedCategories: number } {
+  // Get project path before deleting (needed for command_room_terminals which has no FK)
+  const project = getProjectById(id);
+  if (!project) return { deleted: false, commandRoomTerminals: 0, orphanedCategories: 0 };
+
+  // 1. Delete command_room_terminals (no FK to projects, uses project_path)
+  const commandRoomTerminals = deleteTerminalsByProject(project.path);
+
+  // 2. Delete from projects table (CASCADE handles agents, terminals, sessions, events, autopilot_log, ganga_log)
   const result = db.prepare(`DELETE FROM projects WHERE id = ?`).run(id);
-  return { deleted: (result as { changes: number }).changes > 0 };
+  const deleted = (result as { changes: number }).changes > 0;
+
+  // 3. Clean up orphaned categories (categories with no remaining terminals)
+  const orphanedCategories = deleteOrphanedCategories();
+
+  return { deleted, commandRoomTerminals, orphanedCategories };
 }
 
 export function clearProjectEvents(id: number): { events: number; sessions: number } {
@@ -430,6 +449,16 @@ export function closeSession(sessionId: number): void {
     SET ended_at = datetime('now'), status = 'completed'
     WHERE id = ? AND status = 'active'
   `).run(sessionId);
+}
+
+/** Close all active sessions tied to a specific terminal (orphan cleanup). */
+export function closeSessionsByTerminal(terminalId: number): number {
+  const result = db.prepare(`
+    UPDATE sessions
+    SET ended_at = datetime('now'), status = 'completed'
+    WHERE terminal_id = ? AND status = 'active'
+  `).run(terminalId);
+  return (result as { changes: number }).changes;
 }
 
 export function getSessions(filters: SessionFilters = {}): {

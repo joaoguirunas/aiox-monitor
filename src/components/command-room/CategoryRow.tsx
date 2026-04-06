@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useState, useRef, useEffect } from 'react';
 
 interface CategoryRowProps {
   categoryId: string;
@@ -8,28 +8,78 @@ interface CategoryRowProps {
   categoryColor: string | null;
   children: ReactNode;
   onAddTerminal?: () => void;
+  onRename?: (id: string, newName: string) => void;
 }
 
 export function CategoryRow({
+  categoryId,
   categoryName,
   categoryColor,
   children,
   onAddTerminal,
+  onRename,
 }: CategoryRowProps) {
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(categoryName);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  const commitRename = () => {
+    const trimmed = editValue.trim();
+    setEditing(false);
+    if (!trimmed || trimmed === categoryName) {
+      setEditValue(categoryName);
+      return;
+    }
+    onRename?.(categoryId, trimmed);
+  };
+
+  const color = categoryColor ?? '#FF4400';
+
   return (
     <div className="category-row mb-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-3 px-2">
         <div
           className="flex items-center gap-2 border-l-4 pl-3 py-1"
-          style={{ borderColor: categoryColor ?? '#FF4400' }}
+          style={{ borderColor: color }}
         >
-          <h3
-            className="font-semibold text-sm font-mono uppercase tracking-wide"
-            style={{ color: categoryColor ?? '#FF4400' }}
-          >
-            {categoryName}
-          </h3>
+          {editing ? (
+            <input
+              ref={inputRef}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename();
+                if (e.key === 'Escape') { setEditValue(categoryName); setEditing(false); }
+              }}
+              onBlur={commitRename}
+              className="bg-transparent border-b border-border/60 focus:border-accent-orange outline-none font-semibold text-sm font-mono uppercase tracking-wide px-0 py-0"
+              style={{ color }}
+            />
+          ) : (
+            <h3
+              className="font-semibold text-sm font-mono uppercase tracking-wide"
+              style={{ color }}
+            >
+              {categoryName}
+            </h3>
+          )}
+
+          {!editing && onRename && (
+            <button
+              onClick={() => { setEditValue(categoryName); setEditing(true); }}
+              className="text-text-muted/40 hover:text-text-muted transition-colors"
+              title="Renomear categoria"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {onAddTerminal && (

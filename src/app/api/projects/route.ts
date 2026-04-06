@@ -1,6 +1,8 @@
 import { getProjects, getProjectStats } from '@/lib/queries';
 import { apiErrorResponse } from '@/lib/api-utils';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request): Promise<Response> {
   try {
     const { searchParams } = new URL(request.url);

@@ -255,6 +255,16 @@ export interface WsGangaToggle extends WsMessage {
   enabled: boolean;
 }
 
+export interface WsAgentCompleted extends WsMessage {
+  type: 'agent-completed';
+  agentName: string;
+  agentDisplayName?: string;
+  projectPath: string;
+  projectName?: string;
+  summary?: string;
+  terminalPid?: number;
+}
+
 export type WsIncomingMessage =
   | WsEventNew
   | WsAgentUpdate
@@ -264,4 +274,5 @@ export type WsIncomingMessage =
   | WsThemeChange
   | WsGangaHeartbeat
   | WsGangaToggle
+  | WsAgentCompleted
   | WsPing;

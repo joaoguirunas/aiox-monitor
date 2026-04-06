@@ -23,7 +23,13 @@ export function useProjects() {
       })
       .then((data: Project[]) => {
         if (cancelled) return;
-        setProjects(data ?? []);
+        const incoming = data ?? [];
+        setProjects(prev => {
+          if (prev.length === incoming.length && prev.every((p, i) => p.id === incoming[i].id && p.name === incoming[i].name)) {
+            return prev;
+          }
+          return incoming;
+        });
         setLoading(false);
       })
       .catch(() => {

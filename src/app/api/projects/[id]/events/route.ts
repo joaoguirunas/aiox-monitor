@@ -1,6 +1,8 @@
 import { getProjectById, clearProjectEvents } from '@/lib/queries';
 import { ApiError, apiErrorResponse } from '@/lib/api-utils';
 
+export const dynamic = 'force-dynamic';
+
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },

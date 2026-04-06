@@ -24,6 +24,7 @@ export interface CommandRoomTerminalRow {
   category_id: string | null;
   description: string | null;
   is_chief: number;
+  linked_terminal_ids: string | null;
 }
 
 export function insertTerminal(
@@ -66,7 +67,8 @@ export function updateTerminalStatus(
 export function listActiveTerminals(): CommandRoomTerminalRow[] {
   const result = db.prepare(`
     SELECT id, agent_name, agent_display_name, project_path, cols, rows,
-           pty_status, created_at, last_active, category_id, description, is_chief
+           pty_status, created_at, last_active, category_id, description, is_chief,
+           linked_terminal_ids
     FROM command_room_terminals
     WHERE pty_status != 'closed'
     ORDER BY is_chief DESC, created_at ASC
@@ -87,7 +89,7 @@ export function markCrashedTerminals(activeIds: string[]): void {
     db.prepare(`
       UPDATE command_room_terminals
       SET pty_status = 'crashed'
-      WHERE pty_status = 'active'
+      WHERE pty_status IN ('active', 'idle')
     `).run();
     return;
   }
@@ -96,7 +98,7 @@ export function markCrashedTerminals(activeIds: string[]): void {
   db.prepare(`
     UPDATE command_room_terminals
     SET pty_status = 'crashed'
-    WHERE pty_status = 'active'
+    WHERE pty_status IN ('active', 'idle')
       AND id NOT IN (${placeholders})
   `).run(...activeIds);
 }
@@ -146,6 +148,22 @@ export function updateTerminal(
     SET ${setClauses.join(', ')}
     WHERE id = ?
   `).run(...values);
+}
+
+export function updateTerminalLinks(id: string, linkedTerminalIds: string[]): void {
+  db.prepare(`
+    UPDATE command_room_terminals
+    SET linked_terminal_ids = ?, last_active = datetime('now')
+    WHERE id = ?
+  `).run(JSON.stringify(linkedTerminalIds), id);
+}
+
+export function getTerminalLinks(id: string): string[] {
+  const row = db.prepare(`
+    SELECT linked_terminal_ids FROM command_room_terminals WHERE id = ?
+  `).get(id) as { linked_terminal_ids: string | null } | undefined;
+  if (!row?.linked_terminal_ids) return [];
+  try { return JSON.parse(row.linked_terminal_ids); } catch { return []; }
 }
 
 // ─── Terminal Categories ──────────────────────────────────────────────────
@@ -221,4 +239,26 @@ export function deleteCategory(id: string): void {
     DELETE FROM terminal_categories
     WHERE id = ?
   `).run(id);
+}
+
+// ─── Project Cleanup ────────────────────────────────────────────────────────
+
+/** Delete all command_room_terminals for a given project path */
+export function deleteTerminalsByProject(projectPath: string): number {
+  const result = db.prepare(`
+    DELETE FROM command_room_terminals
+    WHERE project_path = ?
+  `).run(projectPath);
+  return (result as { changes: number }).changes;
+}
+
+/** Delete categories that have no remaining terminals referencing them */
+export function deleteOrphanedCategories(): number {
+  const result = db.prepare(`
+    DELETE FROM terminal_categories
+    WHERE id NOT IN (
+      SELECT DISTINCT category_id FROM command_room_terminals WHERE category_id IS NOT NULL
+    )
+  `).run();
+  return (result as { changes: number }).changes;
 }

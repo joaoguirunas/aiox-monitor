@@ -38,6 +38,7 @@ export async function GET(): Promise<Response> {
       } : null,
       description: row.description,
       is_chief: row.is_chief === 1,
+      linked_terminal_ids: row.linked_terminal_ids ? (() => { try { return JSON.parse(row.linked_terminal_ids); } catch { return []; } })() : [],
     };
   });
 

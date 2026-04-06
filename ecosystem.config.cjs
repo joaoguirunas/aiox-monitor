@@ -7,6 +7,10 @@ module.exports = {
       NODE_ENV: 'production',
       PORT: 8888,
     },
+    env_production: {
+      NODE_ENV: 'production',
+      PORT: 8888,
+    },
     max_restarts: 50,
     min_uptime: 5000,
     restart_delay: 500,

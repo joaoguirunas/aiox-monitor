@@ -1,0 +1,86 @@
+name: maestri-orchestration
+version: 1.0.0
+description: >
+  Main orchestration workflow for themaestridev squad.
+  Krishna (Chief) receives objective, distributes work via Maestri CLI,
+  monitors progress, coordinates QA and merge.
+
+triggers:
+  - manual: "*orchestrate"
+  - agent: chief
+
+phases:
+  - name: survey
+    agent: chief
+    description: Run maestri list, identify available agents
+    output: available_agents
+
+  - name: analyze
+    agent: chief
+    description: Break objective into work items, identify dependencies
+    depends_on: [survey]
+    output: work_items
+
+  - name: pre-work
+    description: Architecture, UX, and data work before dev
+    parallel: true
+    depends_on: [analyze]
+    steps:
+      - agent: architect
+        condition: "work_items.needs_stories"
+        command: "*draft"
+      - agent: ux-alpha
+        condition: "work_items.needs_ui"
+        command: "*design-component"
+      - agent: ux-beta
+        condition: "work_items.needs_ux_research"
+        command: "*user-flow"
+      - agent: data-engineer
+        condition: "work_items.needs_schema"
+        command: "*schema"
+      - agent: analyst
+        condition: "work_items.needs_research"
+        command: "*research"
+
+  - name: distribute
+    agent: chief
+    description: Assign stories to devs via maestri ask
+    depends_on: [pre-work]
+    output: assignments
+
+  - name: develop
+    description: Parallel development in isolated worktrees
+    parallel: true
+    depends_on: [distribute]
+    steps:
+      - agent: dev-alpha
+        command: "*develop {story-id}"
+      - agent: dev-beta
+        command: "*develop {story-id}"
+      - agent: dev-gamma
+        command: "*develop {story-id}"
+      - agent: dev-delta
+        command: "*develop {story-id}"
+
+  - name: qa-gate
+    agent: qa
+    description: Quality gate for each completed story
+    depends_on: [develop]
+    decisions:
+      PASS: proceed to merge
+      FAIL: return to develop (same or different dev)
+      CONCERNS: chief decides
+
+  - name: merge
+    agent: devops
+    description: Push and create PRs for approved stories
+    depends_on: [qa-gate]
+    condition: "qa_verdict == PASS"
+
+status_tracking:
+  method: maestri-notes
+  notes:
+    - status-board
+    - decisions
+    - blockers
+    - qa-results

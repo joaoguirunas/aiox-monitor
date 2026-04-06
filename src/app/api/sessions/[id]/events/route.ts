@@ -1,6 +1,8 @@
 import { getSessionEvents } from '@/lib/queries';
 import { parseIntParam, apiErrorResponse, ApiError } from '@/lib/api-utils';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },

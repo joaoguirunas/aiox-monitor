@@ -1,7 +1,9 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import type { IncomingMessage } from 'node:http';
 import { ProcessManager } from './process-manager';
+import { ChatMessageStore } from './chat-store';
+import { ChatCollector } from './chat-collector';
 import type { ProcessEvent } from './types';
+import type { ChatEvent } from './chat-types';
 
 // ─── PtyWebSocketServer ─────────────────────────────────────────────────────
 // Bridge between browser WebSocket clients and node-pty processes.
@@ -31,9 +33,18 @@ export class PtyWebSocketServer {
     this.wss = new WebSocketServer({ noServer: true });
     this.pm = ProcessManager.getInstance();
 
+    // Initialize ChatCollector (starts listening to ProcessManager events)
+    ChatCollector.getInstance();
+
     // Listen for ProcessManager events and broadcast to clients
     this.pm.on('process-event', (event: ProcessEvent) => {
       this.handleProcessEvent(event);
+    });
+
+    // Listen for ChatStore events and broadcast chat messages to clients
+    const chatStore = ChatMessageStore.getInstance();
+    chatStore.on('chat-event', (event: ChatEvent) => {
+      this.handleChatEvent(event);
     });
 
     // Ping keep-alive
@@ -149,6 +160,26 @@ export class PtyWebSocketServer {
 
       default:
         break;
+    }
+  }
+
+  /** Handle ChatStore events and broadcast chat messages to clients */
+  private handleChatEvent(event: ChatEvent): void {
+    if (event.type === 'chat-message') {
+      this.broadcastToTerminal(
+        event.terminalId,
+        JSON.stringify({
+          type: 'chat-message',
+          message: event.message,
+        }),
+        false,
+      );
+    } else if (event.type === 'chat-clear') {
+      this.broadcastToTerminal(
+        event.terminalId,
+        JSON.stringify({ type: 'chat-clear' }),
+        false,
+      );
     }
   }
 

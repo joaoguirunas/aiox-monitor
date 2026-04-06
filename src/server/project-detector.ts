@@ -2,7 +2,7 @@ import path from 'node:path';
 import { upsertProject } from '../lib/queries';
 import type { Project } from '../lib/types';
 
-export function detectProject(projectPath: string, name?: string): Project {
+export function detectProject(projectPath: string, name?: string): { project: Project; isNew: boolean } {
   // Normalize: remove trailing slash, resolve to absolute
   let normalized = path.resolve(projectPath.replace(/\/+$/, ''));
 

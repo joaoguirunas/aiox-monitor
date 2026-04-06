@@ -3,6 +3,8 @@ import { getEvents } from '@/lib/queries';
 import { parseIntParam, apiErrorResponse } from '@/lib/api-utils';
 import type { EventPayload, EventFilters, EventType } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 const VALID_TYPES = new Set<EventType>([
   'PreToolUse',
   'PostToolUse',

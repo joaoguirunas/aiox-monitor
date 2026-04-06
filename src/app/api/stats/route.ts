@@ -1,6 +1,8 @@
 import { getStats } from '@/lib/queries';
 import { apiErrorResponse } from '@/lib/api-utils';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(): Promise<Response> {
   try {
     const stats = getStats();

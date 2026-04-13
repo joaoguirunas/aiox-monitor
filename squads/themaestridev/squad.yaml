@@ -1,9 +1,9 @@
 name: themaestridev
 version: 1.0.0
 description: >
-  Dev squad otimizada para orquestração multi-terminal via Maestri CLI.
-  Squad enxuta sem SM/PO/PM — o Architect (Yudhishthira) cria e valida stories,
-  o Chief (Krishna) orquestra tudo via comandos Maestri. Tema: personagens do Mahabharata.
+  Dev squad otimizada para orquestracao multi-terminal via Maestri CLI.
+  Squad enxuta sem SM/PO/PM — o Architect (Obi-Wan) cria e valida stories,
+  o Chief (Yoda) orquestra tudo via comandos Maestri. Tema: personagens de Star Wars.
 author: João Ramos
 license: MIT
 slashPrefix: themaestridev
@@ -33,6 +33,7 @@ components:
     - chief-sync-notes.md
     - chief-merge-plan.md
     - chief-rebalance.md
+    - chief-activity-log.md
     - architect-draft-story.md
   workflows:
     - parallel-dev.yaml
@@ -57,40 +58,40 @@ dependencies:
 maestri:
   enabled: true
   agents:
-    - name: Krishna
+    - name: Yoda
       agentId: chief
       role: orchestrator
-    - name: Sahadeva
+    - name: Ahsoka
       agentId: analyst
       role: research
-    - name: Yudhishthira
+    - name: Obi-Wan
       agentId: architect
       role: architecture
-    - name: Arjuna
+    - name: Luke
       agentId: dev-alpha
       role: frontend
-    - name: Bhima
+    - name: Han Solo
       agentId: dev-beta
       role: backend
-    - name: Nakula
+    - name: Leia
       agentId: dev-gamma
       role: fullstack
-    - name: Duryodhana
+    - name: Boba Fett
       agentId: dev-delta
       role: integration
-    - name: Draupadi
+    - name: Padme
       agentId: ux-alpha
       role: ui-design
-    - name: Kunti
+    - name: Rey
       agentId: ux-beta
       role: ux-research
-    - name: Vidura
+    - name: R2-D2
       agentId: data-engineer
       role: database
-    - name: Drona
+    - name: Mace Windu
       agentId: qa
       role: quality
-    - name: Bhishma
+    - name: Chewbacca
       agentId: devops
       role: infrastructure
   notes:
@@ -101,7 +102,7 @@ maestri:
 
 tags:
   - maestri
-  - mahabharata
+  - star-wars
   - multi-terminal
   - orchestration
   - dev-squad

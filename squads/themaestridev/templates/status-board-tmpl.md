@@ -1,23 +1,23 @@
 # Status Board — themaestridev
 
-> Updated by Krishna (Chief) via `maestri note write "status-board"`
+> Updated by Yoda (Chief) via `maestri note write "status-board"`
 
 ## Squad Status
 
 | Agent | ID | Status | Current Work | Progress | Last Check |
 |-------|----|--------|-------------|----------|------------|
-| Krishna | chief | active | orchestrating | — | — |
-| Sahadeva | analyst | idle | — | — | — |
-| Yudhishthira | architect | idle | — | — | — |
-| Arjuna | dev-alpha | idle | — | — | — |
-| Bhima | dev-beta | idle | — | — | — |
-| Nakula | dev-gamma | idle | — | — | — |
-| Duryodhana | dev-delta | idle | — | — | — |
-| Draupadi | ux-alpha | idle | — | — | — |
-| Kunti | ux-beta | idle | — | — | — |
-| Vidura | data-engineer | idle | — | — | — |
-| Drona | qa | idle | — | — | — |
-| Bhishma | devops | idle | — | — | — |
+| Yoda | chief | active | orchestrating | — | — |
+| Ahsoka | analyst | idle | — | — | — |
+| Obi-Wan | architect | idle | — | — | — |
+| Luke | dev-alpha | idle | — | — | — |
+| Han Solo | dev-beta | idle | — | — | — |
+| Leia | dev-gamma | idle | — | — | — |
+| Boba Fett | dev-delta | idle | — | — | — |
+| Padmé | ux-alpha | idle | — | — | — |
+| Rey | ux-beta | idle | — | — | — |
+| R2-D2 | data-engineer | idle | — | — | — |
+| Mace Windu | qa | idle | — | — | — |
+| Chewbacca | devops | idle | — | — | — |
 
 ## Active Stories
 

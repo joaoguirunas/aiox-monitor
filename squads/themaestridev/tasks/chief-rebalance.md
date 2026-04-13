@@ -46,21 +46,21 @@ Run `*check-all` and analyze:
 Present plan to user:
 ```
 Rebalance Proposal:
-- Move story-X.3 from Nakula (stalled) → Arjuna (finished early)
-- Keep story-X.2 on Bhima (on track)
+- Move story-X.3 from Leia (stalled) → Luke (finished early)
+- Keep story-X.2 on Han Solo (on track)
 ```
 
 ### Step 3: Execute (after user confirms)
 
 ```bash
-maestri ask "Nakula" "Stop work on story-X.3. Krishna is reassigning it."
-maestri ask "Arjuna" "*develop story-X.3"
+maestri ask "Leia" "Stop work on story-X.3. Yoda is reassigning it."
+maestri ask "Luke" "*develop story-X.3"
 ```
 
 ### Step 4: Update Tracking
 
 ```bash
-maestri note edit "status-board" "Nakula: story-X.3" "Nakula: idle | Arjuna: story-X.3"
+maestri note edit "status-board" "Leia: story-X.3" "Leia: idle | Luke: story-X.3"
 ```
 
 ---

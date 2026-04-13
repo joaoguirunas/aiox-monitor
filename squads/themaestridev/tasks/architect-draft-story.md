@@ -34,7 +34,7 @@ Checklist:
 
 ## Purpose
 
-Yudhishthira (Architect) creates AND validates stories in this squad. This task absorbs the responsibilities of @sm (creation) and @po (validation) into a single streamlined workflow.
+Obi-Wan (Architect) creates AND validates stories in this squad. This task absorbs the responsibilities of @sm (creation) and @po (validation) into a single streamlined workflow.
 
 ## 5-Point Validation Checklist
 
@@ -72,7 +72,7 @@ Run 5-point checklist. If >= 4/5, set status to Ready. If < 4/5, iterate with us
 
 ### Step 4: Notify Chief
 
-After validation, notify Krishna that story is ready for assignment:
+After validation, notify Yoda that story is ready for assignment:
 - Story ID, title, complexity, suggested assignee based on specialization
 
 ---

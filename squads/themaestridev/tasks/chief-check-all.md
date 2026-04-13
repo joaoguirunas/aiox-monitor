@@ -50,8 +50,8 @@ Format as:
 
 | Agent | Status | Current Work | Progress |
 |-------|--------|-------------|----------|
-| Arjuna | active | story-X.1 | implementing step 3 |
-| Bhima | active | story-X.2 | tests passing |
+| Luke | active | story-X.1 | implementing step 3 |
+| Han Solo | active | story-X.2 | tests passing |
 | ... | ... | ... | ... |
 ```
 

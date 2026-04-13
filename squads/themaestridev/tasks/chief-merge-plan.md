@@ -15,7 +15,7 @@ Entrada:
 Saida:
   - campo: merge_plan
     tipo: string
-    destino: Bhishma (DevOps) via Maestri
+    destino: Chewbacca (DevOps) via Maestri
     persistido: true
 
 Checklist:
@@ -23,14 +23,14 @@ Checklist:
   - "[ ] Determine merge order (dependencies)"
   - "[ ] Check for conflicts between branches"
   - "[ ] Generate merge plan document"
-  - "[ ] Send to Bhishma via maestri ask"
+  - "[ ] Send to Chewbacca via maestri ask"
 ---
 
 # Generate Merge Plan
 
 ## Purpose
 
-Analyzes QA-passed stories, determines merge order based on dependencies and potential conflicts, and dispatches the plan to Bhishma (DevOps) for execution.
+Analyzes QA-passed stories, determines merge order based on dependencies and potential conflicts, and dispatches the plan to Chewbacca (DevOps) for execution.
 
 ## Execution Steps
 
@@ -45,10 +45,10 @@ Consider:
 - Branch conflicts (check git diff between branches)
 - Critical path items
 
-### Step 3: Send to Bhishma
+### Step 3: Send to Chewbacca
 
 ```bash
-maestri ask "Bhishma" "Merge plan ready. Order: 1) story-X.1 (Arjuna), 2) story-X.2 (Bhima). Please *push in this order."
+maestri ask "Chewbacca" "Merge plan ready. Order: 1) story-X.1 (Luke), 2) story-X.2 (Han Solo). Please *push in this order."
 ```
 
 ---

@@ -2,7 +2,7 @@ name: maestri-orchestration
 version: 1.0.0
 description: >
   Main orchestration workflow for themaestridev squad.
-  Krishna (Chief) receives objective, distributes work via Maestri CLI,
+  Yoda (Chief) receives objective, distributes work via Maestri CLI,
   monitors progress, coordinates QA and merge.
 
 triggers:

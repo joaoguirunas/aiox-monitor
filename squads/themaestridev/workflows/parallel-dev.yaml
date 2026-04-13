@@ -3,7 +3,7 @@ version: 1.0.0
 description: >
   Parallel development workflow for the 4 dev agents.
   Each dev works in an isolated worktree on a separate story.
-  Krishna monitors progress and coordinates via Maestri CLI.
+  Yoda monitors progress and coordinates via Maestri CLI.
 
 triggers:
   - manual: "*assign"
@@ -11,16 +11,16 @@ triggers:
 
 agents:
   - id: dev-alpha
-    name: Arjuna
+    name: Luke
     specialization: frontend
   - id: dev-beta
-    name: Bhima
+    name: Han Solo
     specialization: backend
   - id: dev-gamma
-    name: Nakula
+    name: Leia
     specialization: fullstack
   - id: dev-delta
-    name: Duryodhana
+    name: Boba Fett
     specialization: integration
 
 execution:
@@ -56,5 +56,5 @@ phases:
     description: When dev completes, dispatch to QA
     steps:
       - maestri check "{dev_name}" to confirm completion
-      - maestri ask "Drona" "*qa-gate {story_id}"
+      - maestri ask "Mace Windu" "*qa-gate {story_id}"
       - maestri note edit "status-board" with QA assignment

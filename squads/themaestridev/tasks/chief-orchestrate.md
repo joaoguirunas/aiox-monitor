@@ -31,7 +31,7 @@ Checklist:
 
 ## Purpose
 
-Main orchestration task for Krishna (Chief). Receives an objective from the user, analyzes it, distributes work to squad agents via Maestri CLI, and monitors progress.
+Main orchestration task for Yoda (Chief). Receives an objective from the user, analyzes it, distributes work to squad agents via Maestri CLI, and monitors progress.
 
 ## Pre-Conditions
 
@@ -52,11 +52,11 @@ Run `maestri list` to see who is online. Map available agents to their roles.
 ### Step 2: Analyze Objective
 
 Break the user's objective into discrete work items. Consider:
-- Does this need architecture/stories first? → Yudhishthira
-- Does this need research? → Sahadeva
-- Does this need UI/UX specs? → Draupadi/Kunti
-- Does this need schema work? → Vidura
-- What can be developed in parallel? → Arjuna/Bhima/Nakula/Duryodhana
+- Does this need architecture/stories first? → Obi-Wan
+- Does this need research? → Ahsoka
+- Does this need UI/UX specs? → Padme/Rey
+- Does this need schema work? → R2-D2
+- What can be developed in parallel? → Luke/Han Solo/Leia/Boba Fett
 
 ### Step 3: Create Distribution Plan
 
@@ -68,9 +68,9 @@ Assign work items to agents based on:
 ### Step 4: Dispatch via Maestri
 
 ```bash
-maestri ask "Yudhishthira" "*draft story-name"
-maestri ask "Arjuna" "*develop story-X.1"
-maestri ask "Bhima" "*develop story-X.2"
+maestri ask "Obi-Wan" "*draft story-name"
+maestri ask "Luke" "*develop story-X.1"
+maestri ask "Han Solo" "*develop story-X.2"
 ```
 
 ### Step 5: Track Status
@@ -81,7 +81,7 @@ maestri note write "status-board" "..."
 
 ### Step 6: Monitor Loop
 
-Periodically check agents and update status-board. When stories complete, dispatch QA. After QA pass, coordinate merge via Bhishma.
+Periodically check agents and update status-board. When stories complete, dispatch QA. After QA pass, coordinate merge via Chewbacca.
 
 ---
 

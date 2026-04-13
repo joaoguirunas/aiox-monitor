@@ -2,263 +2,274 @@
 
 > Documento de contexto para janelas paralelas. Leia este ficheiro ao iniciar qualquer sessão de desenvolvimento.
 
-## Visão Geral
+## O Que É
 
-**aiox-monitor** é um dashboard de monitorização em tempo real para agentes AI do framework AIOX. Recebe eventos via hook (Claude Code hooks), armazena em SQLite, e exibe em interface web com WebSocket para tempo real.
+**aiox-monitor** é um sistema de controlo e monitorização de agentes AI do framework AIOX, a correr localmente em `http://localhost:8888`.
 
-- **URL:** `http://localhost:8888`
-- **Stack:** Next.js 15 + React 19 + TypeScript + Tailwind CSS + SQLite (`node:sqlite`) + WebSocket (`ws`)
-- **Servidor:** Custom server (`server.ts`) com Next.js + WebSocket na mesma porta
-- **DB:** `data/monitor.db` (SQLite com WAL mode, singleton global)
+Serve dois propósitos distintos:
 
-## Fases e Status
+1. **Monitorização passiva** — captura eventos de sessões Claude Code via hook Python, armazena em SQLite, e exibe status de agentes em tempo real.
+2. **Controlo activo** — a Sala de Comando permite abrir terminais PTY reais dentro do browser, lançar agentes Claude Code em projectos e enviar instruções directamente.
 
-### Fase 1 — Core Backend + UI Básica (COMPLETA)
+É um sistema **self-hosted, local, sem cloud**. Stack: Next.js 15 + React 19 + TypeScript + Tailwind CSS + SQLite (`node:sqlite`) + WebSocket (`ws`) + Phaser.js.
 
-| Story | Título | Status |
-|-------|--------|--------|
-| 1.1 | Setup Next.js + TypeScript + Tailwind + Deps | Ready for Review |
-| 1.2 | Schema SQLite + lib/db.ts + lib/schema.ts | Ready for Review |
-| 1.3 | POST /api/events — Receptor de Eventos do Hook | Ready for Review |
-| 1.4 | Hook Python + Script install-hook | Ready for Review |
-| 1.5 | GET /api/projects, /api/agents, /api/events | Ready for Review |
-| 1.6 | Modo Lista — Tabela de Eventos com Filtros | Ready for Review |
-| 1.7 | Teste End-to-End — Hook → Servidor → Visualização | Ready for Review |
+---
 
-### Fase 2 — Tempo Real + Kanban (COMPLETA)
+## Áreas Principais
 
-| Story | Título | Status |
-|-------|--------|--------|
-| 2.1 | WebSocket Server — Custom Server + ws Broadcaster | Ready for Review |
-| 2.2 | useWebSocket Hook — Conexão Tempo Real no Frontend | Ready for Review |
-| 2.3 | Broadcast de Eventos via WebSocket — Tempo Real E2E | Ready for Review |
-| 2.4 | Modo Kanban — Colunas de Projeto com Cards de Agente | Ready for Review |
-| 2.5 | ProjectSelector — Seletor de Projeto na Navbar | Ready for Review |
-| 2.6 | Idle Detector — Transições Automáticas de Status | Ready for Review |
+### 1. Sala de Comando (`/command-room`)
 
-### Fase 3 — Modo Empresa Isométrico (COMPLETA)
+Área central do sistema. Permite gerir terminais PTY activos em qualquer projecto da máquina.
 
-| Story | Título | Status | Depende |
-|-------|--------|--------|---------|
-| 3.1 | Integração Phaser.js no Next.js (dynamic import, SSR disabled) | Ready for Review | 2.6 |
-| 3.2 | Tilemap do Escritório Isométrico (layout com 3 zonas) | Ready for Review | 3.1 |
-| 3.3 | Sprites de Móveis (mesas, computadores, sofás, porta) | Ready for Review | 3.2 |
-| 3.4 | Sprite Base de Personagem (1 agente funcional) | Ready for Review | 3.3 |
-| 3.5 | Animações Básicas: walk, sit, type, idle | Ready for Review | 3.4 |
-| 3.6 | Mesa Central Dinâmica (posições por agente ativo via API) | Ready for Review | 3.5 |
-| 3.7 | Agente Caminha até Mesa ao Receber Evento via WebSocket | Ready for Review | 3.6 |
+**Funcionalidades:**
+- Spawnar terminais PTY (Claude Code ou shell) via `POST /api/command-room/spawn`
+- Visualização em grelha (grid) ou Canvas React Flow
+- Agente Chief — terminal especial fixo por projecto, sempre primeiro e em destaque
+- Categorias de terminais configuráveis (cores, ordem)
+- Vista Chat — interface de conversa sobre o terminal activo
+- Integração Maestri — resolve agentes de outras squads via `maestri-resolver.ts`
+- Envio de instruções com `submit: true` para auto-execução (sem enter manual)
 
-### Fase 4 — Empresa Completa (COMPLETA)
+**Backend dedicado:**
+```
+src/server/command-room/
+├── pty-websocket-server.ts   # PTY WebSocket (separado do WS de monitorização)
+├── process-manager.ts        # Ciclo de vida dos processos PTY
+├── chat-collector.ts         # Colecta output Claude para ChatView
+├── claude-output-parser.ts   # Parser de output estruturado do Claude
+├── chat-store.ts             # Estado da conversa em memória
+└── types.ts                  # Tipos PTY
+```
 
-| Story | Título | Status | Depende |
-|-------|--------|--------|---------|
-| 4.1 | Sprites Pixel Art por Agente — Identidade Visual Única | Ready for Review | 3.7 |
-| 4.2 | Animações Completas de Transição entre Zonas | Ready for Review | 4.1 |
-| 4.3 | Break Room Expandida — Móveis e Interações | Ready for Review | 4.2 |
-| 4.4 | Sistema de Temas Visuais — Espacial, Moderno, Oldschool, Cyberpunk | Ready for Review | 4.3 |
-| 4.5 | Personalização da Empresa — UI de Configuração | Ready for Review | 4.4 |
+**Tabelas DB:**
+- `command_room_terminals` — terminais activos (id, agent_name, project_path, pty_status, is_chief, category_id)
+- `terminal_categories` — categorias de agrupamento (id, name, color, display_order)
 
-### Fase 5 — Polish + Publicação (PRÓXIMA)
+---
 
-| Story | Título | Status | Depende |
-|-------|--------|--------|---------|
-| 5.1 | PM2 — Startup Automático no Boot do Mac | Draft | 4.5 |
-| 5.2 | npm run setup — Comando Único de Instalação | Draft | 5.1 |
-| 5.3 | README Completo para Open Source | Draft | 5.2 |
-| 5.4 | Limpeza Automática de Eventos Antigos (>30 dias) | Draft | 4.5 |
-| 5.5 | Responsive Design e Polish Visual | Draft | 4.5 |
-| 5.6 | Preparação para npm publish | Draft | 5.3 |
+### 2. Real Time (`/empresa`)
 
-### Fase 6 — Transcript Intelligence (COMPLETA)
+Escritório isométrico em pixel art (Phaser.js) onde cada agente AI aparece como personagem animado.
 
-| Story | Título | Status | Depende |
-|-------|--------|--------|---------|
-| 6.1 | JSONL Transcript Intelligence — Tool Granularity, Permission Detection & Spawn Effects | Ready for Review | 5.6 |
+**O que responde:** quais agentes estão a trabalhar, em que ferramenta, em que projecto, se estão à espera de permissão.
 
-### Fase 7 — Config Module: Operational Excellence (ACTIVA)
+**Funcionalidades:**
+- 6 clusters de trabalho (12 mesas cada) para até 6 projectos simultâneos
+- 4 temas visuais com hot-swap: `espacial`, `moderno`, `oldschool`, `cyberpunk`
+- Animações: walk, sit, type, idle, spawn/despawn (Matrix rain)
+- 11 sprites de agentes + 20 skins alternativas (aliens/animais)
+- Wander system: agentes idle/break movem-se na recreação
+- Permission bubble (amber) quando agente aguarda permissão
+- Tool detail label em tempo real via JSONL watcher
 
-| Story | Título | Status | Depende |
-|-------|--------|--------|---------|
-| 7.0 | PM2 Fast Restart — Node Directo + Build Pipeline Optimizado | Ready for Review | 6.1 |
-| 7.1 | Ganga Dashboard — Logs, Stats, Scope Control & Heartbeat | Draft | 7.0 |
-| 7.2 | Config UX Polish — Dirty State, Debounce & Build Warnings | Draft | 7.0 |
-| 7.3 | Skins Server-Persisted — localStorage → SQLite | Draft | 7.2 |
-| 7.4 | Event Retention Config — Slider na UI + Cleanup Manual | Draft | 7.0 |
-| 7.5 | Logo & Branding — Upload, Persistência e Display | Draft | 7.2 |
+**Ciclo de vida visual:**
 
-> **Epic completa:** `docs/stories/EPIC-7.md`
+| Status | Localização | Comportamento |
+|--------|------------|---------------|
+| `working` | Mesa no cluster | Sentado, a teclar |
+| `idle` | Recreação | Em pé, wander a cada 8s |
+| `break` | Recreação | Relaxando |
+| `offline` | Walk até entrada | Matrix despawn, remove sprite |
 
-### Fase 8 — Empresa 2.0: Clareza, Performance & Estabilidade (PRÓXIMA)
+**Backend relevante:** `idle-detector.ts` (loop 30s), `jsonl-watcher.ts`, `ws-broadcaster.ts`.
 
-| Story | Título | Status | Depende |
-|-------|--------|--------|---------|
-| 8.1 | Persistência de Clusters por Projeto — Mesas Nunca Desaparecem | Draft | 6.1 |
-| 8.2 | Separação Visual entre Projetos — Floor Highlight, Borda & Label | Draft | 8.1 |
-| 8.3 | Performance: Sync Incremental & Redução de Carga Visual | Draft | 8.1 |
-| 8.4 | Atribuição Determinística de Slots por Projeto | Draft | 8.1 |
-| 8.5 | Consolidação de Cores & Cleanup Técnico | Draft | 8.2 |
+---
 
-> **Referência:** `docs/Empresa.md` — diagnóstico completo, regras de comportamento, métricas baseline
+### 3. Configurações (`/config`)
 
-### Fase 9 — Lista 2.0: Reflexo Completo do Banco (PLANNED)
+Página unificada com 4 abas:
 
-| Story | Título | Status | Depende |
-|-------|--------|--------|---------|
-| 9.1 | API de Sessões + Paginação Server-Side | Draft | 6.1 |
-| 9.2 | Vista de Sessões com Dados Completos | Draft | 9.1 |
-| 9.3 | Paginação de Eventos Individuais | Draft | 9.1 |
-| 9.4 | Contadores Fiéis e Indicadores de Completude | Draft | 9.2, 9.3 |
-| 9.5 | Busca Textual Server-Side | Draft | 9.1 |
-| 9.6 | Filtro por Período + Duração de Sessão | Draft | 9.2 |
-| 9.7 | Testes, Cleanup & Export | Draft | 9.2, 9.3 |
+| Aba | Conteúdo |
+|-----|----------|
+| **Geral** | Nome da empresa, timeouts idle/break, retenção de eventos |
+| **Aparência** | Tema visual (4 opções), pré-visualização |
+| **Agentes** | Skins por agente, gestão de equipas |
+| **Projectos** | Lista de projectos detectados, estatísticas, limpeza |
 
-> **Epic completa:** `docs/epics/EPIC-9-LISTA-COMPLETE.md`
-> **Análise:** `docs/Lista.md` — diagnóstico completo, causa raiz, gaps, dependências
+Lê e escreve em `company_config` (singleton DB, id=1). Mudanças de tema fazem broadcast WS → actualiza Empresa em tempo real.
 
-## Arquitetura
+---
 
-### Fluxo de Dados
+### Outras Vistas (não no navbar principal)
+
+| Rota | Função |
+|------|--------|
+| `/lista` | Log de eventos com filtros (projecto, agente, tipo) |
+| `/kanban` | Colunas por projecto com AgentCards em tempo real |
+| `/terminais` | Vista Kanban de terminais activos |
+
+---
+
+## Fluxo de Dados
 
 ```
 Claude Code Hook (Python)
     → POST /api/events (event-processor.ts)
         → SQLite (insert event)
-        → agent-tracker.ts (upsert agent, status working/idle)
-        → terminal-tracker.ts (upsert terminal)
-        → broadcast WS { type: 'event:new', event, projectId }
-        → broadcast WS { type: 'agent:update', agent, projectId }
+        → agent-tracker.ts  → broadcast WS { agent:update }
+        → terminal-tracker.ts → broadcast WS { terminal:update }
+        → broadcast WS { event:new }
 
-Idle Detector (30s interval)
-    → Query agents by status + last_active
+JSONL Watcher (jsonl-watcher.ts)
+    → Lê transcripts Claude Code (tool_detail, waiting_permission)
+    → Enriquece terminais + agentes → broadcast WS
+
+Idle Detector (30s loop)
     → working →(5min)→ idle →(15min)→ break →(1h)→ offline
-    → broadcast WS { type: 'agent:update', agent, projectId }
+    → broadcast WS { agent:update }
 
-Frontend (React)
-    → useWebSocket() → receives WS messages
-    → useEvents() → merges WS event:new into state
-    → useAgents() → merges WS agent:update into state
-    → useKanban() → aggregates projects + agents + WS patches
+Ganga Engine (src/server/ganga/)
+    → Analisa prompts UserPromptSubmit
+    → auto-responder.ts → JXA/iTerm2 aprovação automática
+    → ganga_log (SQLite)
+
+Sala de Comando PTY
+    → POST /api/command-room/spawn → process-manager.ts (pty)
+    → PTY WebSocket (porta separada)
+    → TerminalPanel (xterm.js no browser)
 ```
 
-### Estrutura de Ficheiros
+---
 
-```
-server.ts                          # Custom server (Next.js + WS + idle detector)
-src/
-├── app/
-│   ├── layout.tsx                 # Root layout (ProjectProvider wrapping)
-│   ├── page.tsx                   # Redirect → /lista
-│   ├── lista/page.tsx             # Modo Lista — tabela de eventos com filtros
-│   ├── kanban/page.tsx            # Modo Kanban — colunas por projeto
-│   ├── empresa/
-│   │   ├── page.tsx               # Modo Empresa — escritório isométrico Phaser.js
-│   │   └── config/page.tsx        # Config empresa (nome, tema, timeouts)
-│   └── api/
-│       ├── events/route.ts        # POST (receptor hook) + GET (lista filtrada)
-│       ├── projects/route.ts      # GET projects
-│       ├── projects/[id]/route.ts # GET/PUT project by id
-│       ├── agents/route.ts        # GET agents
-│       ├── stats/route.ts         # GET stats dashboard
-│       └── company-config/route.ts # GET/PUT company config + WS theme broadcast
-├── server/
-│   ├── ws-broadcaster.ts          # Singleton WS broadcaster (setBroadcaster + broadcast)
-│   ├── event-processor.ts         # Processa payload do hook → DB + WS broadcast
-│   ├── agent-tracker.ts           # Upsert agent + status working/idle + broadcast
-│   ├── terminal-tracker.ts        # Upsert terminal + broadcast
-│   ├── project-detector.ts        # Detecta projeto a partir do path
-│   └── idle-detector.ts           # Loop 30s: working→idle→break→offline
-├── lib/
-│   ├── db.ts                      # Singleton SQLite (global para hot-reload)
-│   ├── schema.ts                  # DDL: projects, agents, terminals, sessions, events, company_config
-│   ├── queries.ts                 # Todas as queries (upsert, get, update, stats)
-│   ├── types.ts                   # Tipos: Project, Agent, Event, WS messages, etc.
-│   └── api-utils.ts               # Helpers para API routes
-├── hooks/
-│   ├── useWebSocket.ts            # WS hook (reconnect exponential, Strict Mode safe)
-│   ├── useEvents.ts               # Events + WS merge (event:new prepend)
-│   ├── useAgents.ts               # Agents + WS merge (agent:update by id)
-│   ├── useKanban.ts               # Projects + agents + WS aggregation
-│   └── useProjects.ts             # Projects list
-├── contexts/
-│   └── ProjectContext.tsx          # Selected project (localStorage persist, SSR-safe)
-└── components/
-    ├── layout/
-    │   └── Navbar.tsx              # Nav links + ProjectSelector + ConnectionStatus
-    ├── shared/
-    │   ├── ConnectionStatus.tsx    # WS status indicator (green/grey dot)
-    │   ├── ProjectSelector.tsx     # <select> de projetos na Navbar
-    │   ├── Badge.tsx               # Badge component
-    │   └── TimeAgo.tsx             # Relative time display
-    ├── lista/
-    │   ├── EventTable.tsx          # Tabela de eventos
-    │   ├── EventRow.tsx            # Linha individual
-    │   ├── EventDetail.tsx         # Detalhe expandido
-    │   └── FilterBar.tsx           # Filtros (projeto, agente, tipo)
-    ├── kanban/
-    │   ├── ProjectColumn.tsx       # Coluna por projeto com AgentCards
-    │   └── AgentCard.tsx           # Card de agente (status, tool, flash)
-    └── empresa/
-        └── PhaserGame.tsx          # Phaser game wrapper (dynamic import, WS sync)
-game/
-├── config.ts                       # Phaser game config
-├── constants.ts                    # NAVBAR_HEIGHT, TILE_SIZE, etc.
-├── bridge/
-│   └── react-phaser-bridge.ts      # React↔Phaser bridge (syncAgents, updateAgent, setTheme)
-├── data/
-│   ├── agent-sprite-config.ts      # 11 agent visual configs (color, accessory, hair)
-│   ├── agent-visuals.ts            # Agent color/icon mapping
-│   ├── office-layout.ts            # Tile positions, zones, furniture, lounge V2
-│   └── themes.ts                   # 4 themes (moderno, espacial, oldschool, cyberpunk)
-├── animations/
-│   └── agent-animations.ts         # Frame-based animation registration
-├── managers/
-│   └── AgentManager.ts             # Agent lifecycle, walk transitions, collision avoidance
-├── objects/
-│   ├── AgentSprite.ts              # Agent sprite with pixel art + status badge
-│   ├── Desk.ts                     # Desk with monitor + theme support
-│   ├── Sofa.ts                     # Sofa + theme support
-│   ├── CoffeeTable.ts             # Coffee table + theme support
-│   ├── CoffeeMachine.ts           # Coffee machine with steam animation
-│   ├── Bookshelf.ts               # Bookshelf with colored books
-│   ├── Plant.ts                    # Plant with pot and leaves
-│   ├── WaterCooler.ts             # Water cooler with translucent bottle
-│   └── Door.ts                     # Office entrance door
-├── scenes/
-│   ├── BootScene.ts               # Asset loading + spritesheet generation
-│   └── OfficeScene.ts             # Main office scene (floor, walls, furniture, themes)
-└── utils/
-    ├── iso-utils.ts               # Isometric 2:1 projection utilities
-    └── sprite-generator.ts        # Procedural pixel art spritesheet (Canvas API)
-```
+## Stack Técnica
+
+| Camada | Tecnologia |
+|--------|-----------|
+| Framework | Next.js 15 (App Router) |
+| UI | React 19 + TypeScript strict + Tailwind CSS |
+| Game Engine | Phaser.js 3.x (Canvas 2D, isométrico 2:1) |
+| Canvas/Flow | React Flow (scaffold activo na branch actual) |
+| Terminal UI | xterm.js (nos painéis PTY da Sala de Comando) |
+| Servidor | Custom `server.ts` — Next.js + WebSocket + PTY na mesma porta |
+| Base de Dados | SQLite (`node:sqlite` built-in, WAL mode) |
+| Realtime | WebSocket `ws` — eventos de monitorização |
+| PTY | `node-pty` — terminais reais na Sala de Comando |
+| Process Manager | PM2 (produção, auto-restart no boot) |
+
+**URL:** `http://localhost:8888`
+**DB:** `data/monitor.db`
+**Porta PTY WS:** mesma que HTTP (multiplexada em `server.ts`)
+
+---
 
 ## Schema SQLite
 
-| Tabela | Colunas Principais | Notas |
-|--------|-------------------|-------|
-| `projects` | id, name, path (UNIQUE), detected_at, last_active | Auto-detect via hook path |
-| `agents` | id, project_id (FK), name, display_name, status, current_tool, last_active | UNIQUE(project_id, name) |
-| `terminals` | id, project_id (FK), pid, session_id, status, first_seen_at, last_active | UNIQUE(project_id, pid) |
-| `sessions` | id, project_id (FK), agent_id, terminal_id, started_at, ended_at, event_count, status | Track sessions |
-| `events` | id, project_id (FK), agent_id, session_id, terminal_id, type, tool, input/output_summary, duration_ms, raw_payload, created_at | Core event store |
-| `company_config` | id=1, name, logo_path, theme, ambient_music, idle_timeout_lounge, idle_timeout_break, updated_at | Singleton config row |
+| Tabela | Função |
+|--------|--------|
+| `projects` | Projectos detectados automaticamente via path do hook |
+| `agents` | Agentes por projecto (status, tool, display_name, role, team) |
+| `terminals` | Terminais Claude Code (pid, session_id, tool_detail, waiting_permission, autopilot) |
+| `sessions` | Sessões de trabalho (started_at, ended_at, event_count) |
+| `events` | Eventos do hook (PreToolUse, PostToolUse, UserPromptSubmit, Stop, SubagentStop) |
+| `company_config` | Singleton — tema, timeouts, ganga_enabled, event_retention_days |
+| `command_room_terminals` | Terminais PTY da Sala de Comando (is_chief, category_id, pty_status) |
+| `terminal_categories` | Categorias da Sala de Comando (name, color, display_order) |
+| `autopilot_log` | Log de aprovações automáticas do Autopilot |
+| `ganga_log` | Log de respostas automáticas do Ganga Engine |
 
 **Agent statuses:** `idle` | `working` | `break` | `offline`
 **Event types:** `PreToolUse` | `PostToolUse` | `UserPromptSubmit` | `Stop` | `SubagentStop`
-**Themes:** `espacial` | `moderno` | `oldschool` | `cyberpunk`
+**PTY statuses:** `active` | `idle` | `closed` | `crashed`
 
-## WebSocket
+---
 
-- **Endpoint:** `ws://localhost:8888/ws`
-- **Messages do servidor:** `event:new`, `agent:update`, `terminal:update`, `ping`
-- **Ping:** a cada 30s (mantém conexões vivas)
-- **Reconnect:** exponencial 1s→2s→4s→8s→16s, max 5 retries
-- **Strict Mode safety:** `unmountedRef` previne updates após unmount
+## Estrutura de Ficheiros
+
+```
+server.ts                              # Custom server (Next.js + WS + idle detector + PTY WS)
+src/
+├── app/
+│   ├── layout.tsx
+│   ├── page.tsx                       # Redirect → /command-room
+│   ├── command-room/page.tsx          # Sala de Comando (terminais PTY)
+│   ├── empresa/page.tsx               # Real Time (escritório Phaser.js)
+│   ├── config/page.tsx                # Configurações (4 abas)
+│   ├── lista/page.tsx                 # Log de eventos
+│   ├── kanban/page.tsx                # Kanban de agentes
+│   ├── terminais/page.tsx             # Vista de terminais
+│   └── api/
+│       ├── events/                    # POST (hook) + GET (lista)
+│       ├── projects/                  # GET lista + GET/PUT por id
+│       ├── agents/                    # GET agentes (+ expand=terminals)
+│       ├── terminals/                 # GET + autopilot toggle + health
+│       ├── sessions/                  # GET sessões
+│       ├── stats/                     # GET stats
+│       ├── company-config/            # GET/PUT configuração
+│       ├── ganga/                     # POST eventos ganga
+│       └── command-room/              # spawn, list, kill, resize, browse,
+│                                      # categories, agents, messages, ensure-chief
+├── server/
+│   ├── event-processor.ts
+│   ├── agent-tracker.ts
+│   ├── terminal-tracker.ts
+│   ├── terminal-detector.ts
+│   ├── idle-detector.ts
+│   ├── jsonl-watcher.ts
+│   ├── transcript-parser.ts
+│   ├── project-detector.ts
+│   ├── ws-broadcaster.ts
+│   ├── autopilot-engine.ts
+│   ├── cleanup.ts
+│   ├── maestri-resolver.ts
+│   └── command-room/
+│       ├── pty-websocket-server.ts
+│       ├── process-manager.ts
+│       ├── chat-collector.ts
+│       ├── claude-output-parser.ts
+│       ├── chat-store.ts
+│       └── ganga/
+│           ├── ganga-engine.ts
+│           ├── auto-responder.ts
+│           └── prompt-matcher.ts
+├── components/
+│   ├── command-room/                  # TerminalPanel, ChatView, CategoryRow,
+│   │   │                              #   CategoryCreator, TeamBuilder, FolderPicker,
+│   │   │                              #   AvatarPicker
+│   │   └── canvas/                    # CanvasView (React Flow), TerminalNode,
+│   │                                  #   useCanvasLayout (scaffold activo)
+│   ├── empresa/PhaserGame.tsx
+│   ├── kanban/                        # ProjectRow, AgentCard, AgentDetailPanel
+│   ├── lista/                         # EventTable, EventRow, SessionTable, etc.
+│   ├── terminais/                     # TerminalCard, TerminalKanban
+│   ├── realtime/ListaPanel.tsx
+│   ├── layout/Navbar.tsx
+│   └── shared/                        # Badge, ConnectionStatus, ProjectSelector, TimeAgo
+├── hooks/
+│   ├── useWebSocket.ts
+│   ├── useEvents.ts
+│   ├── useAgents.ts
+│   ├── useKanban.ts
+│   ├── useProjects.ts
+│   ├── useTerminals.ts
+│   ├── useSessions.ts
+│   └── usePtySocket.ts
+├── contexts/
+│   ├── WebSocketContext.tsx
+│   └── ProjectContext.tsx
+└── lib/
+    ├── db.ts                          # Singleton SQLite (global para hot-reload)
+    ├── schema.ts                      # DDL + migrações
+    ├── queries.ts                     # Todas as queries
+    ├── types.ts                       # Project, Agent, Event, Terminal, Session, etc.
+    ├── constants.ts                   # AGENT_COLORS, STATUS_DOT, TWELVE_HOURS_MS
+    ├── api-utils.ts
+    └── command-room-repository.ts     # CRUD command_room_terminals + terminal_categories
+game/                                  # Phaser.js game engine (~4600 LOC, 36 ficheiros)
+├── scenes/                            # BootScene, OfficeScene
+├── managers/                          # AgentManager, ClusterManager
+├── objects/                           # AgentSprite, Desk, Sofa, + 15 outros
+├── data/                              # agent-sprite-config, themes, office-layout, skins
+├── animations/
+├── bridge/react-phaser-bridge.ts
+└── utils/
+```
+
+---
 
 ## Padrões Importantes
 
 ### node:sqlite double-cast
 ```typescript
-// .all() retorna Record<string, SQLOutputValue>[] — precisa double-cast
 const result = stmt.all(params) as unknown as Agent[];
 ```
 
@@ -270,53 +281,64 @@ export const db: DatabaseSync =
     : (globalThis.__aiox_db ??= createDb());
 ```
 
-### Fire-and-forget broadcast
+### Broadcasts fire-and-forget
 ```typescript
-// TODOS os broadcasts são wrapped em try/catch — nunca bloquear event processing
-try { broadcast({ type: 'agent:update', agent, projectId }); } catch { /* fire-and-forget */ }
+try { broadcast({ type: 'agent:update', agent, projectId }); } catch { /* nunca bloquear */ }
 ```
 
-### Agent display names
-```typescript
-const DISPLAY_NAMES: Record<string, string> = {
-  '@dev': 'Dex', '@qa': 'Quinn', '@architect': 'Aria',
-  '@pm': 'Morgan', '@sm': 'River', '@po': 'Pax',
-  '@analyst': 'Alex', '@devops': 'Gage',
-  '@data-engineer': 'Dara', '@ux-design-expert': 'Uma',
-  '@aiox-master': 'AIOX',
-};
-```
+### Imports absolutos
+`@/` → `src/` (configurado em `tsconfig.json`)
 
-### Idle detector timeouts
-- `idle_timeout_lounge`: 300s (5min) — working → idle (lido de company_config)
-- `idle_timeout_break`: 900s (15min) — idle → break (lido de company_config)
-- `TIMEOUT_OFFLINE`: 3600s (1h) — break → offline (constante, sem coluna no schema)
+---
 
 ## Comandos
 
 ```bash
-npm run build        # esbuild server.ts + next build (compila tudo)
-npm run start        # node .server/server.mjs (produção)
-npm run lint         # next lint
-npm run typecheck    # tsc --noEmit
-npm run install-hook # Instalar hook Python no Claude Code
+npm run build         # esbuild server.ts + next build
+npm run start         # node .server/server.mjs (produção)
+npm run dev           # tsx watch server.ts (dev)
+npm run lint          # next lint
+npm run typecheck     # tsc --noEmit
+npm run install-hook  # Instalar hook Python no Claude Code
 
-# PM2 (sistema permanente — auto-inicia com o Mac)
-npm run pm2:start    # pm2 start ecosystem.config.cjs
-npm run pm2:restart  # pm2 restart aiox-monitor
-npm run pm2:stop     # pm2 stop aiox-monitor
-npm run pm2:logs     # pm2 logs aiox-monitor --lines 50
-npm run pm2:startup  # pm2 startup launchd && pm2 save
-npm run pm2:status   # pm2 status
+# PM2
+npm run pm2:start     # pm2 start ecosystem.config.cjs
+npm run pm2:restart   # pm2 restart aiox-monitor
+npm run pm2:stop      # pm2 stop aiox-monitor
+npm run pm2:logs      # pm2 logs aiox-monitor --lines 50
+npm run pm2:status    # pm2 status
 
-# Deploy de mudanças (SEMPRE este combo):
+# Deploy de mudanças:
 npm run build && pm2 restart aiox-monitor
 ```
 
-## Gotchas
+---
 
-1. **DB locked durante build**: `next build` renderiza rotas estáticas que abrem SQLite. Se o dev server está rodando, dá lock. Solução: matar dev server antes de build.
-2. **IPv6 no macOS**: `httpServer.listen(port)` sem hostname faz bind em `::` (dual-stack). Se especificar `'0.0.0.0'`, browser pode falhar por tentar IPv6 primeiro.
-3. **tsx --watch restart**: Ao mudar `server.ts`, o `tsx --watch` reinicia mas o processo antigo pode não liberar a porta. Se der `EADDRINUSE`, matar manualmente: `kill $(lsof -ti :8888)`.
-4. **Imports absolutos**: Usar `@/` para imports dentro de `src/` (configurado em `tsconfig.json` paths).
-5. **`company_config` não tem `idle_timeout_offline`**: Apenas `idle_timeout_lounge` e `idle_timeout_break` existem no schema. O timeout offline é constante (3600s).
+## Status de Desenvolvimento
+
+**Branch actual:** `feature/8.8-terminal-tests`
+**Objectivo da branch:** unit tests para terminal matching e lifecycle (Story 8.8, Wave 3 do Epic 8).
+
+### Epics activos
+
+| Epic | Foco | Status |
+|------|------|--------|
+| **Epic 7** | Config module — Ganga dashboard, event retention, logo/branding | Stories 7.1–7.5 em Draft |
+| **Epic 8** | Fiabilidade terminais — deduplication, JSONL matching, session-aware upsert | W1+W2 (8.1–8.5) Ready for Review; W3 (8.6–8.8) em Draft |
+| **Epic 9** | Lista 2.0 — paginação server-side, busca textual | Planned |
+| **Epic 10** | Kanban — visibilidade operacional | 10.1–10.3 Done; 10.4 pendente |
+
+### Gaps visuais abertos (sem epic formal)
+
+| Gap | Severidade |
+|-----|-----------|
+| G1 — Sem separação visual entre clusters de projectos na Empresa (cor, borda, floor) | CRITICAL |
+| G2 — Clusters desaparecem quando projecto fica sem agentes activos | HIGH |
+| G4 — Slots de cluster não são determinísticos entre reloads | MEDIUM |
+
+### Gotchas
+
+1. **DB locked durante build** — matar dev server antes de `npm run build`
+2. **IPv6 no macOS** — não especificar `'0.0.0.0'` no `httpServer.listen`
+3. **EADDRINUSE** — se tsx reiniciar, matar porta manualmente: `kill $(lsof -ti :8888)`
+4. **`company_config` sem `idle_timeout_offline`** — timeout offline é constante (3600s)

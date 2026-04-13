@@ -19,11 +19,11 @@
 ## Testing
 
 - Unit tests for all new functionality
-- Test edge cases (Duryodhana's specialty)
+- Test edge cases (Boba Fett's specialty)
 - Run `npm test` before marking complete
 
 ## Git
 
 - Conventional commits: `feat:`, `fix:`, `docs:`, `chore:`
 - Reference story ID in commits
-- Devs: commit freely, NEVER push (Bhishma exclusive)
+- Devs: commit freely, NEVER push (Chewbacca exclusive)

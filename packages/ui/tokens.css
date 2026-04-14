@@ -1,0 +1,319 @@
+/**
+ * Sala de Comando v2 — Design Tokens
+ * Padmé (UX-Alpha) · Epic 9 · 2026-04-14
+ *
+ * Uso: importar no globals.css ou em qualquer módulo CSS que precise.
+ * Todos os valores aqui são a fonte de verdade — nunca hardcodar hex no código.
+ *
+ * Consumo Tailwind: definir no tailwind.config.ts via `extend.colors` usando
+ *   `var(--sc-surface-0)` etc. Luke (Dev-Alpha) conecta no story 9.5.
+ */
+
+/* ============================================================
+   1. SURFACE — base do canvas escuro azulado
+   ============================================================ */
+:root {
+  --sc-surface-0:   #0E1014; /* canvas bg — o "chão" do universo */
+  --sc-surface-100: #15181F; /* card bg — node normal */
+  --sc-surface-200: #1C2029; /* input bg, bolha agente */
+  --sc-surface-300: #262B36; /* borders, dividers */
+  --sc-surface-400: #353B48; /* code blocks, handles idle */
+}
+
+/* ============================================================
+   2. TEXT
+   ============================================================ */
+:root {
+  --sc-text-primary: #E8EAED; /* labels, mensagens */
+  --sc-text-muted:   #9BA1AD; /* subtítulos, placeholders */
+  --sc-text-subtle:  #6B7280; /* timestamps, hints, dicas de teclado */
+}
+
+/* ============================================================
+   3. SEMÂNTICOS — feedback de estado global
+   ============================================================ */
+:root {
+  --sc-success: #10B981; /* emerald-500 */
+  --sc-warning: #F59E0B; /* amber-400 */
+  --sc-danger:  #EF4444; /* rose-500 */
+  --sc-info:    #3B82F6; /* blue-500 */
+}
+
+/* ============================================================
+   4. ACENTOS POR PERSONAGEM (12 agentes)
+   Uso: avatar-ring, speaking-glow, bolha user, aresta de saída.
+   NUNCA no bg do card — ruído visual garantido.
+   ============================================================ */
+:root {
+  /* Chief — Yoda · verde-sábio */
+  --sc-agent-chief:        #84CC16;
+  --sc-agent-chief-glow:   rgba(132, 204, 22, 0.25);
+  --sc-agent-chief-bubble: rgba(132, 204, 22, 0.12);
+
+  /* Architect — Obi-Wan · azul-jedi */
+  --sc-agent-architect:        #38BDF8;
+  --sc-agent-architect-glow:   rgba(56, 189, 248, 0.25);
+  --sc-agent-architect-bubble: rgba(56, 189, 248, 0.12);
+
+  /* UX-Alpha — Padmé · magenta-real */
+  --sc-agent-ux-alpha:        #E879F9;
+  --sc-agent-ux-alpha-glow:   rgba(232, 121, 249, 0.25);
+  --sc-agent-ux-alpha-bubble: rgba(232, 121, 249, 0.12);
+
+  /* UX-Beta — Rey · laranja-deserto */
+  --sc-agent-ux-beta:        #FB923C;
+  --sc-agent-ux-beta-glow:   rgba(251, 146, 60, 0.25);
+  --sc-agent-ux-beta-bubble: rgba(251, 146, 60, 0.12);
+
+  /* Dev-Alpha — Luke · dourado-trigo */
+  --sc-agent-dev-alpha:        #FACC15;
+  --sc-agent-dev-alpha-glow:   rgba(250, 204, 21, 0.25);
+  --sc-agent-dev-alpha-bubble: rgba(250, 204, 21, 0.12);
+
+  /* Dev-Beta — Leia · rosa-coral */
+  --sc-agent-dev-beta:        #F472B6;
+  --sc-agent-dev-beta-glow:   rgba(244, 114, 182, 0.25);
+  --sc-agent-dev-beta-bubble: rgba(244, 114, 182, 0.12);
+
+  /* Dev-Gamma — Han Solo · âmbar-contrabandista */
+  --sc-agent-dev-gamma:        #D97706;
+  --sc-agent-dev-gamma-glow:   rgba(217, 119, 6, 0.25);
+  --sc-agent-dev-gamma-bubble: rgba(217, 119, 6, 0.12);
+
+  /* Dev-Delta — Chewie · castanho-quente */
+  --sc-agent-dev-delta:        #A16207;
+  --sc-agent-dev-delta-glow:   rgba(161, 98, 7, 0.25);
+  --sc-agent-dev-delta-bubble: rgba(161, 98, 7, 0.12);
+
+  /* QA — Vader · roxo-profundo */
+  --sc-agent-qa:        #8B5CF6;
+  --sc-agent-qa-glow:   rgba(139, 92, 246, 0.25);
+  --sc-agent-qa-bubble: rgba(139, 92, 246, 0.12);
+
+  /* DevOps — R2-D2 · ciano-elétrico */
+  --sc-agent-devops:        #06B6D4;
+  --sc-agent-devops-glow:   rgba(6, 182, 212, 0.25);
+  --sc-agent-devops-bubble: rgba(6, 182, 212, 0.12);
+
+  /* Analyst — C-3PO · ouro-polido */
+  --sc-agent-analyst:        #EAB308;
+  --sc-agent-analyst-glow:   rgba(234, 179, 8, 0.25);
+  --sc-agent-analyst-bubble: rgba(234, 179, 8, 0.12);
+
+  /* Data-Engineer — Lando · cerúleo-violeta */
+  --sc-agent-data-engineer:        #6366F1;
+  --sc-agent-data-engineer-glow:   rgba(99, 102, 241, 0.25);
+  --sc-agent-data-engineer-bubble: rgba(99, 102, 241, 0.12);
+}
+
+/* ============================================================
+   5. TIPOGRAFIA
+   ============================================================ */
+:root {
+  /* Famílias */
+  --sc-font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --sc-font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+
+  /* Tamanhos */
+  --sc-text-xs:  11px; /* timestamps, hints */
+  --sc-text-sm:  12px; /* code blocks mono */
+  --sc-text-md:  13px; /* corpo de mensagem */
+  --sc-text-base: 14px; /* nome do agente no header */
+  --sc-text-lg:  15px; /* subtítulos, placeholders largos */
+
+  /* Pesos */
+  --sc-font-regular:   400;
+  --sc-font-medium:    500;
+  --sc-font-semibold:  600;
+
+  /* Letter-spacing calibrado */
+  --sc-tracking-tight:  -0.01em; /* nome agente */
+  --sc-tracking-tighter: -0.02em; /* headlines do empty-state */
+}
+
+/* ============================================================
+   6. DIMENSÕES DO AgentChatNode
+   ============================================================ */
+:root {
+  /* Card */
+  --sc-node-width-base:     360px;
+  --sc-node-height-base:    280px;
+  --sc-node-width-expanded: 420px;
+  --sc-node-height-expanded: 520px;
+  --sc-node-height-collapsed: 88px;
+  --sc-node-radius:          14px;
+
+  /* Header */
+  --sc-node-header-height:   56px;
+  --sc-node-header-padding:  12px 16px;
+
+  /* Avatar */
+  --sc-avatar-size:          36px;
+  --sc-avatar-border:        2px; /* cor = --sc-agent-{slug} */
+
+  /* Status dot */
+  --sc-status-dot-size:      8px;
+  --sc-status-dot-ring:      2px solid var(--sc-surface-100);
+
+  /* Messages */
+  --sc-msg-gap:              8px;
+  --sc-msg-padding:          12px 16px;
+  --sc-msg-max-width:        85%;
+
+  /* Bolhas */
+  --sc-bubble-radius-user:   12px 12px 4px 12px;
+  --sc-bubble-radius-agent:  12px 12px 12px 4px;
+  --sc-bubble-padding:       8px 12px;
+
+  /* Input */
+  --sc-input-height:         48px;
+  --sc-input-padding:        8px 12px;
+  --sc-input-radius:         10px;
+
+  /* Handles */
+  --sc-handle-size:          10px;
+  --sc-handle-size-hover:    14px;
+  --sc-handle-border:        2px;
+}
+
+/* ============================================================
+   7. BORDAS & SHADOWS — estados de seleção e foco
+   ============================================================ */
+:root {
+  --sc-border-node:          1px solid var(--sc-surface-300);
+  --sc-border-node-selected: 1px solid var(--sc-agent-color, var(--sc-surface-300));
+  --sc-border-node-error:    1px solid rgba(239, 68, 68, 0.6);
+
+  /* Shadow elevado (drag) */
+  --sc-shadow-drag: 0 8px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+
+  /* Speaking glow — usa a var cascateada por agente */
+  --sc-glow-speaking: 0 0 0 1px var(--sc-agent-color),
+                      0 0 16px rgba(var(--sc-agent-color-rgb, 255 255 255) / 0.2);
+
+  /* Idle node */
+  --sc-opacity-idle: 0.92;
+}
+
+/* ============================================================
+   8. ARESTAS (Edge tokens)
+   ============================================================ */
+:root {
+  --sc-edge-stroke-idle:   1.5px;
+  --sc-edge-stroke-active: 2px;
+  --sc-edge-stroke-hover:  2.5px;
+  --sc-edge-color-idle:    var(--sc-surface-400);
+  --sc-edge-opacity-idle:  0.6;
+  --sc-edge-dash:          4 2; /* stroke-dasharray para idle */
+  --sc-edge-particle-size: 4px;
+  --sc-edge-particle-interval: 800ms;
+}
+
+/* ============================================================
+   9. ANIMAÇÕES — cubic-bezier standard + durações
+   ============================================================ */
+:root {
+  --sc-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --sc-ease-spring:   cubic-bezier(0.16, 1, 0.3, 1);
+  --sc-ease-out:      cubic-bezier(0, 0, 0.2, 1);
+
+  /* Durações */
+  --sc-duration-instant:   120ms;
+  --sc-duration-fast:      160ms;
+  --sc-duration-normal:    240ms;
+  --sc-duration-slow:      400ms;
+  --sc-duration-glow:      1200ms;
+  --sc-duration-typing:    1400ms;
+  --sc-duration-edge-draw: 500ms;
+  --sc-duration-resize:    280ms;
+}
+
+/* ============================================================
+   10. KEYFRAMES — todos os agentes
+   ============================================================ */
+
+/* Dot pulsando (thinking) */
+@keyframes sc-dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.85); }
+}
+
+/* Ring shimmer rotativo (thinking) */
+@keyframes sc-ring-shimmer {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Halo pulsante (speaking) */
+@keyframes sc-halo-pulse {
+  0%   { box-shadow: 0 0 0 0 var(--sc-agent-glow, rgba(255,255,255,0.2)); }
+  50%  { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* Avatar ring spring (speaking onset) */
+@keyframes sc-ring-spring {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.08); }
+  70%  { transform: scale(0.97); }
+  100% { transform: scale(1.04); }
+}
+
+/* Typing dots stagger — aplicar com animation-delay 0/120ms/240ms */
+@keyframes sc-typing-dot {
+  0%, 80%, 100% { opacity: 0.3; transform: translateY(0); }
+  40%           { opacity: 1;   transform: translateY(-3px); }
+}
+
+/* Slide-up da bolha nova */
+@keyframes sc-bubble-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Glow fadeout no card pós-mensagem */
+@keyframes sc-card-glow-out {
+  from { box-shadow: 0 0 16px var(--sc-agent-glow, rgba(255,255,255,0.15)); }
+  to   { box-shadow: none; }
+}
+
+/* Shake (error) */
+@keyframes sc-shake {
+  0%,100% { transform: translateX(0); }
+  20%     { transform: translateX(-4px); }
+  40%     { transform: translateX(4px); }
+  60%     { transform: translateX(-4px); }
+  80%     { transform: translateX(2px); }
+}
+
+/* Edge path draw */
+@keyframes sc-edge-draw {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* Handle breathe (quando drag ativo em outro handle) */
+@keyframes sc-handle-breathe {
+  0%,100% { transform: scale(1); }
+  50%     { transform: scale(1.1); }
+}
+
+/* Command palette enter */
+@keyframes sc-palette-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ============================================================
+   11. UTILITY CLASSES — prefers-reduced-motion override
+   Todas as animações devem checar esta media query antes de rodar.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration:        0.01ms !important;
+    animation-iteration-count: 1     !important;
+    transition-duration:       0.01ms !important;
+  }
+}

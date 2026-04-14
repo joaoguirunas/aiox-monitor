@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Sala de Comando v2 — Design Tokens (Padmé JOB-016) */
+@import '../../packages/ui/tokens.css';
+
 @layer base {
   /* Scrollbar — sleek, thin, matches dark theme */
   ::-webkit-scrollbar {

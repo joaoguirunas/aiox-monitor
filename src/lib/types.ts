@@ -247,6 +247,50 @@ export interface WsGangaToggle extends WsMessage {
   enabled: boolean;
 }
 
+// ─── Sala de Comando v2 — §2.5.9 ─────────────────────────────────────────────
+
+export interface AgentCatalogEntry {
+  skill_path: string;   // '/themaestridev:agents:chief'
+  squad: string;
+  agent_id: string;
+  display_name: string;
+  icon?: string;
+  role?: string;
+  description?: string;
+  definition_path: string;
+  source: 'project' | 'user' | 'builtin';
+  persona_tags?: string[];
+}
+
+export interface WsCatalogUpdated extends WsMessage {
+  type: 'catalog.updated';
+  v: 1;
+  projectPath: string;
+  added: AgentCatalogEntry[];
+  removed: string[];
+}
+
+export interface WsCatalogReloaded extends WsMessage {
+  type: 'catalog.reloaded';
+  v: 1;
+  projectPath: string;
+  full: AgentCatalogEntry[];
+}
+
+export interface WsProjectOpened extends WsMessage {
+  type: 'project.opened';
+  v: 1;
+  projectPath: string;
+}
+
+export interface WsProjectClosed extends WsMessage {
+  type: 'project.closed';
+  v: 1;
+  projectPath: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export type WsIncomingMessage =
   | WsEventNew
   | WsAgentUpdate
@@ -255,4 +299,8 @@ export type WsIncomingMessage =
   | WsThemeChange
   | WsGangaHeartbeat
   | WsGangaToggle
-  | WsPing;
+  | WsPing
+  | WsCatalogUpdated
+  | WsCatalogReloaded
+  | WsProjectOpened
+  | WsProjectClosed;

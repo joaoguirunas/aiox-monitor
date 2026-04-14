@@ -13,6 +13,7 @@ const LINKS = [
   { href: '/terminais', label: 'Terminais' },
   { href: '/empresa', label: 'Empresa' },
   { href: '/empresa/config', label: 'Config' },
+  { href: '/command-room', label: 'Sala de Comando' },
   { href: '/command-room/spike', label: '⚡ Spike' },
 ];
 

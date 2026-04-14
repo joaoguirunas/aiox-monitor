@@ -10,6 +10,7 @@
 
 import { create } from 'zustand';
 import type { Node, Edge, Viewport } from '@xyflow/react';
+import type { AgentCatalogEntry } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
 // Tipos de domínio (§3.1)
@@ -96,6 +97,16 @@ export interface CanvasLayout {
 }
 
 // ---------------------------------------------------------------------------
+// Projeto ativo (§2.5.3 — Project Manager)
+// ---------------------------------------------------------------------------
+
+export interface RecentProject {
+  path: string;
+  name: string;
+  openedAt: string; // ISO timestamp
+}
+
+// ---------------------------------------------------------------------------
 // Estado do slice
 // ---------------------------------------------------------------------------
 
@@ -110,6 +121,18 @@ export interface CanvasState {
   selectedNodeIds: Set<string>;
   /** Layout carregado do projeto ativo */
   layout: CanvasLayout | null;
+
+  // ── Projeto ativo ────────────────────────────────────────────────────────
+  /** Caminho absoluto do projeto aberto na Sala de Comando */
+  currentProjectPath: string | null;
+  /** Projetos recentes (MRU) — max 10 */
+  recentProjects: RecentProject[];
+  /** Catálogo de agentes do projeto aberto (catalog.reloaded / catalog.updated) */
+  agentCatalog: AgentCatalogEntry[];
+  /** Verdadeiro enquanto aguarda catalog.reloaded após POST /api/projects/open */
+  catalogLoading: boolean;
+  /** Verdadeiro após o primeiro catalog.reloaded bem-sucedido */
+  catalogReady: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -133,34 +156,68 @@ export interface CanvasActions {
   setSelectedNodeIds: (ids: string[]) => void;
   /** Atualiza o status de um card específico */
   patchNodeStatus: (nodeId: string, status: AgentStatus) => void;
+
+  // ── Ações de projeto ─────────────────────────────────────────────────────
+  /** Atualiza o projeto aberto + adiciona ao MRU */
+  setCurrentProject: (path: string | null) => void;
+  /** Substitui a lista MRU completa */
+  setRecentProjects: (projects: RecentProject[]) => void;
+  /** Substitui o catálogo (catalog.reloaded) */
+  setCatalog: (entries: AgentCatalogEntry[]) => void;
+  /** Aplica diff incremental no catálogo (catalog.updated) */
+  patchCatalog: (added: AgentCatalogEntry[], removedPaths: string[]) => void;
+  /** Sinaliza início/fim de carregamento do catálogo */
+  setCatalogLoading: (loading: boolean) => void;
+  /** Marca catálogo como pronto (recebeu ao menos um reloaded) */
+  setCatalogReady: (ready: boolean) => void;
 }
 
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
 
-export const useCanvasStore = create<CanvasState & CanvasActions>((set) => ({
-  // Estado inicial
+const MRU_MAX = 10;
+const MRU_STORAGE_KEY = 'sc-recent-projects';
+
+function loadMRU(): RecentProject[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    return JSON.parse(localStorage.getItem(MRU_STORAGE_KEY) ?? '[]') as RecentProject[];
+  } catch {
+    return [];
+  }
+}
+
+function saveMRU(projects: RecentProject[]) {
+  if (typeof window === 'undefined') return;
+  try { localStorage.setItem(MRU_STORAGE_KEY, JSON.stringify(projects)); } catch { /* noop */ }
+}
+
+export const useCanvasStore = create<CanvasState & CanvasActions>((set, get) => ({
+  // ── Estado canvas inicial ─────────────────────────────────────────────────
   nodes: [],
   edges: [],
   viewport: { x: 0, y: 0, zoom: 1 },
   selectedNodeIds: new Set(),
   layout: null,
 
-  // Ações
-  addNode: (node) =>
-    set((s) => ({ nodes: [...s.nodes, node] })),
+  // ── Estado projeto inicial ────────────────────────────────────────────────
+  currentProjectPath: null,
+  recentProjects: [],
+  agentCatalog: [],
+  catalogLoading: false,
+  catalogReady: false,
+
+  // ── Ações canvas ──────────────────────────────────────────────────────────
+  addNode: (node) => set((s) => ({ nodes: [...s.nodes, node] })),
 
   removeNode: (nodeId) =>
     set((s) => ({
       nodes: s.nodes.filter((n) => n.id !== nodeId),
-      edges: s.edges.filter(
-        (e) => e.source !== nodeId && e.target !== nodeId,
-      ),
+      edges: s.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
     })),
 
-  addEdge: (edge) =>
-    set((s) => ({ edges: [...s.edges, edge] })),
+  addEdge: (edge) => set((s) => ({ edges: [...s.edges, edge] })),
 
   removeEdge: (edgeId) =>
     set((s) => ({ edges: s.edges.filter((e) => e.id !== edgeId) })),
@@ -169,20 +226,46 @@ export const useCanvasStore = create<CanvasState & CanvasActions>((set) => ({
 
   patchLayout: (patch) =>
     set((s) => ({
-      layout: s.layout
-        ? { ...s.layout, ...patch }
-        : ({ ...patch } as CanvasLayout),
+      layout: s.layout ? { ...s.layout, ...patch } : ({ ...patch } as CanvasLayout),
     })),
 
-  setSelectedNodeIds: (ids) =>
-    set({ selectedNodeIds: new Set(ids) }),
+  setSelectedNodeIds: (ids) => set({ selectedNodeIds: new Set(ids) }),
 
   patchNodeStatus: (nodeId, status) =>
     set((s) => ({
       nodes: s.nodes.map((n) =>
-        n.id === nodeId
-          ? { ...n, data: { ...n.data, status } }
-          : n,
+        n.id === nodeId ? { ...n, data: { ...n.data, status } } : n,
       ),
     })),
+
+  // ── Ações projeto ─────────────────────────────────────────────────────────
+  setCurrentProject: (path) => {
+    if (!path) {
+      set({ currentProjectPath: null });
+      return;
+    }
+    const name = path.split('/').filter(Boolean).pop() ?? path;
+    const entry: RecentProject = { path, name, openedAt: new Date().toISOString() };
+    const prev = get().recentProjects.filter((p) => p.path !== path);
+    const next = [entry, ...prev].slice(0, MRU_MAX);
+    saveMRU(next);
+    set({ currentProjectPath: path, recentProjects: next });
+  },
+
+  setRecentProjects: (projects) => {
+    saveMRU(projects);
+    set({ recentProjects: projects });
+  },
+
+  setCatalog: (entries) =>
+    set({ agentCatalog: entries, catalogReady: true, catalogLoading: false }),
+
+  patchCatalog: (added, removedPaths) =>
+    set((s) => {
+      const kept = s.agentCatalog.filter((e) => !removedPaths.includes(e.skill_path));
+      return { agentCatalog: [...kept, ...added] };
+    }),
+
+  setCatalogLoading: (loading) => set({ catalogLoading: loading }),
+  setCatalogReady: (ready) => set({ catalogReady: ready }),
 }));

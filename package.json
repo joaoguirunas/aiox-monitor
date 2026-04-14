@@ -9,7 +9,16 @@
     "url": "https://github.com/joaoguirunas/aiox-monitor.git"
   },
   "homepage": "https://github.com/joaoguirunas/aiox-monitor",
-  "keywords": ["ai", "agent", "monitor", "dashboard", "claude", "phaser", "isometric", "nextjs"],
+  "keywords": [
+    "ai",
+    "agent",
+    "monitor",
+    "dashboard",
+    "claude",
+    "phaser",
+    "isometric",
+    "nextjs"
+  ],
   "engines": {
     "node": ">=18"
   },
@@ -50,13 +59,15 @@
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
+    "@xyflow/react": "^12.10.2",
     "lucide-react": "^0.469.0",
     "next": "^15.1.6",
     "phaser": "^3.87.0",
     "pm2": "^6.0.14",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@types/node": "^22.10.7",

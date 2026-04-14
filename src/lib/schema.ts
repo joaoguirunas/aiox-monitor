@@ -157,4 +157,46 @@ export function initSchema(db: DatabaseSync): void {
     );
     CREATE INDEX IF NOT EXISTS idx_ganga_log_created ON ganga_log(created_at);
   `);
+
+  // ─── Sala de Comando v2 — Agent Catalog Service (JOB-021) ─────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS agent_catalog (
+      project_path    TEXT NOT NULL,
+      skill_path      TEXT NOT NULL,
+      squad           TEXT NOT NULL,
+      agent_id        TEXT NOT NULL,
+      display_name    TEXT NOT NULL,
+      icon            TEXT,
+      role            TEXT,
+      description     TEXT,
+      definition_path TEXT NOT NULL,
+      source          TEXT NOT NULL CHECK(source IN ('project','user','builtin')),
+      persona_tags    TEXT,
+      last_seen_at    TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY(project_path, skill_path)
+    );
+    CREATE INDEX IF NOT EXISTS idx_catalog_project ON agent_catalog(project_path);
+
+    CREATE TABLE IF NOT EXISTS agent_groups (
+      project_path       TEXT NOT NULL,
+      group_id           TEXT NOT NULL,
+      name               TEXT NOT NULL,
+      description        TEXT,
+      squad              TEXT NOT NULL,
+      member_skill_paths TEXT NOT NULL,
+      topology           TEXT DEFAULT 'chief-hub'
+                         CHECK(topology IN ('none','chief-hub','mesh','pipeline')),
+      source             TEXT NOT NULL CHECK(source IN ('project','user','auto')),
+      definition_path    TEXT,
+      last_seen_at       TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY(project_path, group_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_groups_project ON agent_groups(project_path);
+
+    CREATE TABLE IF NOT EXISTS open_projects (
+      project_path       TEXT PRIMARY KEY,
+      opened_at          TEXT NOT NULL DEFAULT (datetime('now')),
+      last_refreshed_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
 }

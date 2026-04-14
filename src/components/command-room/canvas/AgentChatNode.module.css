@@ -1,0 +1,495 @@
+/**
+ * AgentChatNode.module.css — Story 9.5
+ *
+ * Animações referenciam keyframes definidos globalmente em packages/ui/tokens.css.
+ * Tokens de cor e dimensão via CSS custom props (--sc-*) setados inline no root div.
+ */
+
+/* ── Base card ──────────────────────────────────────────────────────────────── */
+.card {
+  display: flex;
+  flex-direction: column;
+  background: var(--sc-surface-100, #15181F);
+  border-radius: var(--sc-node-radius, 14px);
+  overflow: hidden;
+  position: relative;
+  font-family: var(--sc-font-sans, 'Inter', ui-sans-serif, sans-serif);
+  color: var(--sc-text-primary, #E8EAED);
+  /* Resize transition §5 */
+  transition:
+    width  var(--sc-duration-resize, 280ms) var(--sc-ease-out, cubic-bezier(0, 0, 0.2, 1)),
+    height var(--sc-duration-resize, 280ms) var(--sc-ease-out, cubic-bezier(0, 0, 0.2, 1));
+}
+
+/* Drag §5 */
+.cardDragging {
+  transform: scale(1.02);
+  box-shadow: var(--sc-shadow-drag, 0 8px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3));
+  transition:
+    transform 100ms var(--sc-ease-spring, cubic-bezier(0.16, 1, 0.3, 1)),
+    box-shadow 100ms var(--sc-ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+/* Error shake §4.5 */
+.shakeOnce {
+  animation: sc-shake var(--sc-duration-normal, 240ms) var(--sc-ease-standard, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────────── */
+.header {
+  height: var(--sc-node-header-height, 56px);
+  min-height: var(--sc-node-header-height, 56px);
+  flex-shrink: 0;
+  padding: var(--sc-node-header-padding, 12px 16px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--sc-surface-300, #262B36);
+  cursor: grab;
+  user-select: none;
+}
+
+.header:active {
+  cursor: grabbing;
+}
+
+/* ── Avatar ─────────────────────────────────────────────────────────────────── */
+.avatarWrapper {
+  position: relative;
+  flex-shrink: 0;
+  width: var(--sc-avatar-size, 36px);
+  height: var(--sc-avatar-size, 36px);
+}
+
+.avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--sc-agent-bubble, rgba(99, 102, 241, 0.12));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sc-agent-color, #6366F1);
+  letter-spacing: -0.01em;
+  position: relative;
+  overflow: visible;
+}
+
+/* ── Status dot §4 ──────────────────────────────────────────────────────────── */
+.statusDot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--sc-status-dot-size, 8px);
+  height: var(--sc-status-dot-size, 8px);
+  border-radius: 50%;
+  outline: var(--sc-status-dot-ring, 2px solid #15181F);
+  z-index: 1;
+}
+
+/* online: sólido, sem animação */
+.dotOnline  { background: var(--sc-success, #10B981); }
+
+/* thinking: warning + dot-pulse */
+.dotThinking {
+  background: var(--sc-warning, #F59E0B);
+  animation: sc-dot-pulse 1s var(--sc-ease-standard, cubic-bezier(0.4, 0, 0.2, 1)) infinite;
+}
+
+/* speaking: success + halo-pulse */
+.dotSpeaking {
+  background: var(--sc-success, #10B981);
+  animation: sc-halo-pulse 1.5s ease-in-out infinite;
+}
+
+/* idle: zinc-500, semi-opaco */
+.dotIdle { background: #71717A; opacity: 0.7; }
+
+/* error: danger sólido */
+.dotError { background: var(--sc-danger, #EF4444); }
+
+/* ── Avatar ring §4.2 / §4.3 ────────────────────────────────────────────────── */
+
+/* thinking: shimmer rotativo */
+.ringThinking::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--sc-agent-color, #6366F1) 0deg,
+    transparent 120deg,
+    var(--sc-agent-color, #6366F1) 240deg,
+    transparent 360deg
+  );
+  animation: sc-ring-shimmer 2s linear infinite;
+  opacity: 0.7;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* speaking: spring onset */
+.ringSpeaking {
+  animation: sc-ring-spring var(--sc-duration-slow, 400ms) var(--sc-ease-spring, cubic-bezier(0.16, 1, 0.3, 1)) forwards;
+}
+
+/* error: borda danger */
+.ringError { border-color: var(--sc-danger, #EF4444) !important; }
+
+/* idle: semi-transparente */
+.ringIdle { opacity: 0.5; }
+
+/* ── Name stack ─────────────────────────────────────────────────────────────── */
+.nameStack {
+  flex: 1;
+  min-width: 0;
+}
+
+.nameText {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--sc-text-base, 14px);
+  font-weight: var(--sc-font-semibold, 600);
+  letter-spacing: var(--sc-tracking-tight, -0.01em);
+  color: var(--sc-text-primary, #E8EAED);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.roleText {
+  font-size: var(--sc-text-xs, 11px);
+  font-weight: var(--sc-font-regular, 400);
+  color: var(--sc-text-muted, #9BA1AD);
+  line-height: 1.4;
+}
+
+.chiefBadge {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--sc-agent-color, #6366F1);
+  background: var(--sc-agent-bubble, rgba(99, 102, 241, 0.12));
+  border: 1px solid var(--sc-agent-color, #6366F1);
+  border-radius: 4px;
+  padding: 1px 5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ── Header actions ─────────────────────────────────────────────────────────── */
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.iconBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: var(--sc-text-subtle, #6B7280);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition:
+    background var(--sc-duration-instant, 120ms) var(--sc-ease-standard),
+    color     var(--sc-duration-instant, 120ms) var(--sc-ease-standard);
+}
+
+.iconBtn:hover {
+  background: var(--sc-surface-300, #262B36);
+  color: var(--sc-text-primary, #E8EAED);
+}
+
+/* Menu kebab: aparece apenas no hover do card */
+.menuBtn {
+  opacity: 0;
+  transition: opacity var(--sc-duration-instant, 120ms);
+}
+
+.card:hover .menuBtn {
+  opacity: 1;
+}
+
+/* ── Body ───────────────────────────────────────────────────────────────────── */
+.body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Collapsing crossfade §5 */
+.bodyCollapsing {
+  opacity: 0;
+  transition: opacity 180ms var(--sc-ease-standard, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+/* ── Messages §2.2 ──────────────────────────────────────────────────────────── */
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sc-msg-padding, 12px 16px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc-msg-gap, 8px);
+  min-height: 0;
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: var(--sc-surface-400, #353B48) transparent;
+}
+
+/* Gradient fade topo §2.2 */
+.gradientFade {
+  position: sticky;
+  top: 0;
+  height: 24px;
+  margin-bottom: -24px;
+  background: linear-gradient(to bottom, var(--sc-surface-100, #15181F), transparent);
+  pointer-events: none;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.emptyHint {
+  color: var(--sc-text-subtle, #6B7280);
+  font-size: var(--sc-text-sm, 12px);
+  text-align: center;
+  margin: auto;
+  padding: 32px 0;
+  opacity: 0.7;
+}
+
+/* Bolha row */
+.bubbleRow {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.bubbleRowUser {
+  justify-content: flex-end;
+}
+
+/* Bolha base */
+.bubble {
+  max-width: var(--sc-msg-max-width, 85%);
+  padding: var(--sc-bubble-padding, 8px 12px);
+  font-size: var(--sc-text-md, 13px);
+  font-weight: var(--sc-font-regular, 400);
+  line-height: 1.5;
+  color: var(--sc-text-primary, #E8EAED);
+  word-break: break-word;
+  position: relative;
+}
+
+/* Slide-up na entrada §5 */
+.bubbleEnter {
+  animation: sc-bubble-in var(--sc-duration-normal, 240ms) var(--sc-ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+/* Bolha user (direita) */
+.bubbleUser {
+  border-radius: var(--sc-bubble-radius-user, 12px 12px 4px 12px);
+}
+
+/* Bolha agente (esquerda) */
+.bubbleAgent {
+  background: var(--sc-surface-200, #1C2029);
+  border: 1px solid var(--sc-surface-300, #262B36);
+  border-radius: var(--sc-bubble-radius-agent, 12px 12px 12px 4px);
+}
+
+/* Cursor blinking em mensagem streaming §4.3 */
+.streamCursor {
+  display: inline-block;
+  width: 7px;
+  height: 13px;
+  background: var(--sc-agent-color, #6366F1);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  border-radius: 1px;
+  animation: sc-blink 1s step-end infinite;
+}
+
+@keyframes sc-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+/* Timestamp hover-only §2.2 */
+.bubbleTimestamp {
+  font-size: var(--sc-text-xs, 11px);
+  color: var(--sc-text-subtle, #6B7280);
+  display: block;
+  margin-top: 3px;
+  opacity: 0;
+  transition: opacity 150ms var(--sc-ease-standard);
+}
+
+.bubble:hover .bubbleTimestamp {
+  opacity: 1;
+}
+
+/* ── Typing indicator §4.2 ──────────────────────────────────────────────────── */
+.typingBubble {
+  display: flex;
+  gap: 4px;
+  padding: 10px 14px !important;
+}
+
+.typingDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--sc-text-muted, #9BA1AD);
+  animation: sc-typing-dot var(--sc-duration-typing, 1400ms) var(--sc-ease-standard, cubic-bezier(0.4, 0, 0.2, 1)) infinite;
+  flex-shrink: 0;
+}
+
+.typingDot:nth-child(2) { animation-delay: 120ms; }
+.typingDot:nth-child(3) { animation-delay: 240ms; }
+
+/* ── Error toast §4.5 ───────────────────────────────────────────────────────── */
+.errorToast {
+  margin: 0 12px 8px;
+  padding: 6px 10px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  font-size: var(--sc-text-xs, 11px);
+  color: var(--sc-danger, #EF4444);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  animation: sc-bubble-in var(--sc-duration-normal, 240ms) var(--sc-ease-spring);
+}
+
+.retryBtn {
+  background: transparent;
+  border: none;
+  color: var(--sc-danger, #EF4444);
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: inherit;
+  font-family: inherit;
+  padding: 0;
+}
+
+/* ── Input bar §2.3 ─────────────────────────────────────────────────────────── */
+.inputBar {
+  height: var(--sc-input-height, 48px);
+  flex-shrink: 0;
+  padding: var(--sc-input-padding, 8px 12px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid var(--sc-surface-300, #262B36);
+  background: var(--sc-surface-200, #1C2029);
+}
+
+.inputField {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--sc-text-primary, #E8EAED);
+  font-size: var(--sc-text-md, 13px);
+  font-family: var(--sc-font-sans, 'Inter', sans-serif);
+  line-height: 1.5;
+}
+
+.inputField::placeholder {
+  color: var(--sc-text-subtle, #6B7280);
+}
+
+.sendBtn {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  background: transparent;
+  border: 1px solid var(--sc-surface-300, #262B36);
+  color: var(--sc-text-subtle, #6B7280);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  padding: 0;
+  transition:
+    background     var(--sc-duration-fast, 160ms) var(--sc-ease-standard),
+    border-color   var(--sc-duration-fast, 160ms) var(--sc-ease-standard),
+    color          var(--sc-duration-fast, 160ms) var(--sc-ease-standard);
+}
+
+.sendBtn:not(:disabled) {
+  cursor: pointer;
+}
+
+/* ── Handles §2.4 ───────────────────────────────────────────────────────────── */
+
+/* Círculo: entrada (left) e saída (right) */
+.handleCircle {
+  width: var(--sc-handle-size, 10px) !important;
+  height: var(--sc-handle-size, 10px) !important;
+  border-radius: 50% !important;
+  border: 2px solid var(--sc-agent-color, #6366F1) !important;
+  background: var(--sc-surface-100, #15181F) !important;
+  transition:
+    width  var(--sc-duration-instant, 120ms) ease,
+    height var(--sc-duration-instant, 120ms) ease;
+}
+
+.handleCircle:hover {
+  width: var(--sc-handle-size-hover, 14px) !important;
+  height: var(--sc-handle-size-hover, 14px) !important;
+}
+
+/* Diamante: broadcast (top) §2.4 */
+.handleDiamond {
+  width: 12px !important;
+  height: 12px !important;
+  border-radius: 2px !important;
+  transform: rotate(45deg) !important;
+  border: 2px solid var(--sc-agent-color, #6366F1) !important;
+  background: var(--sc-surface-100, #15181F) !important;
+}
+
+/* Breathe quando outro handle está em drag §2.4 */
+.handleBreathe {
+  animation: sc-handle-breathe 2s ease-in-out infinite !important;
+}
+
+/* ── LOD §6 (zoom < 0.4) ────────────────────────────────────────────────────── */
+.lodMessages {
+  padding: 6px 14px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.lodMsg {
+  font-size: 10px;
+  color: var(--sc-text-subtle, #6B7280);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lodMsgRole {
+  color: var(--sc-text-muted, #9BA1AD);
+  margin-right: 4px;
+}

@@ -78,13 +78,13 @@ function CommandRoomCanvasInner() {
     [edges, removeEdge],
   );
 
-  // Nodes com style aplicado
+  // AgentChatNode controla suas próprias dimensões internamente (collapse/expand §1).
+  // Apenas o dragHandle é injetado aqui; width/height ficam a cargo do componente.
   const styledNodes = useMemo(
     () =>
       nodes.map((n) => ({
         ...n,
         dragHandle: '.chat-drag-handle',
-        style: { width: 360, height: 280 },
       })),
     [nodes],
   );

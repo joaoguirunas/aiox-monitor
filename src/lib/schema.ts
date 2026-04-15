@@ -158,6 +158,103 @@ export function initSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_ganga_log_created ON ganga_log(created_at);
   `);
 
+  // ─── Sala de Comando v2 — Canvas tables (JOB-035, migrations 001+002) ──────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS agent_cards (
+      id                    TEXT PRIMARY KEY,
+      kind                  TEXT NOT NULL CHECK(kind IN ('chat','terminal','hybrid')),
+      display_name          TEXT NOT NULL,
+      aiox_agent            TEXT,
+      project_path          TEXT,
+      pty_terminal_id       TEXT,
+      category_id           TEXT,
+      is_chief              INTEGER DEFAULT 0,
+      status                TEXT DEFAULT 'idle'
+                            CHECK(status IN ('idle','thinking','speaking','waiting','offline','error')),
+      system_prompt         TEXT,
+      model                 TEXT,
+      user_id               TEXT NOT NULL DEFAULT 'local',
+      created_at            TEXT DEFAULT (datetime('now')),
+      last_active           TEXT DEFAULT (datetime('now')),
+      maestri_terminal_name TEXT,
+      skill_path            TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_agent_cards_project ON agent_cards(project_path);
+
+    CREATE TABLE IF NOT EXISTS connections (
+      id         TEXT PRIMARY KEY,
+      source_id  TEXT NOT NULL REFERENCES agent_cards(id) ON DELETE CASCADE,
+      target_id  TEXT NOT NULL REFERENCES agent_cards(id) ON DELETE CASCADE,
+      directed   INTEGER DEFAULT 1,
+      kind       TEXT CHECK(kind IN ('chat','broadcast','supervise','context-share')),
+      label      TEXT,
+      metadata   TEXT,
+      user_id    TEXT NOT NULL DEFAULT 'local',
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(source_id, target_id, kind)
+    );
+    CREATE INDEX IF NOT EXISTS idx_conn_source ON connections(source_id);
+    CREATE INDEX IF NOT EXISTS idx_conn_target ON connections(target_id);
+
+    CREATE TABLE IF NOT EXISTS conversations (
+      id              TEXT PRIMARY KEY,
+      kind            TEXT CHECK(kind IN ('peer','group','broadcast','chief-thread')),
+      title           TEXT,
+      user_id         TEXT NOT NULL DEFAULT 'local',
+      created_at      TEXT DEFAULT (datetime('now')),
+      last_message_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS conversation_participants (
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      agent_card_id   TEXT NOT NULL REFERENCES agent_cards(id) ON DELETE CASCADE,
+      role            TEXT CHECK(role IN ('member','owner','observer')),
+      PRIMARY KEY(conversation_id, agent_card_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS messages (
+      id              TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      sender_id       TEXT REFERENCES agent_cards(id) ON DELETE SET NULL,
+      sender_role     TEXT NOT NULL CHECK(sender_role IN ('chief','agent','system','tool')),
+      content         TEXT NOT NULL,
+      artifacts       TEXT,
+      in_reply_to     TEXT REFERENCES messages(id) ON DELETE SET NULL,
+      created_at      TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_msg_conv_created ON messages(conversation_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS canvas_layouts (
+      project_path   TEXT PRIMARY KEY,
+      viewport       TEXT NOT NULL DEFAULT '{"x":0,"y":0,"zoom":1}',
+      node_positions TEXT NOT NULL DEFAULT '{}',
+      updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  // Triggers from migration 002 (idempotent via CREATE TRIGGER IF NOT EXISTS)
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS trg_messages_sync_last_message_at
+    AFTER INSERT ON messages
+    FOR EACH ROW
+    BEGIN
+      UPDATE conversations
+      SET    last_message_at = NEW.created_at
+      WHERE  id = NEW.conversation_id;
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_agent_cards_sync_canvas_updated_at
+    AFTER UPDATE OF last_active ON agent_cards
+    FOR EACH ROW
+    WHEN NEW.project_path IS NOT NULL
+     AND OLD.last_active IS NOT NEW.last_active
+    BEGIN
+      UPDATE canvas_layouts
+      SET    updated_at = datetime('now')
+      WHERE  project_path = NEW.project_path;
+    END;
+  `);
+
   // ─── Sala de Comando v2 — Agent Catalog Service (JOB-021) ─────────────────
   db.exec(`
     CREATE TABLE IF NOT EXISTS agent_catalog (

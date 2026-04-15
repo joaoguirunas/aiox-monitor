@@ -13,6 +13,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
   snapshotDir: './tests/e2e/__snapshots__',
+  globalSetup: './tests/e2e/global-setup.ts',
   timeout: 30_000,
   expect: {
     timeout: 8_000,
@@ -42,7 +43,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev',
+    command: 'TEST_DB_PATH=data/test.db npm run dev',
     url: 'http://localhost:8888',
     /** Reutiliza servidor existente em dev local; sobe novo em CI */
     reuseExistingServer: !process.env.CI,

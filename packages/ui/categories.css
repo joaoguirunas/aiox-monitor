@@ -1,0 +1,304 @@
+/**
+ * Sala de Comando v2 — Category Design Tokens
+ * Padmé (UX-Alpha) · JOB-042 · Epic 9 · 2026-04-14
+ *
+ * Importar APÓS tokens.css:
+ *   @import './tokens.css';
+ *   @import './categories.css';
+ *
+ * 8 categorias canônicas + fallback 'outros'.
+ * Ordem canônica de exibição na paleta ⌘K:
+ *   orquestracao → planejamento → execucao → design
+ *   → dados → qualidade → ops → pesquisa → outros
+ *
+ * Consumo:
+ *   color:      var(--sc-cat-{slug}-color)
+ *   background: var(--sc-cat-{slug}-bg)
+ *   icon:       var(--sc-cat-{slug}-icon)      ← emoji literal para JSX / CSS content
+ *   icon-url:   var(--sc-cat-{slug}-icon-url)  ← data URI para background-image em CSS puro
+ *
+ * Handoff: Luke (Dev-Alpha) — JOB-037 / CommandPaletteGlobal
+ * Spec:    docs/plans/padme-category-icon-system.md
+ */
+
+/* ============================================================
+   DARK THEME (default — :root)
+   ============================================================ */
+:root {
+
+  /* ----------------------------------------------------------
+     1. ORQUESTRAÇÃO — verde-sábio (Yoda)
+        Agentes: chief, aiox-master
+     ---------------------------------------------------------- */
+  --sc-cat-orquestracao-color:    #84CC16;
+  --sc-cat-orquestracao-bg:       rgba(132, 204, 22, 0.10);
+  --sc-cat-orquestracao-icon:     "🧘";
+  --sc-cat-orquestracao-icon-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E🧘%3C/text%3E%3C/svg%3E");
+
+  /* ----------------------------------------------------------
+     2. PLANEJAMENTO — azul-estratégia (Obi-Wan)
+        Agentes: architect, pm, po, sm, squad-creator
+     ---------------------------------------------------------- */
+  --sc-cat-planejamento-color:    #38BDF8;
+  --sc-cat-planejamento-bg:       rgba(56, 189, 248, 0.10);
+  --sc-cat-planejamento-icon:     "📋";
+  --sc-cat-planejamento-icon-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E📋%3C/text%3E%3C/svg%3E");
+
+  /* ----------------------------------------------------------
+     3. EXECUÇÃO — dourado-trigo (Luke)
+        Agentes: dev, dev-alpha, dev-beta, dev-gamma, dev-delta
+     ---------------------------------------------------------- */
+  --sc-cat-execucao-color:    #FACC15;
+  --sc-cat-execucao-bg:       rgba(250, 204, 21, 0.10);
+  --sc-cat-execucao-icon:     "💻";
+  --sc-cat-execucao-icon-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E💻%3C/text%3E%3C/svg%3E");
+
+  /* ----------------------------------------------------------
+     4. DESIGN — rosa-criativo (Padmé)
+        Agentes: ux-alpha, ux-beta, ux-design-expert
+     ---------------------------------------------------------- */
+  --sc-cat-design-color:    #E879F9;
+  --sc-cat-design-bg:       rgba(232, 121, 249, 0.10);
+  --sc-cat-design-icon:     "🎨";
+  --sc-cat-design-icon-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E🎨%3C/text%3E%3C/svg%3E");
+
+  /* ----------------------------------------------------------
+     5. DADOS — ciano-estrutura (distinto do ciano DevOps)
+        Agentes: data-engineer
+     ---------------------------------------------------------- */
+  --sc-cat-dados-color:    #22D3EE;
+  --sc-cat-dados-bg:       rgba(34, 211, 238, 0.10);
+  --sc-cat-dados-icon:     "🗄️";
+  --sc-cat-dados-icon-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E🗄️%3C/text%3E%3C/svg%3E");
+
+  /* ----------------------------------------------------------
+     6. QUALIDADE — roxo-profundo (Vader)
+        Agentes: qa
+     ---------------------------------------------------------- */
+  --sc-cat-qualidade-color:    #8B5CF6;
+  --sc-cat-qualidade-bg:       rgba(139, 92, 246, 0.10);
+  --sc-cat-qualidade-icon:     "🧪";
+  --sc-cat-qualidade-icon-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E🧪%3C/text%3E%3C/svg%3E");
+
+  /* ----------------------------------------------------------
+     7. OPS — laranja-infra
+        Agentes: devops
+        Nota: o acento individual do R2-D2/devops é ciano (#06B6D4).
+        A categoria Ops usa laranja para diferenciar da categoria Dados
+        e para refletir energia de "ship it / fire it up".
+     ---------------------------------------------------------- */
+  --sc-cat-ops-color:    #F97316;
+  --sc-cat-ops-bg:       rgba(249, 115, 22, 0.10);
+  --sc-cat-ops-icon:     "🚀";
+  --sc-cat-ops-icon-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E🚀%3C/text%3E%3C/svg%3E");
+
+  /* ----------------------------------------------------------
+     8. PESQUISA — cinza-claro
+        Agentes: analyst, ux-research (se existir)
+     ---------------------------------------------------------- */
+  --sc-cat-pesquisa-color:    #94A3B8;
+  --sc-cat-pesquisa-bg:       rgba(148, 163, 184, 0.10);
+  --sc-cat-pesquisa-icon:     "🔍";
+  --sc-cat-pesquisa-icon-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E🔍%3C/text%3E%3C/svg%3E");
+
+  /* ----------------------------------------------------------
+     9. OUTROS — fallback para agentes não categorizados
+        Sempre exibido por último na paleta, nunca vazio.
+     ---------------------------------------------------------- */
+  --sc-cat-outros-color:    #6B7280;
+  --sc-cat-outros-bg:       rgba(107, 114, 128, 0.08);
+  --sc-cat-outros-icon:     "❓";
+  --sc-cat-outros-icon-url: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E❓%3C/text%3E%3C/svg%3E");
+
+}
+
+/* ============================================================
+   LIGHT THEME — [data-theme="light"] no <html> ou <body>
+   Cores escurecidas para manter contraste WCAG AA sobre
+   backgrounds claros. Todos passam 4.5:1 para texto e
+   3:1 para UI components.
+   ============================================================ */
+[data-theme="light"] {
+
+  /* Surface overrides (tokens.css não tem light — definidos aqui
+     até que tokens.css suporte tema claro nativamente) */
+  --sc-surface-0:   #F8F9FB;
+  --sc-surface-100: #FFFFFF;
+  --sc-surface-200: #F1F3F6;
+  --sc-surface-300: #E2E6EC;
+  --sc-surface-400: #CDD3DC;
+  --sc-text-primary: #0E1014;
+  --sc-text-muted:   #4A5568;
+  --sc-text-subtle:  #6B7280;
+
+  /* 1. Orquestração */
+  --sc-cat-orquestracao-color: #3D6400;  /* lime escuro — 5.2:1 sobre branco */
+  --sc-cat-orquestracao-bg:    rgba(132, 204, 22, 0.12);
+
+  /* 2. Planejamento */
+  --sc-cat-planejamento-color: #0369A1;  /* sky-700 — 4.7:1 */
+  --sc-cat-planejamento-bg:    rgba(56, 189, 248, 0.12);
+
+  /* 3. Execução */
+  --sc-cat-execucao-color: #7A5F00;    /* amber escuro — 4.9:1 */
+  --sc-cat-execucao-bg:    rgba(250, 204, 21, 0.12);
+
+  /* 4. Design */
+  --sc-cat-design-color: #9333EA;      /* violet-600 — 4.8:1 */
+  --sc-cat-design-bg:    rgba(232, 121, 249, 0.12);
+
+  /* 5. Dados */
+  --sc-cat-dados-color: #0E7490;       /* cyan-700 — 4.6:1 */
+  --sc-cat-dados-bg:    rgba(34, 211, 238, 0.12);
+
+  /* 6. Qualidade */
+  --sc-cat-qualidade-color: #6D28D9;   /* violet-700 — 5.3:1 */
+  --sc-cat-qualidade-bg:    rgba(139, 92, 246, 0.12);
+
+  /* 7. Ops */
+  --sc-cat-ops-color: #C2410C;         /* orange-700 — 5.1:1 */
+  --sc-cat-ops-bg:    rgba(249, 115, 22, 0.12);
+
+  /* 8. Pesquisa */
+  --sc-cat-pesquisa-color: #475569;    /* slate-600 — 5.8:1 */
+  --sc-cat-pesquisa-bg:    rgba(148, 163, 184, 0.15);
+
+  /* 9. Outros */
+  --sc-cat-outros-color: #4B5563;      /* gray-600 — 5.4:1 */
+  --sc-cat-outros-bg:    rgba(107, 114, 128, 0.10);
+
+}
+
+/* ============================================================
+   UTILITY CLASSES — CategoryChip
+   Uso: <span class="sc-cat-chip sc-cat-chip--{slug}">
+   ============================================================ */
+
+.sc-cat-chip {
+  display:       inline-flex;
+  align-items:   center;
+  gap:           4px;
+  padding:       2px 8px;
+  border-radius: 9999px;         /* pill */
+  font:          500 11px/1.4 var(--sc-font-sans);
+  letter-spacing: 0.02em;
+  /* cor e bg aplicados inline via CSS custom props por slug */
+  white-space:   nowrap;
+  user-select:   none;
+}
+
+/* Variantes estáticas por slug (alternativa às inline styles) */
+.sc-cat-chip--orquestracao { color: var(--sc-cat-orquestracao-color); background: var(--sc-cat-orquestracao-bg); }
+.sc-cat-chip--planejamento { color: var(--sc-cat-planejamento-color); background: var(--sc-cat-planejamento-bg); }
+.sc-cat-chip--execucao     { color: var(--sc-cat-execucao-color);     background: var(--sc-cat-execucao-bg);     }
+.sc-cat-chip--design       { color: var(--sc-cat-design-color);       background: var(--sc-cat-design-bg);       }
+.sc-cat-chip--dados        { color: var(--sc-cat-dados-color);        background: var(--sc-cat-dados-bg);        }
+.sc-cat-chip--qualidade    { color: var(--sc-cat-qualidade-color);    background: var(--sc-cat-qualidade-bg);    }
+.sc-cat-chip--ops          { color: var(--sc-cat-ops-color);          background: var(--sc-cat-ops-bg);          }
+.sc-cat-chip--pesquisa     { color: var(--sc-cat-pesquisa-color);     background: var(--sc-cat-pesquisa-bg);     }
+.sc-cat-chip--outros       { color: var(--sc-cat-outros-color);       background: var(--sc-cat-outros-bg);       }
+
+/* ============================================================
+   UTILITY CLASSES — Palette Category Header
+   Uso: <div class="sc-palette-cat-header sc-palette-cat-header--{slug}">
+   ============================================================ */
+
+.sc-palette-cat-header {
+  display:        flex;
+  align-items:    center;
+  gap:            6px;
+  padding:        8px 12px 4px;
+  font:           500 11px/1 var(--sc-font-sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color:          var(--sc-text-subtle);
+  user-select:    none;
+  pointer-events: none;
+}
+
+.sc-palette-cat-header__icon {
+  font-size: 13px;
+  opacity:   0.6;
+}
+
+/* Divisor dashed antes de cada header de categoria (exceto o primeiro).
+   Usar <hr class="sc-palette-cat-divider"> entre seções. */
+.sc-palette-cat-divider {
+  height:     1px;
+  margin:     4px 12px;
+  border:     none;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--sc-surface-300) 0px,
+    var(--sc-surface-300) 4px,
+    transparent           4px,
+    transparent           8px
+  );
+}
+
+/* ============================================================
+   UTILITY CLASSES — Palette Item
+   Uso: <div class="sc-palette-item" data-category="{slug}">
+   ============================================================ */
+
+.sc-palette-item {
+  display:     grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  padding:     6px 12px;
+  gap:         10px;
+  border-radius: 8px;
+  cursor:      pointer;
+  transition:  background var(--sc-duration-instant) var(--sc-ease-standard);
+}
+
+.sc-palette-item:hover,
+.sc-palette-item[data-highlighted="true"] {
+  background: var(--sc-surface-200);
+}
+
+.sc-palette-item__icon-wrap {
+  width:         28px;
+  height:        28px;
+  border-radius: 8px;
+  display:       flex;
+  align-items:   center;
+  justify-content: center;
+  font-size:     15px;
+  flex-shrink:   0;
+}
+
+.sc-palette-item__body {
+  display:        flex;
+  flex-direction: column;
+  gap:            2px;
+  min-width:      0;   /* permite text-overflow no nome */
+}
+
+.sc-palette-item__name {
+  font:           500 13px/1.2 var(--sc-font-sans);
+  color:          var(--sc-text-primary);
+  white-space:    nowrap;
+  overflow:       hidden;
+  text-overflow:  ellipsis;
+}
+
+.sc-palette-item__role {
+  font:  400 11px/1.4 var(--sc-font-sans);
+  color: var(--sc-text-muted);
+}
+
+.sc-palette-item__source {
+  font:          400 10px/1 var(--sc-font-mono);
+  color:         var(--sc-text-subtle);
+  border:        1px solid var(--sc-surface-400);
+  border-radius: 4px;
+  padding:       2px 6px;
+  flex-shrink:   0;
+}
+
+/* ============================================================
+   MEDIA QUERY — prefers-reduced-motion
+   Herda do tokens.css (já cobre tudo com animation override).
+   Nenhuma animação adicional neste arquivo requer override.
+   ============================================================ */

@@ -28,6 +28,7 @@ import {
 import { ChevronDown, ChevronUp, MoreHorizontal, Send, Terminal } from 'lucide-react';
 
 import { useAgentPromotion } from './useAgentPromotion';
+import { useCardRealtime } from './realtime/useCardRealtime';
 
 import {
   useConversationsStore,
@@ -93,15 +94,20 @@ function getInitials(name: string): string {
     .toUpperCase() || '?';
 }
 
-// ─── TODO(JOB-027): Realtime integration stub ─────────────────────────────────
-// Quando o hook useRealtime (Leia — JOB-027) ficar pronto:
-//  1. Subscrever a eventos 'chat.chunk' para conversationId
-//  2. Chamar appendChunk(messageId, conversationId, delta, senderId) a cada chunk
-//  3. Chamar markDelivered(messageId) ao receber 'message.new' final
-// Evento WS esperado: { type: 'chat.chunk', messageId, conversationId, delta, senderId? }
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function useAgentChatRealtime(_conversationId: string) {
-  // Stub — body a preencher em JOB-027
+// ─── useAgentChatRealtime — wrapper sobre useCardRealtime (JOB-048) ──────────
+// Liga o streaming realtime ao AgentChatNode:
+//  • RealtimeProvider (em CommandRoomCanvas) mantém 1 WsClient compartilhado
+//  • chat.chunk → appendChunk → store → lastStreamingId → cursor piscante
+//  • message.new → markDelivered + appendMessage → streaming=false → cursor some
+//  • agent.status → patchNodeStatus → data.status → toVisualState → UI atualiza
+// O callback onChunk dispara scroll-to-bottom por chunk (UX de streaming suave).
+function useAgentChatRealtime(
+  conversationId: string,
+  onChunkCallback?: () => void,
+) {
+  return useCardRealtime(conversationId, {
+    onChunk: onChunkCallback ? () => onChunkCallback() : undefined,
+  });
 }
 
 // ─── Dot class helper ─────────────────────────────────────────────────────────
@@ -183,22 +189,27 @@ export const AgentChatNode = memo(function AgentChatNode({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardId]);
 
-  // TODO(JOB-027): ligar streaming real
-  useAgentChatRealtime(cardId);
+  // ─── Realtime: liga WsClient → store → UI (JOB-048) ──────────────────────
+  // onChunk: scroll a cada token de streaming (não só quando mensagem nova chega)
+  const scrollToBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    });
+  }, []);
+
+  const { lastStreamingId, isStreaming } = useAgentChatRealtime(cardId, scrollToBottom);
 
   // LOD a zoom < 0.4 §6
   const zoom = useStore((s) => s.transform[2]);
 
-  // ─── Scroll to bottom ──────────────────────────────────────────────────────
+  // ─── Scroll to bottom (novas mensagens completas) ─────────────────────────
   useEffect(() => {
     if (messages.length === 0) return;
-    // requestAnimationFrame conforme §6.1 (não setTimeout)
-    requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    });
+    scrollToBottom();
     setGlowActive(true);
     const t = setTimeout(() => setGlowActive(false), 1400);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length]);
 
   // ─── Send ──────────────────────────────────────────────────────────────────
@@ -276,11 +287,9 @@ export const AgentChatNode = memo(function AgentChatNode({
     cardBoxShadow = `0 0 16px ${glow}`;
   }
 
-  // ID da última mensagem em streaming do agente (para cursor piscante §4.3)
-  const lastStreamingId = useMemo(
-    () => [...messages].reverse().find((m) => m.streaming && m.senderRole !== 'user')?.id,
-    [messages],
-  );
+  // lastStreamingId vem de useCardRealtime (via useAgentChatRealtime acima §4.3)
+  // isStreaming controla o typing indicator: mostra quando agente está respondendo
+  // em streaming (complementa o estado visual 'thinking' do canvasStore)
 
   // ─── LOD: card degradado para zoom < 0.4 §6 ───────────────────────────────
   if (zoom < 0.4) {
@@ -459,8 +468,8 @@ export const AgentChatNode = memo(function AgentChatNode({
               </div>
             ))}
 
-            {/* Typing indicator §4.2 — visível apenas no estado thinking */}
-            {visualState === 'thinking' && (
+            {/* Typing indicator §4.2 — thinking (aguardando) OU pré-primeiro-chunk */}
+            {(visualState === 'thinking' && !isStreaming) && (
               <div className={styles.bubbleRow}>
                 <div className={`${styles.bubble} ${styles.bubbleAgent} ${styles.typingBubble}`}>
                   <span className={styles.typingDot} />

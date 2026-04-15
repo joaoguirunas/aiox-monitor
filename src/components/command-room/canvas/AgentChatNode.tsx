@@ -14,7 +14,7 @@
  *  4. stopPropagation Backspace/Delete no input — não deleta o node
  *  5. Input/colapso em useState LOCAL — nunca em data.* (evita re-render bug)
  *
- * Aguarda: story 9.6 (chat→PTY) e 9.7 (⌘K palette).
+ * Story 9.7: SlashMenuInline integrado — aparece quando input começa com '/'.
  * TODO(JOB-027): integração useRealtime (Leia) para streaming chat.chunk.
  */
 
@@ -34,6 +34,7 @@ import {
   type Message,
 } from './store/conversationsStore';
 import type { AgentCardNode } from './store/canvasStore';
+import { SlashMenuInline, useSlashMenu, type SlashMenuHandle } from './palette/SlashMenuInline';
 import styles from './AgentChatNode.module.css';
 
 // ─── Agent color table ────────────────────────────────────────────────────────
@@ -145,6 +146,10 @@ export const AgentChatNode = memo(function AgentChatNode({
   const [glowActive, setGlowActive] = useState(false);
   const [menuOpen, setMenuOpen]     = useState(false);
   const messagesEndRef              = useRef<HTMLDivElement>(null);
+  const slashMenuRef                = useRef<SlashMenuHandle>(null);
+
+  // Story 9.7: slash menu state (isOpen quando input começa com '/')
+  const { isOpen: slashOpen, query: slashQuery } = useSlashMenu(input);
 
   // ─── Promoção chat → PTY (Story 9.6) ──────────────────────────────────────
   const { promote, promoting } = useAgentPromotion(cardId);
@@ -215,12 +220,19 @@ export const AgentChatNode = memo(function AgentChatNode({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Backspace' || e.key === 'Delete') e.stopPropagation();
+      // Story 9.7: delega ↑↓/Enter/Esc/Tab ao slash menu quando aberto
+      if (slashOpen && slashMenuRef.current) {
+        if (['ArrowUp', 'ArrowDown', 'Enter', 'Escape', 'Tab'].includes(e.key)) {
+          slashMenuRef.current.handleKeyDown(e);
+          return;
+        }
+      }
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
       }
     },
-    [sendMessage],
+    [sendMessage, slashOpen],
   );
 
   // ─── Collapse toggle com crossfade ─────────────────────────────────────────
@@ -402,7 +414,10 @@ export const AgentChatNode = memo(function AgentChatNode({
 
       {/* ── Body: mensagens + input (oculto quando colapsado) ─────── */}
       {!collapsed && (
-        <div className={`${styles.body} ${collapsing ? styles.bodyCollapsing : ''}`}>
+        <div
+          className={`${styles.body} ${collapsing ? styles.bodyCollapsing : ''}`}
+          style={{ position: 'relative' }}
+        >
           {/* Pitfall 1+2: nodrag (seleção) + nowheel (scroll ≠ zoom canvas) */}
           <div className={`nodrag nopan nowheel ${styles.messages}`}>
             {/* Gradient fade §2.2 */}
@@ -466,6 +481,27 @@ export const AgentChatNode = memo(function AgentChatNode({
             </div>
           )}
 
+          {/* Story 9.7: slash menu inline — aparece acima do input quando começa com '/' */}
+          {slashOpen && (
+            <div
+              className="nodrag nopan nowheel"
+              style={{
+                position: 'absolute',
+                bottom: 48,
+                left: 8,
+                right: 8,
+                zIndex: 10,
+              }}
+            >
+              <SlashMenuInline
+                ref={slashMenuRef}
+                query={slashQuery}
+                onSelect={(cmd) => setInput(cmd)}
+                onClose={() => setInput('')}
+              />
+            </div>
+          )}
+
           {/* Pitfall 2: nowheel no input (scroll não dá zoom no canvas) */}
           {/* Pitfall 1: nodrag nopan no input wrapper */}
           <div className={`nodrag nopan nowheel ${styles.inputBar}`}>
@@ -476,6 +512,10 @@ export const AgentChatNode = memo(function AgentChatNode({
               onKeyDown={handleKeyDown}
               placeholder={`Fale com ${displayName}… ou / para comandos`}
               style={{ caretColor: color }}
+              role="combobox"
+              aria-expanded={slashOpen}
+              aria-autocomplete="list"
+              aria-controls={slashOpen ? 'slash-menu-list' : undefined}
             />
             <button
               className={`nodrag nopan ${styles.sendBtn}`}

@@ -34,6 +34,7 @@ import '@xyflow/react/dist/style.css';
 import { useCanvasStore } from './store/canvasStore';
 import { CommandRoomProjectSelector } from '../project-selector/CommandRoomProjectSelector';
 import { AgentChatNode } from './AgentChatNode';
+import { CommandPaletteGlobal } from './palette/CommandPaletteGlobal';
 
 // Pitfall 3: NODE_TYPES fora do componente — referência estável
 const NODE_TYPES: NodeTypes = {
@@ -183,6 +184,10 @@ function CommandRoomCanvasInner() {
       {!currentProjectPath && nodes.length === 0 && (
         <EmptyState />
       )}
+
+      {/* ── ⌘K Palette global — montada dentro do Provider para ter acesso
+           ao ReactFlow context se necessário; renderiza via portal em <body> */}
+      <CommandPaletteGlobal />
     </div>
   );
 }

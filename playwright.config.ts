@@ -34,8 +34,6 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     viewport: { width: 1280, height: 800 },
-    /** Desabilita animações nas páginas durante os testes */
-    reducedMotion: 'reduce',
   },
   projects: [
     {

@@ -350,3 +350,57 @@ export function getCanvasLayout(projectPath: string): CanvasLayout | undefined {
     `SELECT * FROM canvas_layouts WHERE project_path = ?`
   ).get(projectPath) as unknown as CanvasLayout | undefined;
 }
+
+// ─── Agent Catalog (read-only queries for invoke) ────────────────────────────
+
+export interface CatalogRow {
+  project_path: string;
+  skill_path: string;
+  squad: string;
+  agent_id: string;
+  display_name: string;
+  icon: string | null;
+  role: string | null;
+  description: string | null;
+  definition_path: string;
+  source: string;
+}
+
+export function getCatalogEntry(projectPath: string, skillPath: string): CatalogRow | undefined {
+  return db.prepare(
+    `SELECT * FROM agent_catalog WHERE project_path = ? AND skill_path = ?`
+  ).get(projectPath, skillPath) as unknown as CatalogRow | undefined;
+}
+
+/**
+ * Find recently created card with same skill_path + project_path + kind.
+ * Used for idempotency: within 5s of invoke, return existing card.
+ */
+export function findRecentCard(
+  projectPath: string,
+  skillPath: string,
+  kind: AgentKind,
+  withinSeconds = 5,
+): AgentCard | undefined {
+  return db.prepare(`
+    SELECT * FROM agent_cards
+    WHERE project_path = ?
+      AND skill_path = ?
+      AND kind = ?
+      AND created_at >= datetime('now', ? || ' seconds')
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(projectPath, skillPath, kind, `-${withinSeconds}`) as unknown as AgentCard | undefined;
+}
+
+/**
+ * List all active agent_cards for a project (for is_chief connection wiring).
+ */
+export function listActiveCards(projectPath: string): AgentCard[] {
+  return db.prepare(`
+    SELECT * FROM agent_cards
+    WHERE project_path = ?
+      AND status != 'offline'
+    ORDER BY created_at ASC
+  `).all(projectPath) as unknown as AgentCard[];
+}

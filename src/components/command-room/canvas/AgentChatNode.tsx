@@ -25,7 +25,9 @@ import {
   useStore,
   type NodeProps,
 } from '@xyflow/react';
-import { ChevronDown, ChevronUp, MoreHorizontal, Send } from 'lucide-react';
+import { ChevronDown, ChevronUp, MoreHorizontal, Send, Terminal } from 'lucide-react';
+
+import { useAgentPromotion } from './useAgentPromotion';
 
 import {
   useConversationsStore,
@@ -141,7 +143,12 @@ export const AgentChatNode = memo(function AgentChatNode({
   const [collapsing, setCollapsing] = useState(false); // crossfade flag
   const [input, setInput]           = useState('');
   const [glowActive, setGlowActive] = useState(false);
+  const [menuOpen, setMenuOpen]     = useState(false);
   const messagesEndRef              = useRef<HTMLDivElement>(null);
+
+  // ─── Promoção chat → PTY (Story 9.6) ──────────────────────────────────────
+  const { promote, promoting } = useAgentPromotion(cardId);
+  const isHybrid = status === 'hybrid' || data.kind === 'hybrid';
 
   // ─── Conversações do store ─────────────────────────────────────────────────
   const upsertConversation     = useConversationsStore((s) => s.upsertConversation);
@@ -355,12 +362,41 @@ export const AgentChatNode = memo(function AgentChatNode({
           >
             {collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
           </button>
-          <button
-            className={`nodrag nopan ${styles.iconBtn} ${styles.menuBtn}`}
-            title="Mais opções"
-          >
-            <MoreHorizontal size={13} />
-          </button>
+          <div className={styles.menuWrap}>
+            <button
+              className={`nodrag nopan ${styles.iconBtn} ${styles.menuBtn}`}
+              title="Mais opções"
+              onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }}
+            >
+              <MoreHorizontal size={13} />
+            </button>
+            {menuOpen && (
+              <div
+                className={`nodrag nopan nowheel ${styles.menuDropdown}`}
+                onMouseLeave={() => setMenuOpen(false)}
+              >
+                {!isHybrid && (
+                  <button
+                    className={styles.menuItem}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpen(false);
+                      void promote();
+                    }}
+                    disabled={promoting}
+                  >
+                    <Terminal size={12} />
+                    {promoting ? 'Promovendo…' : 'Promover para PTY'}
+                  </button>
+                )}
+                {isHybrid && (
+                  <span className={styles.menuItemDisabled}>
+                    <Terminal size={12} /> Já é PTY
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

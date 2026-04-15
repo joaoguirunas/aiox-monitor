@@ -493,3 +493,55 @@
   color: var(--sc-text-muted, #9BA1AD);
   margin-right: 4px;
 }
+
+/* ── Menu ⋯ dropdown (Story 9.6) ─────────────────────────────────────────── */
+.menuWrap {
+  position: relative;
+}
+
+.menuDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 50;
+  min-width: 168px;
+  background: var(--sc-surface-200, #1A1F2B);
+  border: 1px solid var(--sc-surface-300, #262B36);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--sc-text-primary, #E2E8F0);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms;
+}
+
+.menuItem:hover:not(:disabled) {
+  background: var(--sc-surface-300, #262B36);
+}
+
+.menuItem:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.menuItemDisabled {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  color: var(--sc-text-subtle, #6B7280);
+  font-size: 12px;
+}

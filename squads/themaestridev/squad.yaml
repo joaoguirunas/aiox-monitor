@@ -1,0 +1,108 @@
+name: themaestridev
+version: 1.0.0
+description: >
+  Dev squad otimizada para orquestracao multi-terminal via Maestri CLI.
+  Squad enxuta sem SM/PO/PM — o Architect (Obi-Wan) cria e valida stories,
+  o Chief (Yoda) orquestra tudo via comandos Maestri. Tema: personagens de Star Wars.
+author: João Ramos
+license: MIT
+slashPrefix: themaestridev
+
+aiox:
+  minVersion: "2.1.0"
+  type: squad
+
+components:
+  agents:
+    - chief.md
+    - analyst.md
+    - architect.md
+    - dev-alpha.md
+    - dev-beta.md
+    - dev-gamma.md
+    - dev-delta.md
+    - ux-alpha.md
+    - ux-beta.md
+    - data-engineer.md
+    - qa.md
+    - devops.md
+  tasks:
+    - chief-orchestrate.md
+    - chief-assign.md
+    - chief-check-all.md
+    - chief-sync-notes.md
+    - chief-merge-plan.md
+    - chief-rebalance.md
+    - chief-activity-log.md
+    - architect-draft-story.md
+  workflows:
+    - parallel-dev.yaml
+    - maestri-orchestration.yaml
+  checklists: []
+  templates:
+    - status-board-tmpl.md
+  tools: []
+  scripts: []
+
+config:
+  extends: extend
+  coding-standards: config/coding-standards.md
+  tech-stack: config/tech-stack.md
+  source-tree: config/source-tree.md
+
+dependencies:
+  node: []
+  python: []
+  squads: []
+
+maestri:
+  enabled: true
+  agents:
+    - name: Yoda
+      agentId: chief
+      role: orchestrator
+    - name: Ahsoka
+      agentId: analyst
+      role: research
+    - name: Obi-Wan
+      agentId: architect
+      role: architecture
+    - name: Luke
+      agentId: dev-alpha
+      role: frontend
+    - name: Han Solo
+      agentId: dev-beta
+      role: backend
+    - name: Leia
+      agentId: dev-gamma
+      role: fullstack
+    - name: Boba Fett
+      agentId: dev-delta
+      role: integration
+    - name: Padme
+      agentId: ux-alpha
+      role: ui-design
+    - name: Rey
+      agentId: ux-beta
+      role: ux-research
+    - name: R2-D2
+      agentId: data-engineer
+      role: database
+    - name: Mace Windu
+      agentId: qa
+      role: quality
+    - name: Chewbacca
+      agentId: devops
+      role: infrastructure
+  notes:
+    - status-board
+    - decisions
+    - blockers
+    - qa-results
+
+tags:
+  - maestri
+  - star-wars
+  - multi-terminal
+  - orchestration
+  - dev-squad

@@ -124,6 +124,22 @@ export interface EvLayoutPatch extends WsEventBase {
 }
 
 // ---------------------------------------------------------------------------
+// Eventos de lifecycle de projeto
+// ---------------------------------------------------------------------------
+
+/** Projeto aberto — scan inicial completo, watcher ativo */
+export interface EvProjectOpened extends WsEventBase {
+  type: 'project.opened';
+  projectPath: string;
+}
+
+/** Projeto fechado — watcher parado, recursos liberados */
+export interface EvProjectClosed extends WsEventBase {
+  type: 'project.closed';
+  projectPath: string;
+}
+
+// ---------------------------------------------------------------------------
 // Eventos de catálogo de agentes
 // ---------------------------------------------------------------------------
 
@@ -178,6 +194,8 @@ export type WsEvent =
   | EvLayoutPatch
   | EvCatalogUpdated
   | EvCatalogReloaded
+  | EvProjectOpened
+  | EvProjectClosed
   | EvHeartbeat
   | EvPtyFrame;
 

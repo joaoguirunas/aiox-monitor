@@ -50,6 +50,12 @@ function setCache(projectPath: string, agents: AgentCatalogEntry[], groups: Grou
 
 const activeWatchers = new Map<string, () => void>(); // projectPath → cleanup fn
 
+// ─── Broadcast seq counter ────────────────────────────────────────────────────
+
+let _seq = 0;
+function nextSeq(): number { return ++_seq; }
+function nowIso(): string { return new Date().toISOString(); }
+
 // ─── DB helpers ───────────────────────────────────────────────────────────────
 
 function upsertCatalogEntry(entry: AgentCatalogEntry): void {
@@ -139,8 +145,8 @@ export function openProject(projectPath: string): { agents: AgentCatalogEntry[];
   setCache(projectPath, agents, groups);
   persistScanResult(agents, groups);
 
-  broadcast({ type: 'project.opened', v: 1, projectPath });
-  broadcast({ type: 'catalog.reloaded', v: 1, projectPath, full: agents });
+  broadcast({ type: 'project.opened', v: 1, seq: nextSeq(), at: nowIso(), projectPath });
+  broadcast({ type: 'catalog.reloaded', v: 1, seq: nextSeq(), at: nowIso(), projectPath, full: agents });
 
   // Set up watcher (idempotent — close existing first)
   if (activeWatchers.has(projectPath)) {
@@ -164,7 +170,7 @@ export function closeProject(projectPath: string): void {
 
   db.prepare(`DELETE FROM open_projects WHERE project_path = ?`).run(projectPath);
 
-  broadcast({ type: 'project.closed', v: 1, projectPath });
+  broadcast({ type: 'project.closed', v: 1, seq: nextSeq(), at: nowIso(), projectPath });
 }
 
 /**
@@ -236,7 +242,7 @@ function handleCatalogChange(projectPath: string): void {
   `).run(projectPath);
 
   if (!prevCache) {
-    broadcast({ type: 'catalog.reloaded', v: 1, projectPath, full: newAgents });
+    broadcast({ type: 'catalog.reloaded', v: 1, seq: nextSeq(), at: nowIso(), projectPath, full: newAgents });
     return;
   }
 
@@ -249,6 +255,8 @@ function handleCatalogChange(projectPath: string): void {
   broadcast({
     type: 'catalog.updated',
     v: 1,
+    seq: nextSeq(),
+    at: nowIso(),
     projectPath,
     added,
     removed,

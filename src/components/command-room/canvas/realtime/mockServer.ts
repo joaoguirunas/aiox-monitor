@@ -204,6 +204,9 @@ function now(): string {
 
 /** Emite sequência de eventos sintéticos para demo/smoke test */
 export function emitSyntheticDemo(server: MockWsServer): void {
+  // Projeto aberto
+  server.emit({ type: 'project.opened', v: 1, seq: nextSeq(), at: now(), projectPath: '/demo/project' });
+
   // Heartbeat
   server.emit({ type: 'heartbeat', v: 1, seq: nextSeq(), at: now() });
 
@@ -244,6 +247,9 @@ export function emitSyntheticDemo(server: MockWsServer): void {
     type: 'agent.status', v: 1, seq: nextSeq(), at: now(),
     cardId: 'card-demo-1', status: 'idle',
   });
+
+  // Projeto fechado
+  server.emit({ type: 'project.closed', v: 1, seq: nextSeq(), at: now(), projectPath: '/demo/project' });
 
   // Nova conexão entre cards
   server.emit({

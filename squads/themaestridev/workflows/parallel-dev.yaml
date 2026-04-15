@@ -1,0 +1,60 @@
+name: parallel-dev
+version: 1.0.0
+description: >
+  Parallel development workflow for the 4 dev agents.
+  Each dev works in an isolated worktree on a separate story.
+  Yoda monitors progress and coordinates via Maestri CLI.
+
+triggers:
+  - manual: "*assign"
+  - workflow: maestri-orchestration.distribute
+
+agents:
+  - id: dev-alpha
+    name: Luke
+    specialization: frontend
+  - id: dev-beta
+    name: Han Solo
+    specialization: backend
+  - id: dev-gamma
+    name: Leia
+    specialization: fullstack
+  - id: dev-delta
+    name: Boba Fett
+    specialization: integration
+
+execution:
+  mode: parallel
+  isolation: worktree
+  max_concurrent: 4
+
+phases:
+  - name: assign
+    agent: chief
+    description: Distribute stories to devs based on specialization and load
+    steps:
+      - maestri ask "{dev_name}" "*develop {story_id}"
+      - maestri note edit "status-board" with assignment
+
+  - name: develop
+    agents: [dev-alpha, dev-beta, dev-gamma, dev-delta]
+    parallel: true
+    description: Each dev implements their assigned story
+    completion_signal: "status: Ready for Review"
+
+  - name: monitor
+    agent: chief
+    description: Periodic check on all devs
+    loop:
+      interval: "on-demand"
+      command: "*check-all"
+      stall_threshold: 3
+      stall_action: "*rebalance"
+
+  - name: handoff
+    agent: chief
+    description: When dev completes, dispatch to QA
+    steps:
+      - maestri check "{dev_name}" to confirm completion
+      - maestri ask "Mace Windu" "*qa-gate {story_id}"
+      - maestri note edit "status-board" with QA assignment
